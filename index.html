@@ -663,9 +663,14 @@
 <script>
 /* ============ SUPABASE CONNECTION ============ */
 // TODO: 발급받으신 프로젝트 URL / anon key로 교체하세요
-const SUPABASE_URL = "https://YOUR_PROJECT_REF.supabase.co";
-const SUPABASE_ANON_KEY = "YOUR_ANON_KEY";
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const SUPABASE_URL = "https://fvjxpdbnenbbfsgrondc.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ2anhwZGJuZW5iYmZzZ3JvbmRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4MjA5NzAsImV4cCI6MjEwMTM5Njk3MH0.qCBzFg9pnmHRqgceCHkq9M7z-Xv6DnwP067CwL27TCs";
+let supabase = null;
+try {
+  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+} catch (e) {
+  console.error("Supabase 클라이언트 생성 실패:", e);
+}
 
 // TODO: 실제 뷰/테이블명과 컬럼명으로 교체하세요.
 // programs_view 는 계산(achievement 등)까지 포함된 SQL 뷰를 권장합니다.
@@ -698,6 +703,11 @@ function mapTrendRow(row) {
 }
 
 async function loadData() {
+  if (!supabase) {
+    console.error("Supabase 클라이언트가 초기화되지 않았습니다.");
+    return false;
+  }
+
   const { data: programRows, error: programError } = await supabase
     .from(PROGRAMS_TABLE)
     .select("*")
