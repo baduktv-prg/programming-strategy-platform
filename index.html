@@ -672,34 +672,29 @@ try {
   console.error("Supabase 클라이언트 생성 실패:", e);
 }
 
-// TODO: 실제 뷰/테이블명과 컬럼명으로 교체하세요.
-// programs_view 는 계산(achievement 등)까지 포함된 SQL 뷰를 권장합니다.
-// 컬럼명이 program_name / rating_pct 처럼 다르면 아래 매핑 함수(mapProgramRow)만 고치면 됩니다.
-const PROGRAMS_TABLE = "programs_view";
-const TREND_TABLE = "rating_trend_view";
+// v_program_detail 뷰: schedule_id, date_key, program_name, start_time, end_time,
+// duration_minutes, is_rerun, players, rating_pct, viewers, prev_rating_pct,
+// target_rating_pct, achievement_pct  (fact_schedule + fact_rating + dim_program 조인)
+const DASHBOARD_VIEW = "v_program_detail";
 
 let PROGRAMS = [];
 let TREND = [];
 
-// DB row -> 기존 코드가 기대하는 필드명으로 매핑 (컬럼명이 다르면 여기만 수정)
+// DB row -> 기존 코드가 기대하는 필드명으로 매핑
 function mapProgramRow(row) {
   return {
-    name: row.name,
-    start: row.start,
-    end: row.end,
-    duration: row.duration,
-    rating: row.rating,
+    name: row.program_name,
+    start: (row.start_time || "").slice(0, 5),
+    end: (row.end_time || "").slice(0, 5),
+    duration: row.duration_minutes != null ? Math.round(row.duration_minutes) : null,
+    rating: row.rating_pct,
     viewers: row.viewers,
-    prev: row.prev_rating,
-    type: row.type,
-    players: row.players,
-    target: row.target,
-    achievement: row.achievement,
+    prev: row.prev_rating_pct,
+    type: row.is_rerun ? "재방" : "생방",
+    players: row.players || "",
+    target: row.target_rating_pct,
+    achievement: row.achievement_pct,
   };
-}
-
-function mapTrendRow(row) {
-  return [row.date_label, row.rating];
 }
 
 async function loadData() {
@@ -708,10 +703,26 @@ async function loadData() {
     return false;
   }
 
+  // 1) 가장 최근 날짜(date_key) 찾기 — 대시보드는 "오늘자" 리포트 기준으로 동작
+  const { data: latestRows, error: latestError } = await supabase
+    .from(DASHBOARD_VIEW)
+    .select("date_key")
+    .order("date_key", { ascending: false })
+    .limit(1);
+
+  if (latestError || !latestRows || !latestRows.length) {
+    console.error("최신 날짜 조회 실패:", latestError);
+    alert("데이터를 불러오지 못했습니다. 콘솔을 확인해주세요.");
+    return false;
+  }
+  const latestDate = latestRows[0].date_key;
+
+  // 2) 해당 날짜의 프로그램별 실적
   const { data: programRows, error: programError } = await supabase
-    .from(PROGRAMS_TABLE)
+    .from(DASHBOARD_VIEW)
     .select("*")
-    .order("start", { ascending: true });
+    .eq("date_key", latestDate)
+    .order("start_time", { ascending: true });
 
   if (programError) {
     console.error("PROGRAMS 로드 실패:", programError);
@@ -720,17 +731,29 @@ async function loadData() {
   }
   PROGRAMS = (programRows || []).map(mapProgramRow);
 
+  // 3) 최근 14일 추이 — 날짜별 평균 시청률을 클라이언트에서 집계
   const { data: trendRows, error: trendError } = await supabase
-    .from(TREND_TABLE)
-    .select("*")
-    .order("date_label", { ascending: true });
+    .from(DASHBOARD_VIEW)
+    .select("date_key, rating_pct")
+    .order("date_key", { ascending: true });
 
   if (trendError) {
     console.error("TREND 로드 실패:", trendError);
     alert("추이 데이터를 불러오지 못했습니다. 콘솔을 확인해주세요.");
     return false;
   }
-  TREND = (trendRows || []).map(mapTrendRow);
+  const byDate = {};
+  (trendRows || []).forEach((r) => {
+    if (!byDate[r.date_key]) byDate[r.date_key] = [];
+    byDate[r.date_key].push(Number(r.rating_pct) || 0);
+  });
+  const allDates = Object.keys(byDate).sort();
+  const last14 = allDates.slice(-14);
+  TREND = last14.map((d) => {
+    const vals = byDate[d];
+    const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+    return [d.slice(5), Number(avg.toFixed(3))]; // "2026-08-03" -> "08-03"
+  });
 
   return true;
 }
