@@ -7,7 +7,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root {
     --bg-main: #f5f5f7;
@@ -349,6 +348,7 @@
   ::-webkit-scrollbar-thumb { background: #d1d1d6; border-radius: 10px; }
   ::-webkit-scrollbar-track { background: transparent; }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 <div class="app">
@@ -435,18 +435,18 @@
           </div>
           <div class="bento-card col-3">
             <div class="card-label">평균 점유율</div>
-            <div class="kpi-value">0.52%</div>
-            <div class="kpi-delta up">▲ 0.03%p</div>
+            <div class="kpi-value" id="kpi-avg-share">-</div>
+            <div class="kpi-delta" id="kpi-avg-share-note"></div>
           </div>
           <div class="bento-card col-3">
             <div class="card-label">채널 순위 (종합)</div>
-            <div class="kpi-value">53위</div>
-            <div class="kpi-delta down">▼ 전주 대비 5계단</div>
+            <div class="kpi-value" id="kpi-rank">-</div>
+            <div class="kpi-delta" id="kpi-rank-note"></div>
           </div>
           <div class="bento-card col-3">
             <div class="card-label">최고 시청률 프로그램</div>
-            <div class="kpi-value" style="font-size:20px; margin-top:4px;">난양배 월드바둑</div>
-            <div class="kpi-delta up">0.123%</div>
+            <div class="kpi-value" id="kpi-top-program" style="font-size:20px; margin-top:4px;">-</div>
+            <div class="kpi-delta up" id="kpi-top-rating"></div>
           </div>
         </div>
 
@@ -661,105 +661,108 @@
 </div>
 
 <script>
-/* ============ SUPABASE CONNECTION ============ */
-// TODO: 발급받으신 프로젝트 URL / anon key로 교체하세요
-const SUPABASE_URL = "https://fvjxpdbnenbbfsgrondc.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ2anhwZGJuZW5iYmZzZ3JvbmRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4MjA5NzAsImV4cCI6MjEwMTM5Njk3MH0.qCBzFg9pnmHRqgceCHkq9M7z-Xv6DnwP067CwL27TCs";
-let supabase = null;
-try {
-  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-} catch (e) {
-  console.error("Supabase 클라이언트 생성 실패:", e);
-}
+/* ============ SUPABASE 연결 설정 ============ */
+// ⚠️ 여기 URL/키는 anon(공개용) 키만 넣으세요. service_role 키는 절대 브라우저 코드에 넣으면 안 됩니다.
+const SUPABASE_URL = 'https://fvjxpdbnenbbfsgrondc.supabase.co';   // ← Supabase Project URL로 교체
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ2anhwZGJuZW5iYmZzZ3JvbmRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4MjA5NzAsImV4cCI6MjEwMTM5Njk3MH0.qCBzFg9pnmHRqgceCHkq9M7z-Xv6DnwP067CwL27TCs';                  // ← Settings > API > anon public 키로 교체 (service_role 아님!)
 
-// v_program_detail 뷰: schedule_id, date_key, program_name, start_time, end_time,
-// duration_minutes, is_rerun, players, rating_pct, viewers, prev_rating_pct,
-// target_rating_pct, achievement_pct  (fact_schedule + fact_rating + dim_program 조인)
-const DASHBOARD_VIEW = "v_program_detail";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let PROGRAMS = [];
 let TREND = [];
 
-// DB row -> 기존 코드가 기대하는 필드명으로 매핑
-function mapProgramRow(row) {
-  return {
-    name: row.program_name,
-    start: (row.start_time || "").slice(0, 5),
-    end: (row.end_time || "").slice(0, 5),
-    duration: row.duration_minutes != null ? Math.round(row.duration_minutes) : null,
-    rating: row.rating_pct,
-    viewers: row.viewers,
-    prev: row.prev_rating_pct,
-    type: row.is_rerun ? "재방" : "생방",
-    players: row.players || "",
-    target: row.target_rating_pct,
-    achievement: row.achievement_pct,
-  };
-}
-
-async function loadData() {
-  if (!supabase) {
-    console.error("Supabase 클라이언트가 초기화되지 않았습니다.");
-    return false;
-  }
-
-  // 1) 가장 최근 날짜(date_key) 찾기 — 대시보드는 "오늘자" 리포트 기준으로 동작
-  const { data: latestRows, error: latestError } = await supabase
-    .from(DASHBOARD_VIEW)
-    .select("date_key")
-    .order("date_key", { ascending: false })
-    .limit(1);
-
-  if (latestError || !latestRows || !latestRows.length) {
-    console.error("최신 날짜 조회 실패:", latestError);
-    alert("데이터를 불러오지 못했습니다. 콘솔을 확인해주세요.");
-    return false;
-  }
-  const latestDate = latestRows[0].date_key;
-
-  // 2) 해당 날짜의 프로그램별 실적
-  const { data: programRows, error: programError } = await supabase
-    .from(DASHBOARD_VIEW)
-    .select("*")
-    .eq("date_key", latestDate)
-    .order("start_time", { ascending: true });
-
-  if (programError) {
-    console.error("PROGRAMS 로드 실패:", programError);
-    alert("데이터를 불러오지 못했습니다. 콘솔을 확인해주세요.");
-    return false;
-  }
-  PROGRAMS = (programRows || []).map(mapProgramRow);
-
-  // 3) 최근 14일 추이 — 날짜별 평균 시청률을 클라이언트에서 집계
-  const { data: trendRows, error: trendError } = await supabase
-    .from(DASHBOARD_VIEW)
-    .select("date_key, rating_pct")
-    .order("date_key", { ascending: true });
-
-  if (trendError) {
-    console.error("TREND 로드 실패:", trendError);
-    alert("추이 데이터를 불러오지 못했습니다. 콘솔을 확인해주세요.");
-    return false;
-  }
-  const byDate = {};
-  (trendRows || []).forEach((r) => {
-    if (!byDate[r.date_key]) byDate[r.date_key] = [];
-    byDate[r.date_key].push(Number(r.rating_pct) || 0);
-  });
-  const allDates = Object.keys(byDate).sort();
-  const last14 = allDates.slice(-14);
-  TREND = last14.map((d) => {
-    const vals = byDate[d];
-    const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
-    return [d.slice(5), Number(avg.toFixed(3))]; // "2026-08-03" -> "08-03"
-  });
-
-  return true;
-}
-
 const ACCENT_COLOR = "#0071e3";
 const ACCENT_LIGHT = "rgba(0,113,229,0.12)";
+
+/* ============ 실제 데이터 로딩 ============ */
+async function loadData() {
+  // 1) 바둑TV 채널 ID 조회
+  const { data: channelRow, error: chErr } = await sb
+    .from('dim_channel').select('channel_id').eq('channel_name', '바둑TV').single();
+  if (chErr) { console.error('채널 조회 실패', chErr); return; }
+  const channelId = channelRow.channel_id;
+
+  // 2) 가장 최근 방송일 조회
+  const { data: latestRow, error: dateErr } = await sb
+    .from('fact_schedule').select('date_key').eq('channel_id', channelId)
+    .order('date_key', { ascending: false }).limit(1).single();
+  if (dateErr) { console.error('최근 날짜 조회 실패', dateErr); return; }
+  const latestDate = latestRow.date_key;
+
+  // 3) 그날의 프로그램 목록 + 시청률 + 프로그램명 조인
+  const { data: rows, error: progErr } = await sb
+    .from('fact_schedule')
+    .select(`
+      start_time, end_time, is_rerun, players,
+      dim_program ( program_name ),
+      fact_rating ( rating_pct, share_pct, viewers, target_rating_pct, achievement_pct, prev_rating_pct )
+    `)
+    .eq('channel_id', channelId)
+    .eq('date_key', latestDate)
+    .order('start_time', { ascending: true });
+  if (progErr) { console.error('프로그램 조회 실패', progErr); return; }
+
+  PROGRAMS = rows.map(r => {
+    const ratingRaw = r.fact_rating;
+    const rating = Array.isArray(ratingRaw) ? (ratingRaw[0] || {}) : (ratingRaw || {});
+    const programRaw = r.dim_program;
+    const program = Array.isArray(programRaw) ? (programRaw[0] || {}) : (programRaw || {});
+    const [sh, sm] = r.start_time.split(':').map(Number);
+    const [eh, em] = r.end_time.split(':').map(Number);
+    let duration = (eh * 60 + em) - (sh * 60 + sm);
+    if (duration < 0) duration += 24 * 60; // 자정 넘어가는 경우 보정
+    return {
+      name: program.program_name || '(이름없음)',
+      start: r.start_time.slice(0, 5),
+      end: r.end_time.slice(0, 5),
+      duration,
+      rating: rating.rating_pct || 0,
+      share: rating.share_pct || 0,
+      viewers: rating.viewers || 0,
+      prev: rating.prev_rating_pct || 0,
+      type: r.is_rerun ? '재방' : '생방',
+      players: r.players || '-',
+      target: rating.target_rating_pct || 0,
+      achievement: rating.achievement_pct || 0,
+    };
+  });
+
+  // 4-1) 채널 순위 (종합 카테고리, 해당 날짜)
+  const { data: rankRow } = await sb
+    .from('fact_channel_rank').select('rank')
+    .eq('channel_id', channelId).eq('date_key', latestDate).eq('category', '종합')
+    .single();
+  window.__latestRank = rankRow ? rankRow.rank : null;
+  window.__latestDate = latestDate;
+
+  // 4) 최근 14일 일별 평균 시청률 (트렌드 차트용)
+  const { data: trendRows, error: trendErr } = await sb
+    .from('fact_schedule')
+    .select('date_key, fact_rating ( rating_pct )')
+    .eq('channel_id', channelId)
+    .lte('date_key', latestDate)
+    .order('date_key', { ascending: false })
+    .limit(300); // 하루 평균 10~15개 프로그램 * 14일 여유있게
+
+  if (trendErr) { console.error('트렌드 조회 실패', trendErr); }
+  else {
+    const byDate = {};
+    trendRows.forEach(r => {
+      const ratingRaw = r.fact_rating;
+      const ratingObj = Array.isArray(ratingRaw) ? ratingRaw[0] : ratingRaw;
+      const rating = ratingObj?.rating_pct;
+      if (rating == null) return;
+      if (!byDate[r.date_key]) byDate[r.date_key] = [];
+      byDate[r.date_key].push(rating);
+    });
+    const dates = Object.keys(byDate).sort().slice(-14); // 최근 14일만
+    TREND = dates.map(d => {
+      const vals = byDate[d];
+      const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+      return [d.slice(5), avg]; // "MM-DD" 형태로 축약
+    });
+  }
+}
 
 function fillSelect(el, items, valueFn, labelFn){
   el.innerHTML = items.map((it,i)=>`<option value="${i}">${labelFn(it)}</option>`).join('');
@@ -828,6 +831,19 @@ function renderDashboard(){
   const dEl = document.getElementById('kpi-avg-rating-delta');
   dEl.textContent = (delta>=0?'▲ ':'▼ ') + Math.abs(delta).toFixed(4) + ' (14일 전 대비)';
   dEl.className = 'kpi-delta ' + (delta>=0?'up':'down');
+
+  const avgShare = PROGRAMS.reduce((a,p)=>a+(p.share||0),0)/PROGRAMS.length;
+  document.getElementById('kpi-avg-share').textContent = avgShare.toFixed(2) + '%';
+  document.getElementById('kpi-avg-share-note').textContent = window.__latestDate + ' 기준';
+
+  document.getElementById('kpi-rank').textContent = window.__latestRank ? (window.__latestRank + '위') : '데이터 없음';
+  document.getElementById('kpi-rank-note').textContent = '';
+
+  const topProgram = [...PROGRAMS].sort((a,b)=>b.rating-a.rating)[0];
+  if (topProgram) {
+    document.getElementById('kpi-top-program').textContent = topProgram.name;
+    document.getElementById('kpi-top-rating').textContent = topProgram.rating.toFixed(3) + '%';
+  }
 
   new Chart(document.getElementById('chart-trend'), {
     type:'line',
@@ -1121,10 +1137,13 @@ function renderFatigue(){
 }
 
 /* ============ INIT ============ */
-(async function init() {
-  const ok = await loadData();
-  if (!ok) return;
-
+(async function init(){
+  await loadData();
+  if (PROGRAMS.length === 0) {
+    document.querySelector('.content').insertAdjacentHTML('afterbegin',
+      '<div style="padding:16px; background:#fff3cd; border-radius:8px; margin-bottom:16px; font-size:13px;">⚠ 데이터를 불러오지 못했어요. SUPABASE_URL/ANON_KEY 설정을 확인해주세요 (콘솔 로그 참고).</div>');
+    return;
+  }
   renderDashboard();
   renderValueMap();
   renderDNA();
