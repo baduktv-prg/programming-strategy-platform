@@ -570,7 +570,7 @@
           </div>
           <div class="bento-grid">
             <div class="bento-card col-12">
-              <div class="card-label" id="valuemap-title">프로그램 가치 지도 — X: 도달력(시청자수) · Y: 충성도(평균 시청지속시간) · Bubble: 시청률</div>
+              <div class="card-label" id="valuemap-title">프로그램 가치 지도 — X: 도달률(%) · Y: 시청시간(분) · Bubble: 시청률</div>
               <div class="chart-wrap tall"><canvas id="chart-valuemap"></canvas></div>
             </div>
           </div>
@@ -1311,7 +1311,7 @@ function renderValueMap(){
     }
   });
   const titleEl = document.getElementById('valuemap-title');
-  if (titleEl) titleEl.textContent = `프로그램 가치 지도 (${filtered.length}건) — X: 도달력(시청자수) · Y: 충성도(평균 시청지속시간) · Bubble: 시청률`;
+  if (titleEl) titleEl.textContent = `프로그램 가치 지도 (${filtered.length}건) — X: 도달률(%) · Y: 시청시간(분) · Bubble: 시청률`;
 }
 
 document.querySelectorAll('#program-value-map .chip-btn').forEach(btn=>{
