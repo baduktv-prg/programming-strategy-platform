@@ -507,7 +507,7 @@
             <div class="kpi-delta" id="kpi-avg-share-note"></div>
           </div>
           <div class="bento-card col-3">
-            <div class="card-label" id="kpi-rank-title">채널 순위 (종합·기간평균)</div>
+            <div class="card-label" id="kpi-rank-title">채널 순위 (종합·보간추정)</div>
             <div class="kpi-value" id="kpi-rank">-</div>
             <div class="kpi-delta" id="kpi-rank-note"></div>
           </div>
@@ -570,7 +570,7 @@
           </div>
           <div class="bento-grid">
             <div class="bento-card col-12">
-              <div class="card-label" id="valuemap-title">프로그램 가치 지도 — X: 도달률(%) · Y: 시청시간(분) · Bubble: 시청률</div>
+              <div class="card-label" id="valuemap-title">프로그램 가치 지도 — X: 도달력(시청자수) · Y: 충성도(평균 시청지속시간) · Bubble: 시청률</div>
               <div class="chart-wrap tall"><canvas id="chart-valuemap"></canvas></div>
             </div>
           </div>
@@ -1149,12 +1149,12 @@ let trendChart;
 function renderTrendKpiAndChart(){
   const hasTrend = TREND.length > 0;
   const avg = hasTrend ? TREND.reduce((a,b)=>a+b[1],0)/TREND.length : 0;
-  document.getElementById('kpi-avg-rating').textContent = hasTrend ? avg.toFixed(4) + '%' : '데이터 없음';
+  document.getElementById('kpi-avg-rating').textContent = hasTrend ? avg.toFixed(3) + '%' : '데이터 없음';
   const first = hasTrend ? TREND[0][1] : 0;
   const last = hasTrend ? TREND[TREND.length-1][1] : 0;
   const delta = last - first;
   const dEl = document.getElementById('kpi-avg-rating-delta');
-  dEl.textContent = hasTrend ? ((delta>=0?'▲ ':'▼ ') + Math.abs(delta).toFixed(4) + ` (선택 기간 첫날 대비)`) : '';
+  dEl.textContent = hasTrend ? ((delta>=0?'▲ ':'▼ ') + Math.abs(delta).toFixed(3) + ` (선택 기간 첫날 대비)`) : '';
   dEl.className = 'kpi-delta ' + (delta>=0?'up':'down');
 
   if (trendChart) trendChart.destroy();
@@ -1223,7 +1223,7 @@ function renderDashboard(){
   document.getElementById('kpi-avg-share').textContent = todaysPrograms.length ? avgShare.toFixed(2) + '%' : '데이터 없음';
   document.getElementById('kpi-avg-share-note').textContent = window.__latestDate + ' 기준';
 
-  document.getElementById('kpi-rank').textContent = window.__periodRank != null ? (Math.round(window.__periodRank*10)/10 + '위') : '데이터 없음';
+  document.getElementById('kpi-rank').textContent = window.__periodRank != null ? (Math.round(window.__periodRank) + '위') : '데이터 없음';
   const trendVal = window.__periodRankTrend;
   const rankNoteEl = document.getElementById('kpi-rank-note');
   if (trendVal == null || trendVal === 0) {
@@ -1302,7 +1302,7 @@ function renderValueMap(){
       responsive: true, maintainAspectRatio: false,
       plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: (ctx)=>{
         const p = filtered[ctx.dataIndex];
-        return [`${p.name} (${p.date} ${p.start})`, `대진: ${p.players||'-'}`, `시청률 ${p.rating}% · 도달률 ${p.reach}% · 시청지속 ${p.avgView.toFixed(1)}분`];
+        return [`${p.name} (${p.date} ${p.start})`, `대진: ${p.players||'-'}`, `시청률 ${p.rating.toFixed(3)}% · 도달률 ${p.reach}% · 시청지속 ${p.avgView.toFixed(1)}분`];
       }}}},
       scales:{
         x:{ title:{display:true, text:'도달률', font:{weight:'bold'}}, grid:{color:'rgba(0,0,0,0.04)'} },
@@ -1311,7 +1311,7 @@ function renderValueMap(){
     }
   });
   const titleEl = document.getElementById('valuemap-title');
-  if (titleEl) titleEl.textContent = `프로그램 가치 지도 (${filtered.length}건) — X: 도달률(%) · Y: 시청시간(분) · Bubble: 시청률`;
+  if (titleEl) titleEl.textContent = `프로그램 가치 지도 (${filtered.length}건) — X: 도달력(시청자수) · Y: 충성도(평균 시청지속시간) · Bubble: 시청률`;
 }
 
 document.querySelectorAll('#program-value-map .chip-btn').forEach(btn=>{
@@ -1532,11 +1532,11 @@ function renderMatching(){
     document.getElementById('match-factors').innerHTML = n === 0
       ? `<li>과거 방영 이력이 없어 기본 점수(50점)로 표시됩니다</li>`
       : `
-      <li>역대 최고 시청률 ${(peak*100).toFixed(2)}% 대비 예측</li>
-      <li>과거 ${n}회 방영 평균 ${(avgAll*100).toFixed(2)}%
-        <span style="color:var(--text-tertiary);">(생방 ${liveN}회${liveAvg!=null?' 평균 '+(liveAvg*100).toFixed(2)+'%':''} · 재방 ${rerunN}회${rerunAvg!=null?' 평균 '+(rerunAvg*100).toFixed(2)+'%':''})</span></li>
-      <li>${day.value} 방영 시 평균 ${(avgDow*100).toFixed(2)}% (${avgDow>avgAll?'▲ 전체 평균보다 높음':'▼ 전체 평균보다 낮음'})</li>
-      <li>${time.value} 전후 시간대 평균 ${(avgHour*100).toFixed(2)}% (${avgHour>avgAll?'▲ 전체 평균보다 높음':'▼ 전체 평균보다 낮음'})</li>
+      <li>역대 최고 시청률 ${(peak*100).toFixed(3)}% 대비 예측</li>
+      <li>과거 ${n}회 방영 평균 ${(avgAll*100).toFixed(3)}%
+        <span style="color:var(--text-tertiary);">(생방 ${liveN}회${liveAvg!=null?' 평균 '+(liveAvg*100).toFixed(3)+'%':''} · 재방 ${rerunN}회${rerunAvg!=null?' 평균 '+(rerunAvg*100).toFixed(3)+'%':''})</span></li>
+      <li>${day.value} 방영 시 평균 ${(avgDow*100).toFixed(3)}% (${avgDow>avgAll?'▲ 전체 평균보다 높음':'▼ 전체 평균보다 낮음'})</li>
+      <li>${time.value} 전후 시간대 평균 ${(avgHour*100).toFixed(3)}% (${avgHour>avgAll?'▲ 전체 평균보다 높음':'▼ 전체 평균보다 낮음'})</li>
     `;
     renderHeatmap(history);
   }
