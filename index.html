@@ -360,10 +360,41 @@
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-thumb { background: #d1d1d6; border-radius: 10px; }
   ::-webkit-scrollbar-track { background: transparent; }
+@media print {
+  body.print-mode .sidebar, body.print-mode .topbar, body.print-mode .btn-report,
+  body.print-mode .subtabs, body.print-mode .filter-row { display:none !important; }
+  body.print-mode .screen { display:none !important; }
+  body.print-mode .screen.print-include { display:block !important; page-break-after: always; }
+  body.print-mode .content { padding:0; overflow:visible; }
+  body.print-mode .main { overflow:visible; }
+}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
+
+<div id="report-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:1000; align-items:center; justify-content:center;">
+  <div style="background:#fff; border-radius:16px; padding:28px; width:360px; box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+    <div style="font-size:16px; font-weight:700; margin-bottom:4px;">보고서에 포함할 화면 선택</div>
+    <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:16px;">현재 각 탭에서 보고 있는 화면 그대로 PDF로 저장됩니다.</div>
+    <label style="display:flex; align-items:center; gap:8px; padding:8px 0; font-size:13px; cursor:pointer;">
+      <input type="checkbox" class="report-check" value="dashboard" checked> Dashboard
+    </label>
+    <label style="display:flex; align-items:center; gap:8px; padding:8px 0; font-size:13px; cursor:pointer;">
+      <input type="checkbox" class="report-check" value="program" checked> 프로그램 분석
+    </label>
+    <label style="display:flex; align-items:center; gap:8px; padding:8px 0; font-size:13px; cursor:pointer;">
+      <input type="checkbox" class="report-check" value="schedule"> 편성 분석
+    </label>
+    <label style="display:flex; align-items:center; gap:8px; padding:8px 0; font-size:13px; cursor:pointer;">
+      <input type="checkbox" class="report-check" value="audience"> 시청자 분석
+    </label>
+    <div style="display:flex; gap:8px; margin-top:20px;">
+      <button onclick="closeReportModal()" style="flex:1; padding:10px; border-radius:10px; border:1px solid var(--border); background:#fff; cursor:pointer; font-weight:600;">취소</button>
+      <button onclick="generateReport()" style="flex:1; padding:10px; border-radius:10px; border:none; background:var(--accent); color:#fff; cursor:pointer; font-weight:600;">PDF로 저장</button>
+    </div>
+  </div>
+</div>
 <div class="app">
 
   <!-- ================= SIDEBAR ================= -->
@@ -396,7 +427,7 @@
           <div class="nav-sub active" data-screen="schedule" data-sub="matching">편성 궁합 분석 (공사중)</div>
           <div class="nav-sub" data-screen="schedule" data-sub="recommend">편성 추천 엔진</div>
           <div class="nav-sub" data-screen="schedule" data-sub="risk">편성 리스크 분석</div>
-          <div class="nav-sub" data-screen="schedule" data-sub="counterfactual">Counterfactual</div>
+          <div class="nav-sub" data-screen="schedule" data-sub="counterfactual">가상 편성 시나리오 (공사중)</div>
         </div>
       </div>
 
@@ -408,6 +439,13 @@
           <div class="nav-sub" data-screen="audience" data-sub="sankey">시청자 이동 지도</div>
           -->
           <div class="nav-sub" data-screen="audience" data-sub="fatigue">시청 피로도 분석</div>
+        </div>
+      </div>
+
+      <div class="nav-group" data-group="update">
+        <div class="nav-item" data-screen="update"><span>업데이트 예정</span><span class="nav-caret">▸</span></div>
+        <div class="nav-sub-wrap">
+          <div class="nav-sub active" data-screen="update" data-sub="player-detail">기사별 세부 정보</div>
         </div>
       </div>
     </div>
@@ -437,7 +475,7 @@
           <button class="chip-btn" data-days="28">4주</button>
           <button class="chip-btn" data-days="56">8주</button>
         </div>
-        <button class="btn-report" onclick="alert('Report Builder 패널은 다음 단계에서 상세 설계 예정입니다.')">보고서 생성</button>
+        <button class="btn-report" onclick="openReportModal()">보고서 생성</button>
       </div>
     </div>
 
@@ -561,7 +599,7 @@
           <div class="subtab active" data-parent="schedule" data-tab="matching">궁합 분석 (공사중)</div>
           <div class="subtab" data-parent="schedule" data-tab="recommend">추천 엔진</div>
           <div class="subtab" data-parent="schedule" data-tab="risk">리스크 분석</div>
-          <div class="subtab" data-parent="schedule" data-tab="counterfactual">Counterfactual</div>
+          <div class="subtab" data-parent="schedule" data-tab="counterfactual">가상 편성 시나리오 (공사중)</div>
         </div>
 
         <div class="subscreen active" data-parent="schedule" id="schedule-matching">
@@ -628,10 +666,13 @@
         <div class="subscreen" data-parent="schedule" id="schedule-counterfactual" style="display:none;">
           <div class="filter-row">
             <select class="mini-filter" id="cf-current"></select>
+            <span style="align-self:center; color:var(--text-tertiary);">→ 이 자리에 대신</span>
+            <select class="mini-filter" id="cf-virtual"></select>
+            <span style="align-self:center; color:var(--text-tertiary);">를 넣었다면?</span>
           </div>
           <div class="bento-grid">
             <div class="bento-card col-12">
-              <div class="card-label">현재 실적 vs 유사 슬롯 대비 (prev_rating 기반)</div>
+              <div class="card-label">실제 편성 실적 vs 가상 대체 프로그램 예측 실적 (공사중 · 과거 이력 기반 예측)</div>
               <div class="cf-compare" id="cf-compare-wrap" style="margin-top:12px;"></div>
               <div class="comment-box" id="cf-comment"></div>
             </div>
@@ -654,9 +695,13 @@
             <select class="mini-filter" id="regression-select"></select>
           </div>
           <div class="bento-grid">
-            <div class="bento-card col-12">
-              <div class="card-label">종료 프로그램 前/後 후속 실적 비교</div>
-              <div class="chart-wrap"><canvas id="chart-regression"></canvas></div>
+            <div class="bento-card col-6">
+              <div class="card-label">시작 직전~직후 광고시간 시청률 변화</div>
+              <div class="chart-wrap"><canvas id="chart-regression-start"></canvas></div>
+            </div>
+            <div class="bento-card col-6">
+              <div class="card-label">종료 직전~직후 광고시간 시청률 변화</div>
+              <div class="chart-wrap"><canvas id="chart-regression-end"></canvas></div>
             </div>
           </div>
         </div>
@@ -675,14 +720,30 @@
 
         <div class="subscreen" data-parent="audience" id="audience-fatigue" style="display:none;">
           <div class="filter-row">
-            <select class="mini-filter">
-              <option>2025 SUPERCUP BADUK (재방)</option>
-            </select>
+            <select class="mini-filter" id="fatigue-select"></select>
           </div>
           <div class="bento-grid">
             <div class="bento-card col-12">
-              <div class="card-label">재방 회차별 시청률 변화</div>
+              <div class="card-label" id="fatigue-title">재방 회차별 시청률 변화</div>
               <div class="chart-wrap"><canvas id="chart-fatigue"></canvas></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen" id="screen-update">
+        <div class="subtabs">
+          <div class="subtab active" data-parent="update" data-tab="player-detail">기사별 세부 정보</div>
+        </div>
+        <div class="subscreen active" data-parent="update" id="update-player-detail">
+          <div class="bento-grid">
+            <div class="bento-card col-12" style="text-align:center; padding:60px 20px;">
+              <div style="font-size:15px; font-weight:700; margin-bottom:8px;">🚧 준비 중인 기능입니다</div>
+              <div style="font-size:13px; color:var(--text-tertiary); max-width:420px; margin:0 auto; line-height:1.6;">
+                대국자(기사)를 프로그램과 별개의 분석 축으로 승격시켜서,<br>
+                "이 기사가 나오면 평균 시청률이 얼마나 나오는지", "어느 시간대에 특히 강한지" 같은<br>
+                기사 중심의 상세 분석 페이지를 만들 예정이에요.
+              </div>
             </div>
           </div>
         </div>
@@ -713,6 +774,60 @@ function subtractDays(dateStr, days){
   d.setDate(d.getDate() - (days - 1));
   return d.toISOString().slice(0, 10);
 }
+function hhmmToMin(t){ const [h,m] = t.split(':').map(Number); return h*60+m; }
+
+// 같은 프로그램(program_id) + 방송 간격 30분 이내 → 방송시간 가중평균으로 통합 (부 나뉨 처리)
+function mergeParts(list){
+  const sorted = [...list].sort((a,b)=> a.start.localeCompare(b.start));
+  const merged = [];
+  sorted.forEach(p=>{
+    const prev = merged[merged.length-1];
+    if (prev && prev.program_id === p.program_id){
+      const gap = hhmmToMin(p.start) - hhmmToMin(prev.end);
+      if (gap >= -5 && gap <= 30){
+        const totalDur = prev.duration + p.duration;
+        const wavg = (key)=> (prev[key]*prev.duration + p[key]*p.duration) / totalDur;
+        prev.rating = wavg('rating'); prev.share = wavg('share'); prev.reach = wavg('reach');
+        prev.avgView = wavg('avgView'); prev.viewers = Math.round(wavg('viewers'));
+        prev.duration = totalDur; prev.end = p.end; prev._parts = (prev._parts||1)+1;
+        return;
+      }
+    }
+    merged.push({...p, _parts: 1});
+  });
+  return merged;
+}
+// 선택 기간 전체를 날짜별로 부 나뉨 통합
+function getMergedPrograms(){
+  const byDate = {};
+  PROGRAMS.forEach(p=>{ (byDate[p.date] = byDate[p.date]||[]).push(p); });
+  let all = [];
+  Object.values(byDate).forEach(dayList=>{ all = all.concat(mergeParts(dayList)); });
+  return all;
+}
+// 같은 program_id의 여러 회차를 평균으로 통합 (DNA 분석용)
+function aggregateByProgram(list){
+  const map = {};
+  list.forEach(p=>{
+    if (!map[p.program_id]) map[p.program_id] = { program_id: p.program_id, name: p.name, instances: [] };
+    map[p.program_id].instances.push(p);
+  });
+  return Object.values(map).map(g=>{
+    const n = g.instances.length;
+    const sum = k => g.instances.reduce((a,x)=>a+(x[k]||0),0);
+    const players = [...new Set(g.instances.map(x=>x.players).filter(x=>x && x!=='-'))];
+    return {
+      ...g,
+      rating: sum('rating')/n, share: sum('share')/n, reach: sum('reach')/n,
+      avgView: sum('avgView')/n, target: sum('target')/n, achievement: sum('achievement')/n,
+      duration: sum('duration')/n,
+      start: g.instances[0].start, end: g.instances[0].end,
+      type: g.instances.every(x=>x.type==='재방') ? '재방' : (g.instances.every(x=>x.type==='생방') ? '생방' : '생방+재방'),
+      players, count: n,
+      schedule_ids: g.instances.map(x=>x.schedule_id),
+    };
+  });
+}
 
 async function loadData() {
   // 1) 바둑TV 채널 ID 조회
@@ -728,10 +843,20 @@ async function loadData() {
   if (dateErr) { console.error('최근 날짜 조회 실패', dateErr); return; }
   window.__latestDate = latestRow.date_key;
 
-  // 3) 편성분석 도구용 — 전체 기간에 걸쳐 방영된 프로그램 목록(중복 없이)
-  const { data: allProgRows } = await sb
-    .from('dim_program').select('program_id, program_name').order('program_name');
-  ALL_PROGRAMS = allProgRows || [];
+  // 3) 편성분석 도구용 — "바둑TV"에서 실제로 방영된 적 있는 프로그램만(전체 기간, 중복 없이)
+  // dim_program은 채널 구분 없이 공용 테이블이라, fact_schedule을 통해 바둑TV 이력이 있는 것만 걸러야 함
+  const { data: ownProgRows } = await sb
+    .from('fact_schedule')
+    .select('program_id, dim_program!fact_schedule_program_id_fkey ( program_id, program_name )')
+    .eq('channel_id', window.__channelId);
+  const seenIds = new Set();
+  ALL_PROGRAMS = [];
+  (ownProgRows||[]).forEach(r=>{
+    const raw = r.dim_program;
+    const prog = Array.isArray(raw) ? raw[0] : raw;
+    if (prog && !seenIds.has(prog.program_id)) { seenIds.add(prog.program_id); ALL_PROGRAMS.push(prog); }
+  });
+  ALL_PROGRAMS.sort((a,b)=>a.program_name.localeCompare(b.program_name));
 
   // 4) 채널 순위 (종합 카테고리, 최근 날짜 기준 — 기간 선택과 무관하게 항상 "현재" 순위)
   const { data: rankRow } = await sb
@@ -837,7 +962,8 @@ const titleMap = {
   dashboard:{t:'Dashboard', s:'채널 전체 성과와 주요 편성 이슈 요약'},
   program:{t:'프로그램 분석', s:'프로그램별 콘텐츠 특성과 전략적 가치 분석'},
   schedule:{t:'편성 분석', s:'프로그램-시간대 적합도 및 편성 시나리오 분석'},
-  audience:{t:'시청자 분석', s:'시청 흐름과 반복 편성에 따른 시청자 행동 분석'}
+  audience:{t:'시청자 분석', s:'시청 흐름과 반복 편성에 따른 시청자 행동 분석'},
+  update:{t:'업데이트 예정', s:'앞으로 추가될 분석 기능 미리보기'}
 };
 
 document.querySelectorAll('.nav-item[data-screen]').forEach(item=>{
@@ -972,16 +1098,35 @@ function renderDashboard(){
     document.getElementById('kpi-top-rating').textContent = topProgram.rating.toFixed(3) + '% (' + topProgram.date + ')';
   }
 
+  // 단일일 선택인지, 기간 선택인지에 따라 표 내용이 달라짐
+  const fromV = document.getElementById('date-from').value;
+  const toV = document.getElementById('date-to').value;
+  const isSingleDay = fromV === toV;
+  const merged = getMergedPrograms(); // 부 나뉨(1부/2부) 통합된 목록
+
   const titleEl = document.getElementById('dashboard-table-title');
-  if (titleEl) titleEl.textContent = window.__latestDate + ' 프로그램별 실적';
+  let displayPrograms;
+  if (isSingleDay) {
+    displayPrograms = merged.filter(p => p.date === fromV).sort((a,b)=>a.start.localeCompare(b.start));
+    if (titleEl) titleEl.textContent = `${fromV} 프로그램별 실적`;
+  } else {
+    displayPrograms = [...merged].sort((a,b)=>b.rating-a.rating).slice(0, 10);
+    if (titleEl) titleEl.textContent = `${fromV} ~ ${toV} 시청률 TOP 10`;
+  }
 
   const tbl = document.getElementById('dashboard-table');
-  tbl.innerHTML = `<tr><th>프로그램</th><th>시간대</th><th>구분</th><th>시청률</th><th>전회 대비</th></tr>` +
-    todaysPrograms.map(p=>{
-      const arrow = p.prev == null ? `<span style="color:var(--text-tertiary);">데이터 없음</span>` :
-        (p.rating - p.prev >= 0 ? `<span class="delta-up">▲ ${(p.rating-p.prev).toFixed(3)}</span>` : `<span class="delta-down">▼ ${Math.abs(p.rating-p.prev).toFixed(3)}</span>`);
-      const badge = p.type==='생방' ? '<span class="badge live">생방</span>' : '<span class="badge rerun">재방</span>';
-      return `<tr><td><b>${p.name}</b></td><td>${p.start}–${p.end}</td><td>${badge}</td><td>${p.rating.toFixed(3)}%</td><td>${arrow}</td></tr>`;
+  tbl.innerHTML = `<tr><th>프로그램</th><th>${isSingleDay?'시간대':'날짜/시간대'}</th><th>구분</th><th>시청률</th><th>목표 대비</th></tr>` +
+    displayPrograms.map(p=>{
+      const hasTarget = p.target > 0;
+      const achieveTxt = hasTarget
+        ? (p.achievement >= 100
+            ? `<span class="delta-up">▲ ${p.achievement.toFixed(0)}%</span>`
+            : `<span class="delta-down">▼ ${p.achievement.toFixed(0)}%</span>`)
+        : `<span style="color:var(--text-tertiary);">목표 미설정</span>`;
+      const badge = p.type==='생방' ? '<span class="badge live">생방</span>' : (p.type==='재방' ? '<span class="badge rerun">재방</span>' : '<span class="badge rerun">혼합</span>');
+      const timeLabel = isSingleDay ? `${p.start}–${p.end}` : `${p.date} ${p.start}`;
+      const partsNote = p._parts > 1 ? ` <span style="font-size:10px; color:var(--text-tertiary);">(${p._parts}부 통합)</span>` : '';
+      return `<tr><td><b>${p.name}</b>${partsNote}</td><td>${timeLabel}</td><td>${badge}</td><td>${p.rating.toFixed(3)}%</td><td>${achieveTxt}</td></tr>`;
     }).join('');
 }
 
@@ -1030,48 +1175,61 @@ document.querySelectorAll('#program-value-map .chip-btn').forEach(btn=>{
 /* ============ PROGRAM: DNA ============ */
 function renderDNA(){
   const sel = document.getElementById('dna-select');
-  fillSelect(sel, PROGRAMS, null, p=>p.name);
+  const grouped = aggregateByProgram(PROGRAMS);
+  window.__dnaGrouped = grouped;
+  fillSelect(sel, grouped, null, g=> g.count>1 ? `${g.name} (${g.count}회 통합)` : g.name);
   sel.value = 0;
-  sel.addEventListener('change', ()=>drawDNA(PROGRAMS[sel.value]));
-  drawDNA(PROGRAMS[0]);
+  sel.addEventListener('change', ()=>drawDNA(grouped[sel.value]));
+  drawDNA(grouped[0]);
 }
 let dnaChart;
-async function fetchAudience(scheduleId){
+// 여러 schedule_id의 연령대별 시청률을 평균내서 반환
+async function fetchAudience(scheduleIds){
   const { data, error } = await sb.from('fact_audience')
-    .select('gender, age_group, rating_pct').eq('schedule_id', scheduleId);
+    .select('gender, age_group, rating_pct, schedule_id').in('schedule_id', scheduleIds);
   if (error) { console.error('연령대별 시청률 조회 실패', error); return []; }
-  return data || [];
+  const byKey = {};
+  (data||[]).forEach(row=>{
+    const key = row.gender+'_'+row.age_group;
+    if (!byKey[key]) byKey[key] = { gender: row.gender, age_group: row.age_group, sum:0, n:0 };
+    byKey[key].sum += row.rating_pct; byKey[key].n += 1;
+  });
+  return Object.values(byKey).map(x=>({ gender:x.gender, age_group:x.age_group, rating_pct:x.sum/x.n }));
 }
-async function drawDNA(p){
+async function drawDNA(g){
   if(dnaChart) dnaChart.destroy();
   dnaChart = new Chart(document.getElementById('chart-dna'), {
     type:'bar',
     data:{ labels:['목표 시청률','실제 시청률'], datasets:[{
-      data:[p.target, p.rating], backgroundColor:[ '#e5e5ea', ACCENT_COLOR ], borderRadius: 8
+      data:[g.target, g.rating], backgroundColor:[ '#e5e5ea', ACCENT_COLOR ], borderRadius: 8
     }]},
     options:{ responsive: true, maintainAspectRatio: false, plugins:{legend:{display:false}}, scales:{ y:{ beginAtZero:true, grid:{color:'rgba(0,0,0,0.04)'} }, x:{grid:{display:false}} } }
   });
 
+  const playersTxt = g.count > 1
+    ? `총 ${g.count}회 방송 · 출연 기사: ${g.players.length ? g.players.join(', ') : '정보 없음'}`
+    : (g.players[0] || '-');
+
   document.getElementById('dna-detail').innerHTML = `
-    <div class="card-label">구조화 분석 결과</div>
+    <div class="card-label">구조화 분석 결과 ${g.count>1 ? `<span style="font-weight:400; color:var(--text-tertiary); font-size:11px;">(${g.count}회 평균)</span>` : ''}</div>
     <div id="dna-tags">불러오는 중...</div>
     <ul class="factor-list">
-      <li><b>주요 대진:</b> ${p.players}</li>
-      <li><b>방송 시간:</b> ${p.start}–${p.end} (${p.duration}분)</li>
-      <li><b>목표 달성률:</b> ${p.achievement}%</li>
-      <li><b>전회 대비:</b> ${p.prev == null ? '데이터 없음' : ((p.rating-p.prev>=0?'+':'')+(p.rating-p.prev).toFixed(3)+'%')}</li>
+      <li><b>대진:</b> ${playersTxt}</li>
+      <li><b>평균 방송 시간:</b> ${g.duration.toFixed(0)}분</li>
+      <li><b>목표 대비 실적:</b> ${g.target>0 ? g.achievement.toFixed(0)+'%' : '목표 미설정'}</li>
     </ul>
-    <div class="card-label" style="margin-top:14px;">성·연령대별 시청률</div>
+    <div class="card-label" style="margin-top:14px;">성·연령대별 시청률 ${g.count>1?'(평균)':''}</div>
     <div id="dna-audience">불러오는 중...</div>
   `;
 
   const tags = [];
-  if(p.type==='재방') tags.push('재방 강세형');
-  if(p.duration>200) tags.push('장시간 편성');
-  if(p.achievement>120) tags.push('목표 초과 달성');
-  if(p.start>='22:00'||p.start<'06:00') tags.push('심야·새벽 시간대');
+  if(g.type==='재방') tags.push('재방 강세형');
+  if(g.type==='생방+재방') tags.push('생방+재방 혼합 편성');
+  if(g.duration>200) tags.push('장시간 편성');
+  if(g.achievement>120) tags.push('목표 초과 달성');
+  if(g.start>='22:00'||g.start<'06:00') tags.push('심야·새벽 시간대');
 
-  const audience = await fetchAudience(p.schedule_id);
+  const audience = await fetchAudience(g.schedule_ids);
   if (audience.length > 0) {
     const top = [...audience].sort((a,b)=>b.rating_pct-a.rating_pct)[0];
     if (top && top.rating_pct > 0) tags.push(`${top.age_group} ${top.gender==='남'?'남성':'여성'} 시청층 집중`);
@@ -1139,12 +1297,12 @@ function drawCompare(){
 const DOW_INDEX = {'일':0,'월':1,'화':2,'수':3,'목':4,'금':5,'토':6};
 const historyCache = {};
 
-// 특정 프로그램의 과거 방영 이력(요일/시간대/시청률) 전체 조회 (캐싱)
+// 특정 프로그램의 과거 방영 이력(요일/시간대/시청률/생재구분) 전체 조회 (캐싱)
 async function fetchProgramHistory(programId){
   if (historyCache[programId]) return historyCache[programId];
   const { data: rows, error } = await sb
     .from('fact_schedule')
-    .select('date_key, start_time, fact_rating ( rating_pct )')
+    .select('date_key, start_time, is_rerun, fact_rating ( rating_pct )')
     .eq('program_id', programId)
     .eq('channel_id', window.__channelId);
   if (error) { console.error('프로그램 이력 조회 실패', error); historyCache[programId] = []; return []; }
@@ -1155,13 +1313,16 @@ async function fetchProgramHistory(programId){
     if (rating == null) return null;
     const dow = new Date(r.date_key + 'T00:00:00').getDay();
     const hour = Number(r.start_time.split(':')[0]);
-    return { rating, dow, hour };
+    return { rating, dow, hour, isRerun: r.is_rerun };
   }).filter(Boolean);
   historyCache[programId] = history;
   return history;
 }
 
-// 과거 이력 기반 궁합 점수 계산: 전체 평균 + 같은 요일 평균 + 비슷한 시간대 평균을 가중합
+// 과거 이력 기반 궁합 점수 계산 (100점 만점)
+// 예측 시청률 = 전체평균×20% + 같은요일평균×30% + 비슷한시간대평균×50% (시간대를 요일보다 중요하게)
+// 점수 = 100 × (예측 시청률 ÷ 이 프로그램의 역대 최고 시청률)
+// → 100점 = "이 프로그램이 낼 수 있는 최고 성과를 이 슬롯에서도 낼 것으로 예측됨"
 function computeMatchScore(history, dowLabel, timeStr){
   const dow = DOW_INDEX[dowLabel[0]];
   const hour = Number(timeStr.split(':')[0]);
@@ -1172,10 +1333,19 @@ function computeMatchScore(history, dowLabel, timeStr){
   const avgDow = sameDow.length ? sameDow.reduce((a,h)=>a+h.rating,0)/sameDow.length : avgAll;
   const nearHour = history.filter(h => Math.abs(h.hour - hour) <= 2);
   const avgHour = nearHour.length ? nearHour.reduce((a,h)=>a+h.rating,0)/nearHour.length : avgAll;
+  const predicted = avgAll*0.2 + avgDow*0.3 + avgHour*0.5;
+  const peak = Math.max(...history.map(h=>h.rating));
 
-  let score = 50 + avgAll*400 + (avgDow-avgAll)*600 + (avgHour-avgAll)*400;
-  score = Math.max(10, Math.min(99, Math.round(score)));
-  return { score, avgAll, avgDow, avgHour, n: history.length };
+  let score = peak > 0 ? Math.round(100 * predicted / peak) : 50;
+  score = Math.max(10, Math.min(99, score));
+
+  const liveHist = history.filter(h=>!h.isRerun);
+  const rerunHist = history.filter(h=>h.isRerun);
+  const liveAvg = liveHist.length ? liveHist.reduce((a,h)=>a+h.rating,0)/liveHist.length : null;
+  const rerunAvg = rerunHist.length ? rerunHist.reduce((a,h)=>a+h.rating,0)/rerunHist.length : null;
+
+  return { score, avgAll, avgDow, avgHour, n: history.length, peak, predicted,
+    liveN: liveHist.length, rerunN: rerunHist.length, liveAvg, rerunAvg };
 }
 
 function renderMatching(){
@@ -1189,13 +1359,15 @@ function renderMatching(){
     document.getElementById('match-score').textContent = '계산 중...';
     document.getElementById('match-factors').innerHTML = '';
     const history = await fetchProgramHistory(p.program_id);
-    const { score, avgAll, avgDow, avgHour, n } = computeMatchScore(history, day.value, time.value);
+    const { score, avgAll, avgDow, avgHour, n, peak, liveN, rerunN, liveAvg, rerunAvg } = computeMatchScore(history, day.value, time.value);
 
     document.getElementById('match-score').textContent = score+'점';
     document.getElementById('match-factors').innerHTML = n === 0
       ? `<li>과거 방영 이력이 없어 기본 점수(50점)로 표시됩니다</li>`
       : `
-      <li>과거 ${n}회 방영 평균 시청률 ${(avgAll*100).toFixed(2)}%</li>
+      <li>역대 최고 시청률 ${(peak*100).toFixed(2)}% 대비 예측</li>
+      <li>과거 ${n}회 방영 평균 ${(avgAll*100).toFixed(2)}%
+        <span style="color:var(--text-tertiary);">(생방 ${liveN}회${liveAvg!=null?' 평균 '+(liveAvg*100).toFixed(2)+'%':''} · 재방 ${rerunN}회${rerunAvg!=null?' 평균 '+(rerunAvg*100).toFixed(2)+'%':''})</span></li>
       <li>${day.value} 방영 시 평균 ${(avgDow*100).toFixed(2)}% (${avgDow>avgAll?'▲ 전체 평균보다 높음':'▼ 전체 평균보다 낮음'})</li>
       <li>${time.value} 전후 시간대 평균 ${(avgHour*100).toFixed(2)}% (${avgHour>avgAll?'▲ 전체 평균보다 높음':'▼ 전체 평균보다 낮음'})</li>
     `;
@@ -1264,50 +1436,111 @@ function renderRisk(){
 /* ============ SCHEDULE: COUNTERFACTUAL ============ */
 function renderCounterfactual(){
   const sel = document.getElementById('cf-current');
-  fillSelect(sel, PROGRAMS, null, p=>p.name); sel.value=0;
-  function update(){
+  const vsel = document.getElementById('cf-virtual');
+  fillSelect(sel, PROGRAMS, null, p=>`${p.date} ${p.start} ${p.name}`); sel.value=0;
+  fillSelect(vsel, ALL_PROGRAMS, null, p=>p.program_name); vsel.value=0;
+
+  async function update(){
     const p = PROGRAMS[sel.value];
-    const diff = p.prev == null ? null : p.rating - p.prev;
-    const pct = (diff != null && p.prev>0) ? Math.round((diff/p.prev)*100) : null;
+    const virtual = ALL_PROGRAMS[vsel.value];
+    document.getElementById('cf-comment').textContent = '계산 중...';
+
+    const dowLabel = ['일요일','월요일','화요일','수요일','목요일','금요일','토요일'][new Date(p.date+'T00:00:00').getDay()];
+    const history = await fetchProgramHistory(virtual.program_id);
+    const { predicted, n } = computeMatchScore(history, dowLabel, p.start);
+
     document.getElementById('cf-compare-wrap').innerHTML = `
       <div class="cf-box current">
-        <div class="cf-box-label">직전 편성 실적</div>
+        <div class="cf-box-label">실제 편성 실적</div>
         <div class="prog-name">${p.name}</div>
-        <div class="prog-meta">${p.start}–${p.end} · ${p.type}</div>
-        <div class="prog-rating">${p.prev == null ? '데이터 없음' : p.prev.toFixed(3)+'%'}</div>
+        <div class="prog-meta">${p.date} ${p.start}–${p.end} · ${p.type}</div>
+        <div class="prog-rating">${p.rating.toFixed(3)}%</div>
       </div>
       <div class="cf-arrow">→</div>
       <div class="cf-box virtual">
-        <div class="cf-box-label">이번 편성 실적</div>
-        <div class="prog-name">${p.name}</div>
-        <div class="prog-meta">${p.start}–${p.end} · ${p.type}</div>
-        <div class="prog-rating" style="color:var(--accent);">${p.rating.toFixed(3)}%</div>
+        <div class="cf-box-label">가상: "${virtual.program_name}"을(를) 넣었다면</div>
+        <div class="prog-name">${virtual.program_name}</div>
+        <div class="prog-meta">${p.date} ${p.start}–${p.end} (예측)</div>
+        <div class="prog-rating" style="color:var(--accent);">${n>0 ? (predicted*100).toFixed(3)+'%' : '이력 없음'}</div>
       </div>
     `;
-    document.getElementById('cf-comment').textContent = pct===null
-      ? '직전 실적 데이터가 아직 수집되지 않아 증감률 계산 불가 (prev_rating_pct 컬럼 미구현 — 추후 추가 예정)'
-      : `실측 데이터 기준 전회 대비 ${pct>=0?'+':''}${pct}% ${pct>=0?'상승':'하락'}. (fact_rating.prev_rating 필드로 계산되는 실제 Counterfactual 대조 방식의 예시)`;
+    if (n === 0) {
+      document.getElementById('cf-comment').textContent = `"${virtual.program_name}"의 바둑TV 방영 이력이 없어 예측할 수 없습니다.`;
+    } else {
+      const diff = predicted - p.rating;
+      const pct = p.rating > 0 ? Math.round((diff/p.rating)*100) : null;
+      document.getElementById('cf-comment').textContent =
+        `과거 ${n}회 방영 이력 기반 예측 — 실제 대비 ${pct!=null ? (pct>=0?'+':'')+pct+'%' : '비교 불가'} ${diff>=0?'높을':'낮을'} 것으로 예측됩니다. (⚠ 공사중: 예측 로직은 편성 궁합 분석과 동일한 방식이며 정교화가 더 필요합니다)`;
+    }
   }
   sel.addEventListener('change', update);
+  vsel.addEventListener('change', update);
   update();
 }
 
 /* ============ AUDIENCE: REGRESSION ============ */
+let regStartChart, regEndChart;
+const WINDOW_MIN = 10; // 경계 앞뒤로 볼 분 수
+
+async function fetchMinutes(scheduleId){
+  if (!scheduleId) return [];
+  const { data, error } = await sb.from('fact_rating_minute')
+    .select('minute_offset, rating_pct').eq('schedule_id', scheduleId).order('minute_offset', {ascending:true});
+  if (error) { console.error('분단위 조회 실패', error); return []; }
+  return data || [];
+}
+
 function renderRegression(){
   const sel = document.getElementById('regression-select');
-  fillSelect(sel, PROGRAMS.slice(0, Math.max(1,PROGRAMS.length-1)), null, p=>p.name); sel.value=0;
-  function update(){
+  fillSelect(sel, PROGRAMS, null, p=>`${p.date} ${p.start} ${p.name}`); sel.value=0;
+
+  async function update(){
     const idx = +sel.value;
-    const before = PROGRAMS[idx].rating;
-    const after = PROGRAMS[idx+1] ? PROGRAMS[idx+1].rating : before*1.1;
-    if(window.regChart) window.regChart.destroy();
-    window.regChart = new Chart(document.getElementById('chart-regression'), {
-      type:'bar',
-      data:{ labels:['종료 프로그램','후속 프로그램'], datasets:[{
-        data:[before, after], backgroundColor:['#e5e5ea', ACCENT_COLOR], borderRadius: 8
-      }]},
-      options:{ responsive: true, maintainAspectRatio: false, plugins:{legend:{display:false}}, scales:{ y:{ beginAtZero:true, grid:{color:'rgba(0,0,0,0.04)'} }, x:{grid:{display:false}} } }
-    });
+    const p = PROGRAMS[idx];
+    const prev = PROGRAMS[idx-1] && PROGRAMS[idx-1].date === p.date ? PROGRAMS[idx-1] : null;
+    const next = PROGRAMS[idx+1] && PROGRAMS[idx+1].date === p.date ? PROGRAMS[idx+1] : null;
+
+    const [ownMinutes, prevMinutes, nextMinutes] = await Promise.all([
+      fetchMinutes(p.schedule_id), fetchMinutes(prev?.schedule_id), fetchMinutes(next?.schedule_id)
+    ]);
+
+    // 시작 경계: 직전 프로그램의 마지막 WINDOW_MIN분 + 이 프로그램의 첫 WINDOW_MIN분
+    const prevTail = prevMinutes.filter(m => m.minute_offset >= (prevMinutes.length ? prevMinutes[prevMinutes.length-1].minute_offset - WINDOW_MIN : 0));
+    const ownHead = ownMinutes.filter(m => m.minute_offset <= WINDOW_MIN);
+    const startLabels = [...prevTail.map(m=>`이전 -${prevTail[prevTail.length-1].minute_offset - m.minute_offset}분`), ...ownHead.map(m=>`+${m.minute_offset}분`)];
+    const startData = [...prevTail.map(m=>m.rating_pct), ...ownHead.map(m=>m.rating_pct)];
+    const startBoundaryIdx = prevTail.length; // 이 지점이 "시작(0분)"
+
+    // 종료 경계: 이 프로그램의 마지막 WINDOW_MIN분 + 다음 프로그램의 첫 WINDOW_MIN분
+    const ownTail = ownMinutes.filter(m => m.minute_offset >= (ownMinutes.length ? ownMinutes[ownMinutes.length-1].minute_offset - WINDOW_MIN : 0));
+    const nextHead = nextMinutes.filter(m => m.minute_offset <= WINDOW_MIN);
+    const endLabels = [...ownTail.map((m,i)=>`종료 -${ownTail.length-1-i}분`), ...nextHead.map(m=>`다음 +${m.minute_offset}분`)];
+    const endData = [...ownTail.map(m=>m.rating_pct), ...nextHead.map(m=>m.rating_pct)];
+    const endBoundaryIdx = ownTail.length;
+
+    function drawBoundaryChart(existing, canvasId, labels, data, boundaryIdx, noDataMsg){
+      if (existing) existing.destroy();
+      if (data.length === 0) {
+        const ctx = document.getElementById(canvasId).getContext('2d');
+        ctx.clearRect(0,0,9999,9999);
+        return null;
+      }
+      return new Chart(document.getElementById(canvasId), {
+        type:'line',
+        data:{ labels, datasets:[{
+          data, borderColor: ACCENT_COLOR, backgroundColor: ACCENT_LIGHT, fill:true, tension:0.3,
+          pointRadius: labels.map((_,i)=> i===boundaryIdx ? 6 : 2),
+          pointBackgroundColor: labels.map((_,i)=> i===boundaryIdx ? '#ff3b30' : ACCENT_COLOR),
+        }]},
+        options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+          scales:{ y:{ beginAtZero:true, grid:{color:'rgba(0,0,0,0.04)'} }, x:{ grid:{display:false}, ticks:{maxRotation:60, minRotation:60} } } }
+      });
+    }
+    regStartChart = drawBoundaryChart(regStartChart, 'chart-regression-start', startLabels, startData, startBoundaryIdx);
+    regEndChart = drawBoundaryChart(regEndChart, 'chart-regression-end', endLabels, endData, endBoundaryIdx);
+
+    if (!prev) document.querySelector('#chart-regression-start').closest('.bento-card').querySelector('.card-label').textContent = '시작 직전~직후 (직전 방송 정보 없음, 자체 구간만 표시)';
+    if (!next) document.querySelector('#chart-regression-end').closest('.bento-card').querySelector('.card-label').textContent = '종료 직전~직후 (다음 방송 정보 없음, 자체 구간만 표시)';
   }
   sel.addEventListener('change', update);
   update();
@@ -1349,16 +1582,92 @@ function renderSankey(){
 }
 
 /* ============ AUDIENCE: FATIGUE ============ */
-function renderFatigue(){
-  new Chart(document.getElementById('chart-fatigue'), {
-    type:'line',
-    data:{ labels:['1회차','2회차','3회차','4회차','5회차'], datasets:[{
-      data:[0.118, 0.095, 0.081, 0.070, 0.062], borderColor: ACCENT_COLOR, backgroundColor: ACCENT_LIGHT,
-      fill:true, tension:0.4, pointRadius:4, pointBackgroundColor: ACCENT_COLOR
-    }]},
-    options:{ responsive: true, maintainAspectRatio: false, plugins:{legend:{display:false}}, scales:{ y:{ beginAtZero:true, grid:{color:'rgba(0,0,0,0.04)'} }, x:{grid:{display:false}} } }
+let fatigueChart;
+async function renderFatigue(){
+  // 바둑TV에서 재방 2회 이상 편성된 적 있는 프로그램만 후보로
+  const { data: rerunRows, error } = await sb
+    .from('fact_schedule')
+    .select('program_id, date_key, start_time, dim_program!fact_schedule_program_id_fkey ( program_id, program_name )')
+    .eq('channel_id', window.__channelId).eq('is_rerun', true);
+  if (error) { console.error('피로도 후보 조회 실패', error); return; }
+
+  const byProgram = {};
+  (rerunRows||[]).forEach(r=>{
+    const raw = r.dim_program; const prog = Array.isArray(raw) ? raw[0] : raw;
+    if (!prog) return;
+    if (!byProgram[prog.program_id]) byProgram[prog.program_id] = { program_id: prog.program_id, name: prog.program_name, rows: [] };
+    byProgram[prog.program_id].rows.push({ date: r.date_key, start: r.start_time });
   });
+  const candidates = Object.values(byProgram).filter(g => g.rows.length >= 2)
+    .sort((a,b)=> b.rows.length - a.rows.length);
+
+  const sel = document.getElementById('fatigue-select');
+  if (candidates.length === 0) {
+    sel.innerHTML = '<option>재방 2회 이상 프로그램 없음</option>';
+    document.getElementById('fatigue-title').textContent = '재방 2회 이상 편성된 프로그램이 선택 기간에 없습니다';
+    if (fatigueChart) { fatigueChart.destroy(); fatigueChart = null; }
+    return;
+  }
+  fillSelect(sel, candidates, null, c=>`${c.name} (재방 ${c.rows.length}회)`);
+  sel.value = 0;
+
+  async function update(){
+    const c = candidates[sel.value];
+    document.getElementById('fatigue-title').textContent = `${c.name} — 재방 회차별 시청률 변화`;
+    // 해당 프로그램의 재방 스케줄들의 실제 시청률 조회 (날짜 오름차순 = 회차 순)
+    const scheduleIds = [];
+    const { data: schedRows } = await sb.from('fact_schedule')
+      .select('schedule_id, date_key, start_time')
+      .eq('program_id', c.program_id).eq('channel_id', window.__channelId).eq('is_rerun', true)
+      .order('date_key', { ascending: true }).order('start_time', { ascending: true });
+    (schedRows||[]).forEach(r=>scheduleIds.push(r.schedule_id));
+
+    const { data: ratingRows } = await sb.from('fact_rating')
+      .select('schedule_id, rating_pct').in('schedule_id', scheduleIds);
+    const ratingMap = {};
+    (ratingRows||[]).forEach(r=>{ ratingMap[r.schedule_id] = r.rating_pct; });
+
+    const labels = (schedRows||[]).map((r,i)=>`${i+1}회차 (${r.date_key.slice(5)})`);
+    const data = (schedRows||[]).map(r=> ratingMap[r.schedule_id] ?? null);
+
+    if (fatigueChart) fatigueChart.destroy();
+    fatigueChart = new Chart(document.getElementById('chart-fatigue'), {
+      type:'line',
+      data:{ labels, datasets:[{
+        data, borderColor: ACCENT_COLOR, backgroundColor: ACCENT_LIGHT,
+        fill:true, tension:0.4, pointRadius:4, pointBackgroundColor: ACCENT_COLOR, spanGaps: true
+      }]},
+      options:{ responsive: true, maintainAspectRatio: false, plugins:{legend:{display:false}}, scales:{ y:{ beginAtZero:true, grid:{color:'rgba(0,0,0,0.04)'} }, x:{grid:{display:false}} } }
+    });
+  }
+  sel.addEventListener('change', update);
+  update();
 }
+
+/* ============ REPORT (PDF) ============ */
+function openReportModal(){
+  document.getElementById('report-modal').style.display = 'flex';
+}
+function closeReportModal(){
+  document.getElementById('report-modal').style.display = 'none';
+}
+function generateReport(){
+  const checked = Array.from(document.querySelectorAll('.report-check:checked')).map(c=>c.value);
+  if (checked.length === 0) { alert('최소 1개 화면은 선택해주세요.'); return; }
+  closeReportModal();
+
+  document.querySelectorAll('.screen').forEach(el=>el.classList.remove('print-include'));
+  checked.forEach(name=>{
+    const el = document.getElementById('screen-'+name);
+    if (el) el.classList.add('print-include');
+  });
+  document.body.classList.add('print-mode');
+  window.print();
+}
+window.addEventListener('afterprint', ()=>{
+  document.body.classList.remove('print-mode');
+  document.querySelectorAll('.screen').forEach(el=>el.classList.remove('print-include'));
+});
 
 /* ============ INIT ============ */
 (async function init(){
