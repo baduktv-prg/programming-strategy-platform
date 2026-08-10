@@ -582,7 +582,7 @@
           </div>
           <div class="bento-grid">
             <div class="bento-card col-7">
-              <div class="card-label">시간대별 목표 달성률</div>
+              <div class="card-label">목표 달성률</div>
               <div class="chart-wrap"><canvas id="chart-dna"></canvas></div>
             </div>
             <div class="bento-card col-5" id="dna-detail"></div>
@@ -1305,8 +1305,8 @@ function renderValueMap(){
         return [`${p.name} (${p.date} ${p.start})`, `대진: ${p.players||'-'}`, `시청률 ${p.rating}%`];
       }}}},
       scales:{
-        x:{ title:{display:true, text:'도달력 (시청자 수)', font:{weight:'bold'}}, grid:{color:'rgba(0,0,0,0.04)'} },
-        y:{ title:{display:true, text:'충성도 (평균 시청지속시간, 분)', font:{weight:'bold'}}, grid:{color:'rgba(0,0,0,0.04)'} }
+        x:{ title:{display:true, text:'도달률', font:{weight:'bold'}}, grid:{color:'rgba(0,0,0,0.04)'} },
+        y:{ title:{display:true, text:'시청시간(분)', font:{weight:'bold'}}, grid:{color:'rgba(0,0,0,0.04)'} }
       }
     }
   });
