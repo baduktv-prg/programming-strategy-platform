@@ -807,6 +807,27 @@ function mergeParts(list){
   return merged;
 }
 // 선택 기간 전체를 날짜별로 부 나뉨 통합
+// 방송이 시작~종료 사이 걸쳐있는 모든 시간대의 목표값을 평균내서 반환 (재방에만 적용)
+function getHourlyTargetAvg(start, end){
+  const startH = Number(start.split(':')[0]);
+  const endH = Number(end.split(':')[0]);
+  const endM = Number(end.split(':')[1]);
+  const hours = [];
+  let h = startH;
+  while (true){
+    hours.push(h);
+    if (h === endH) break;
+    h = (h + 1) % 24;
+    if (hours.length > 24) break; // 안전장치
+  }
+  // 종료 분이 0분이면 그 시간대는 실질적으로 방영 안 한 것으로 보고 제외 (마지막 시간대가 시작시간과 다를 때만)
+  if (endM === 0 && hours.length > 1) hours.pop();
+
+  const vals = hours.map(hh => HOURLY_TARGET[hh]).filter(v => v != null);
+  if (vals.length === 0) return null;
+  return vals.reduce((a,b)=>a+b,0) / vals.length;
+}
+
 function getMergedPrograms(){
   const byDate = {};
   PROGRAMS.forEach(p=>{ (byDate[p.date] = byDate[p.date]||[]).push(p); });
@@ -1139,11 +1160,13 @@ function renderDashboard(){
   const tbl = document.getElementById('dashboard-table');
   tbl.innerHTML = `<tr><th>프로그램</th><th>${isSingleDay?'시간대':'날짜/시간대'}</th><th>구분</th><th>시청률</th><th>시간대 목표 比</th></tr>` +
     displayPrograms.map(p=>{
-      const hour = Number(p.start.split(':')[0]);
-      const hourTarget = HOURLY_TARGET[hour];
+      const isRerunType = p.type === '재방';
+      const hourTarget = isRerunType ? getHourlyTargetAvg(p.start, p.end) : null;
       const hasTarget = hourTarget != null && hourTarget > 0;
       const ratio = hasTarget ? (p.rating / hourTarget * 100) : null;
-      const achieveTxt = hasTarget
+      const achieveTxt = !isRerunType
+        ? `<span style="color:var(--text-tertiary);">해당없음(생방/본방)</span>`
+        : hasTarget
         ? (ratio >= 100
             ? `<span class="delta-up">▲ ${ratio.toFixed(0)}%</span>`
             : `<span class="delta-down">▼ ${ratio.toFixed(0)}%</span>`)
