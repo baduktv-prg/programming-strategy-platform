@@ -155,6 +155,19 @@
   }
   select.period-select:hover, select.mini-filter:hover { border-color: rgba(0,0,0,0.15); }
 
+  input.date-input {
+    font-family: inherit; font-size: 12.5px; font-weight: 600; padding: 8px 10px;
+    border: 1px solid var(--border); border-radius: 8px;
+    background: #fff; color: var(--text-primary); outline: none;
+  }
+  .chip-btn {
+    font-family: inherit; font-size: 12px; font-weight: 700; padding: 8px 12px;
+    border: 1px solid var(--border); border-radius: var(--radius-pill);
+    background: #fff; color: var(--text-secondary); cursor: pointer; transition: all .15s;
+  }
+  .chip-btn:hover { border-color: rgba(0,0,0,0.15); }
+  .chip-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
   .btn-report {
     font-family: inherit; font-size: 13px; font-weight: 700; padding: 10px 20px;
     background: var(--text-primary); color: #fff; border: none;
@@ -413,11 +426,17 @@
         <div class="topbar-sub" id="topbar-sub">채널 전체 성과와 주요 편성 이슈 요약</div>
       </div>
       <div class="topbar-right">
-        <select class="period-select" id="period-select">
-          <option value="28">최근 4주</option>
-          <option value="56">최근 8주</option>
-          <option value="30">이번 달</option>
-        </select>
+        <div style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-secondary);">
+          <input type="date" id="date-from" class="date-input">
+          <span>~</span>
+          <input type="date" id="date-to" class="date-input">
+        </div>
+        <div style="display:flex; gap:4px;">
+          <button class="chip-btn" data-days="1">오늘</button>
+          <button class="chip-btn" data-days="7">1주</button>
+          <button class="chip-btn" data-days="28">4주</button>
+          <button class="chip-btn" data-days="56">8주</button>
+        </div>
         <button class="btn-report" onclick="alert('Report Builder 패널은 다음 단계에서 상세 설계 예정입니다.')">보고서 생성</button>
       </div>
     </div>
@@ -493,9 +512,17 @@
         </div>
 
         <div class="subscreen active" data-parent="program" id="program-value-map">
+          <div class="filter-row" style="margin-bottom:12px;">
+            <span style="font-size:12px; color:var(--text-secondary); align-self:center; margin-right:4px;">시간대:</span>
+            <button class="chip-btn active" data-hour-range="0,24">전체</button>
+            <button class="chip-btn" data-hour-range="6,12">오전 (06-12시)</button>
+            <button class="chip-btn" data-hour-range="12,18">오후 (12-18시)</button>
+            <button class="chip-btn" data-hour-range="18,24">프라임 (18-24시)</button>
+            <button class="chip-btn" data-hour-range="0,6">심야·새벽 (00-06시)</button>
+          </div>
           <div class="bento-grid">
             <div class="bento-card col-12">
-              <div class="card-label">프로그램 가치 지도 — X: 도달력(시청자수) · Y: 충성도(방송시간) · Bubble: 시청률</div>
+              <div class="card-label" id="valuemap-title">프로그램 가치 지도 — X: 도달력(시청자수) · Y: 충성도(평균 시청지속시간) · Bubble: 시청률</div>
               <div class="chart-wrap tall"><canvas id="chart-valuemap"></canvas></div>
             </div>
           </div>
@@ -668,8 +695,8 @@
 <script>
 /* ============ SUPABASE 연결 설정 ============ */
 // ⚠️ 여기 URL/키는 anon(공개용) 키만 넣으세요. service_role 키는 절대 브라우저 코드에 넣으면 안 됩니다.
-const SUPABASE_URL = 'https://fvjxpdbnenbbfsgrondc.supabase.co';   // ← Supabase Project URL로 교체
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ2anhwZGJuZW5iYmZzZ3JvbmRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4MjA5NzAsImV4cCI6MjEwMTM5Njk3MH0.qCBzFg9pnmHRqgceCHkq9M7z-Xv6DnwP067CwL27TCs';                  // ← Settings > API > anon public 키로 교체 (service_role 아님!)
+const SUPABASE_URL = 'https://fvjxpdbnenbbfsgrondc.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ2anhwZGJuZW5iYmZzZ3JvbmRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4MjA5NzAsImV4cCI6MjEwMTM5Njk3MH0.qCBzFg9pnmHRqgceCHkq9M7z-Xv6DnwP067CwL27TCs';
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -713,13 +740,19 @@ async function loadData() {
     .single();
   window.__latestRank = rankRow ? rankRow.rank : null;
 
-  await loadPrograms(28);  // 기본값: 최근 4주
-  await loadTrend(28);
+  const today = window.__latestDate;
+  const monthAgo = subtractDays(today, 28);
+  document.getElementById('date-from').value = monthAgo;
+  document.getElementById('date-from').max = today;
+  document.getElementById('date-to').value = today;
+  document.getElementById('date-to').max = today;
+  await loadPrograms(monthAgo, today);
+  await loadTrend(monthAgo, today);
+  setActiveChip(28);
 }
 
 // 선택한 기간(days)만큼의 프로그램 목록 + 시청률 + 프로그램명 조인해서 PROGRAMS 채움
-async function loadPrograms(days) {
-  const startDate = subtractDays(window.__latestDate, days);
+async function loadPrograms(startDate, endDate) {
   const { data: rows, error: progErr } = await sb
     .from('fact_schedule')
     .select(`
@@ -729,7 +762,7 @@ async function loadPrograms(days) {
     `)
     .eq('channel_id', window.__channelId)
     .gte('date_key', startDate)
-    .lte('date_key', window.__latestDate)
+    .lte('date_key', endDate)
     .order('date_key', { ascending: true })
     .order('start_time', { ascending: true });
   if (progErr) { console.error('프로그램 조회 실패', progErr); PROGRAMS = []; return; }
@@ -765,16 +798,16 @@ async function loadPrograms(days) {
   });
 }
 
-// 기간 필터에서 선택한 일수만큼 트렌드 다시 조회
-async function loadTrend(days) {
+// 선택한 기간의 일별 평균 시청률 조회 (트렌드 차트용)
+async function loadTrend(startDate, endDate) {
   const channelId = window.__channelId;
   const { data: trendRows, error: trendErr } = await sb
     .from('fact_schedule')
     .select('date_key, fact_rating ( rating_pct )')
     .eq('channel_id', channelId)
-    .lte('date_key', window.__latestDate)
-    .order('date_key', { ascending: false })
-    .limit(days * 20); // 하루 평균 10~15개 프로그램 감안, 여유있게
+    .gte('date_key', startDate)
+    .lte('date_key', endDate)
+    .order('date_key', { ascending: true });
 
   if (trendErr) { console.error('트렌드 조회 실패', trendErr); TREND = []; return; }
 
@@ -787,7 +820,7 @@ async function loadTrend(days) {
     if (!byDate[r.date_key]) byDate[r.date_key] = [];
     byDate[r.date_key].push(rating);
   });
-  const dates = Object.keys(byDate).sort().slice(-days);
+  const dates = Object.keys(byDate).sort();
   TREND = dates.map(d => {
     const vals = byDate[d];
     const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
@@ -863,7 +896,7 @@ function renderTrendKpiAndChart(){
   const last = hasTrend ? TREND[TREND.length-1][1] : 0;
   const delta = last - first;
   const dEl = document.getElementById('kpi-avg-rating-delta');
-  dEl.textContent = hasTrend ? ((delta>=0?'▲ ':'▼ ') + Math.abs(delta).toFixed(4) + ` (${TREND.length}일 전 대비)`) : '';
+  dEl.textContent = hasTrend ? ((delta>=0?'▲ ':'▼ ') + Math.abs(delta).toFixed(4) + ` (선택 기간 첫날 대비)`) : '';
   dEl.className = 'kpi-delta ' + (delta>=0?'up':'down');
 
   if (trendChart) trendChart.destroy();
@@ -885,17 +918,40 @@ function renderTrendKpiAndChart(){
   });
 }
 
-document.getElementById('period-select').addEventListener('change', async (e)=>{
-  const days = Number(e.target.value);
+async function reloadAllForPeriod(){
+  const from = document.getElementById('date-from').value;
+  const to = document.getElementById('date-to').value;
+  if (!from || !to || from > to) return;
   document.querySelector('.content').style.opacity = '0.4';
-  await loadPrograms(days);
-  await loadTrend(days);
+  await loadPrograms(from, to);
+  await loadTrend(from, to);
   renderDashboard();
   renderValueMap();
   renderDNA();
   renderCompare();
   renderRegression();
   document.querySelector('.content').style.opacity = '1';
+}
+
+function setActiveChip(days){
+  document.querySelectorAll('.chip-btn').forEach(b=>{
+    b.classList.toggle('active', Number(b.dataset.days) === days);
+  });
+}
+
+document.getElementById('date-from').addEventListener('change', reloadAllForPeriod);
+document.getElementById('date-to').addEventListener('change', reloadAllForPeriod);
+
+document.querySelectorAll('.chip-btn').forEach(btn=>{
+  btn.addEventListener('click', async ()=>{
+    const days = Number(btn.dataset.days);
+    const to = window.__latestDate;
+    const from = subtractDays(to, days);
+    document.getElementById('date-from').value = from;
+    document.getElementById('date-to').value = to;
+    setActiveChip(days);
+    await reloadAllForPeriod();
+  });
 });
 
 function renderDashboard(){
@@ -931,20 +987,26 @@ function renderDashboard(){
 
 /* ============ PROGRAM: VALUE MAP ============ */
 let valueMapChart;
+let valueMapHourRange = [0, 24];
 function renderValueMap(){
+  const filtered = PROGRAMS.filter(p=>{
+    const hour = Number(p.start.split(':')[0]);
+    return hour >= valueMapHourRange[0] && hour < valueMapHourRange[1];
+  });
+
   if (valueMapChart) valueMapChart.destroy();
   valueMapChart = new Chart(document.getElementById('chart-valuemap'), {
     type:'bubble',
     data:{ datasets:[{
       label:'프로그램',
-      data: PROGRAMS.map(p=>({x:p.viewers, y:p.avgView, r: p.rating*140})),
+      data: filtered.map(p=>({x:p.viewers, y:p.avgView, r: p.rating*140})),
       backgroundColor: ACCENT_LIGHT, borderColor: ACCENT_COLOR, borderWidth:1.5
     }]},
     options:{
       responsive: true, maintainAspectRatio: false,
       plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: (ctx)=>{
-        const p = PROGRAMS[ctx.dataIndex];
-        return `${p.name}(${p.date}) · 시청률 ${p.rating}%`;
+        const p = filtered[ctx.dataIndex];
+        return `${p.name}(${p.date} ${p.start}) · 시청률 ${p.rating}%`;
       }}}},
       scales:{
         x:{ title:{display:true, text:'도달력 (시청자 수)', font:{weight:'bold'}}, grid:{color:'rgba(0,0,0,0.04)'} },
@@ -952,7 +1014,18 @@ function renderValueMap(){
       }
     }
   });
+  const titleEl = document.getElementById('valuemap-title');
+  if (titleEl) titleEl.textContent = `프로그램 가치 지도 (${filtered.length}건) — X: 도달력(시청자수) · Y: 충성도(평균 시청지속시간) · Bubble: 시청률`;
 }
+
+document.querySelectorAll('#program-value-map .chip-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('#program-value-map .chip-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    valueMapHourRange = btn.dataset.hourRange.split(',').map(Number);
+    renderValueMap();
+  });
+});
 
 /* ============ PROGRAM: DNA ============ */
 function renderDNA(){
