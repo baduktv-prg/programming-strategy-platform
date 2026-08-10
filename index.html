@@ -380,7 +380,7 @@
       <div class="nav-group" data-group="schedule">
         <div class="nav-item" data-screen="schedule"><span>편성 분석</span><span class="nav-caret">▸</span></div>
         <div class="nav-sub-wrap">
-          <div class="nav-sub active" data-screen="schedule" data-sub="matching">편성 궁합 분석</div>
+          <div class="nav-sub active" data-screen="schedule" data-sub="matching">편성 궁합 분석 (공사중)</div>
           <div class="nav-sub" data-screen="schedule" data-sub="recommend">편성 추천 엔진</div>
           <div class="nav-sub" data-screen="schedule" data-sub="risk">편성 리스크 분석</div>
           <div class="nav-sub" data-screen="schedule" data-sub="counterfactual">Counterfactual</div>
@@ -390,8 +390,10 @@
       <div class="nav-group" data-group="audience">
         <div class="nav-item" data-screen="audience"><span>시청자 분석</span><span class="nav-caret">▸</span></div>
         <div class="nav-sub-wrap">
-          <div class="nav-sub" data-screen="audience" data-sub="regression">시청자 회귀 분석</div>
-          <div class="nav-sub active" data-screen="audience" data-sub="sankey">시청자 이동 지도</div>
+          <div class="nav-sub active" data-screen="audience" data-sub="regression">시청자 회귀 분석</div>
+          <!-- 공사중: 시청자 이동 지도 (추정치 기반 목업) 임시 비활성화
+          <div class="nav-sub" data-screen="audience" data-sub="sankey">시청자 이동 지도</div>
+          -->
           <div class="nav-sub" data-screen="audience" data-sub="fatigue">시청 피로도 분석</div>
         </div>
       </div>
@@ -476,7 +478,7 @@
         <!-- Bento Grid: Table -->
         <div class="bento-grid">
           <div class="bento-card col-12">
-            <div class="card-label">2026-08-03 프로그램별 실적</div>
+            <div class="card-label" id="dashboard-table-title">프로그램별 실적</div>
             <table class="data-table" id="dashboard-table"></table>
           </div>
         </div>
@@ -520,7 +522,7 @@
           <div class="bento-grid">
             <div class="bento-card col-12">
               <div class="card-label">주요 지표 비교</div>
-              <div class="chart-wrap"><canvas id="chart-compare"></canvas></div>
+              <div id="compare-table-wrap"></div>
             </div>
           </div>
         </div>
@@ -529,7 +531,7 @@
       <!-- ============ SCHEDULE ============ -->
       <div class="screen" id="screen-schedule">
         <div class="subtabs">
-          <div class="subtab active" data-parent="schedule" data-tab="matching">궁합 분석</div>
+          <div class="subtab active" data-parent="schedule" data-tab="matching">궁합 분석 (공사중)</div>
           <div class="subtab" data-parent="schedule" data-tab="recommend">추천 엔진</div>
           <div class="subtab" data-parent="schedule" data-tab="risk">리스크 분석</div>
           <div class="subtab" data-parent="schedule" data-tab="counterfactual">Counterfactual</div>
@@ -613,12 +615,14 @@
       <!-- ============ AUDIENCE ============ -->
       <div class="screen" id="screen-audience">
         <div class="subtabs">
-          <div class="subtab" data-parent="audience" data-tab="regression">회귀 분석</div>
-          <div class="subtab active" data-parent="audience" data-tab="sankey">이동 지도</div>
+          <div class="subtab active" data-parent="audience" data-tab="regression">회귀 분석</div>
+          <!-- 공사중: 이동 지도 (추정치 기반 목업) 임시 비활성화
+          <div class="subtab" data-parent="audience" data-tab="sankey">이동 지도</div>
+          -->
           <div class="subtab" data-parent="audience" data-tab="fatigue">피로도 분석</div>
         </div>
 
-        <div class="subscreen" data-parent="audience" id="audience-regression" style="display:none;">
+        <div class="subscreen active" data-parent="audience" id="audience-regression">
           <div class="filter-row">
             <select class="mini-filter" id="regression-select"></select>
           </div>
@@ -630,7 +634,8 @@
           </div>
         </div>
 
-        <div class="subscreen active" data-parent="audience" id="audience-sankey">
+        <!-- 공사중: 시청자 이동 지도 (추정치 기반 목업) 임시 비활성화
+        <div class="subscreen" data-parent="audience" id="audience-sankey">
           <div class="note-banner">⚠ 추정치 — 분단위 집계 곡선 기반 근사 분석입니다 (가구 단위 추적 데이터 아님)</div>
           <div class="bento-grid">
             <div class="bento-card col-12">
@@ -639,6 +644,7 @@
             </div>
           </div>
         </div>
+        -->
 
         <div class="subscreen" data-parent="audience" id="audience-fatigue" style="display:none;">
           <div class="filter-row">
@@ -662,8 +668,8 @@
 <script>
 /* ============ SUPABASE 연결 설정 ============ */
 // ⚠️ 여기 URL/키는 anon(공개용) 키만 넣으세요. service_role 키는 절대 브라우저 코드에 넣으면 안 됩니다.
-const SUPABASE_URL = 'https://fvjxpdbnenbbfsgrondc.supabase.co';   // ← Supabase Project URL로 교체
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ2anhwZGJuZW5iYmZzZ3JvbmRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4MjA5NzAsImV4cCI6MjEwMTM5Njk3MH0.qCBzFg9pnmHRqgceCHkq9M7z-Xv6DnwP067CwL27TCs';                  // ← Settings > API > anon public 키로 교체 (service_role 아님!)
+const SUPABASE_URL = 'https://xxxxxxxxxxxx.supabase.co';   // ← Supabase Project URL로 교체
+const SUPABASE_ANON_KEY = 'eyJhbGciOi...';                  // ← Settings > API > anon public 키로 교체 (service_role 아님!)
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -675,32 +681,58 @@ const ACCENT_COLOR = "#0071e3";
 const ACCENT_LIGHT = "rgba(0,113,229,0.12)";
 
 /* ============ 실제 데이터 로딩 ============ */
+function subtractDays(dateStr, days){
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() - (days - 1));
+  return d.toISOString().slice(0, 10);
+}
+
 async function loadData() {
   // 1) 바둑TV 채널 ID 조회
   const { data: channelRow, error: chErr } = await sb
     .from('dim_channel').select('channel_id').eq('channel_name', '바둑TV').single();
   if (chErr) { console.error('채널 조회 실패', chErr); return; }
-  const channelId = channelRow.channel_id;
+  window.__channelId = channelRow.channel_id;
 
-  // 2) 가장 최근 방송일 조회
+  // 2) 가장 최근 방송일 조회 (모든 기간 선택의 기준점)
   const { data: latestRow, error: dateErr } = await sb
-    .from('fact_schedule').select('date_key').eq('channel_id', channelId)
+    .from('fact_schedule').select('date_key').eq('channel_id', window.__channelId)
     .order('date_key', { ascending: false }).limit(1).single();
   if (dateErr) { console.error('최근 날짜 조회 실패', dateErr); return; }
-  const latestDate = latestRow.date_key;
+  window.__latestDate = latestRow.date_key;
 
-  // 3) 그날의 프로그램 목록 + 시청률 + 프로그램명 조인
+  // 3) 편성분석 도구용 — 전체 기간에 걸쳐 방영된 프로그램 목록(중복 없이)
+  const { data: allProgRows } = await sb
+    .from('dim_program').select('program_id, program_name').order('program_name');
+  ALL_PROGRAMS = allProgRows || [];
+
+  // 4) 채널 순위 (종합 카테고리, 최근 날짜 기준 — 기간 선택과 무관하게 항상 "현재" 순위)
+  const { data: rankRow } = await sb
+    .from('fact_channel_rank').select('rank')
+    .eq('channel_id', window.__channelId).eq('date_key', window.__latestDate).eq('category', '종합')
+    .single();
+  window.__latestRank = rankRow ? rankRow.rank : null;
+
+  await loadPrograms(28);  // 기본값: 최근 4주
+  await loadTrend(28);
+}
+
+// 선택한 기간(days)만큼의 프로그램 목록 + 시청률 + 프로그램명 조인해서 PROGRAMS 채움
+async function loadPrograms(days) {
+  const startDate = subtractDays(window.__latestDate, days);
   const { data: rows, error: progErr } = await sb
     .from('fact_schedule')
     .select(`
-      schedule_id, start_time, end_time, is_rerun, players,
+      schedule_id, date_key, start_time, end_time, is_rerun, players,
       dim_program!fact_schedule_program_id_fkey ( program_id, program_name ),
-      fact_rating ( rating_pct, share_pct, viewers, target_rating_pct, achievement_pct, prev_rating_pct )
+      fact_rating ( rating_pct, share_pct, viewers, reach_pct, avg_view_minutes, target_rating_pct, achievement_pct, prev_rating_pct )
     `)
-    .eq('channel_id', channelId)
-    .eq('date_key', latestDate)
+    .eq('channel_id', window.__channelId)
+    .gte('date_key', startDate)
+    .lte('date_key', window.__latestDate)
+    .order('date_key', { ascending: true })
     .order('start_time', { ascending: true });
-  if (progErr) { console.error('프로그램 조회 실패', progErr); return; }
+  if (progErr) { console.error('프로그램 조회 실패', progErr); PROGRAMS = []; return; }
 
   PROGRAMS = rows.map(r => {
     const ratingRaw = r.fact_rating;
@@ -714,12 +746,15 @@ async function loadData() {
     return {
       schedule_id: r.schedule_id,
       program_id: program.program_id,
+      date: r.date_key,
       name: program.program_name || '(이름없음)',
       start: r.start_time.slice(0, 5),
       end: r.end_time.slice(0, 5),
       duration,
       rating: rating.rating_pct || 0,
       share: rating.share_pct || 0,
+      reach: rating.reach_pct || 0,
+      avgView: rating.avg_view_minutes || 0,
       viewers: rating.viewers || 0,
       prev: rating.prev_rating_pct ?? null,
       type: r.is_rerun ? '재방' : '생방',
@@ -728,23 +763,6 @@ async function loadData() {
       achievement: rating.achievement_pct || 0,
     };
   });
-
-  // 3-1) 편성분석 도구용 — 전체 기간에 걸쳐 방영된 프로그램 목록(중복 없이)
-  const { data: allProgRows } = await sb
-    .from('dim_program').select('program_id, program_name').order('program_name');
-  ALL_PROGRAMS = allProgRows || [];
-
-  // 4-1) 채널 순위 (종합 카테고리, 해당 날짜)
-  const { data: rankRow } = await sb
-    .from('fact_channel_rank').select('rank')
-    .eq('channel_id', channelId).eq('date_key', latestDate).eq('category', '종합')
-    .single();
-  window.__latestRank = rankRow ? rankRow.rank : null;
-  window.__latestDate = latestDate;
-
-  // 4) 최근 14일 일별 평균 시청률 (트렌드 차트용)
-  window.__channelId = channelId;
-  await loadTrend(28); // 기본값: 최근 4주
 }
 
 // 기간 필터에서 선택한 일수만큼 트렌드 다시 조회
@@ -868,15 +886,25 @@ function renderTrendKpiAndChart(){
 }
 
 document.getElementById('period-select').addEventListener('change', async (e)=>{
-  await loadTrend(Number(e.target.value));
-  renderTrendKpiAndChart();
+  const days = Number(e.target.value);
+  document.querySelector('.content').style.opacity = '0.4';
+  await loadPrograms(days);
+  await loadTrend(days);
+  renderDashboard();
+  renderValueMap();
+  renderDNA();
+  renderCompare();
+  renderRegression();
+  document.querySelector('.content').style.opacity = '1';
 });
 
 function renderDashboard(){
   renderTrendKpiAndChart();
 
-  const avgShare = PROGRAMS.reduce((a,p)=>a+(p.share||0),0)/PROGRAMS.length;
-  document.getElementById('kpi-avg-share').textContent = avgShare.toFixed(2) + '%';
+  const todaysPrograms = PROGRAMS.filter(p => p.date === window.__latestDate);
+
+  const avgShare = todaysPrograms.length ? todaysPrograms.reduce((a,p)=>a+(p.share||0),0)/todaysPrograms.length : 0;
+  document.getElementById('kpi-avg-share').textContent = todaysPrograms.length ? avgShare.toFixed(2) + '%' : '데이터 없음';
   document.getElementById('kpi-avg-share-note').textContent = window.__latestDate + ' 기준';
 
   document.getElementById('kpi-rank').textContent = window.__latestRank ? (window.__latestRank + '위') : '데이터 없음';
@@ -885,12 +913,15 @@ function renderDashboard(){
   const topProgram = [...PROGRAMS].sort((a,b)=>b.rating-a.rating)[0];
   if (topProgram) {
     document.getElementById('kpi-top-program').textContent = topProgram.name;
-    document.getElementById('kpi-top-rating').textContent = topProgram.rating.toFixed(3) + '%';
+    document.getElementById('kpi-top-rating').textContent = topProgram.rating.toFixed(3) + '% (' + topProgram.date + ')';
   }
+
+  const titleEl = document.getElementById('dashboard-table-title');
+  if (titleEl) titleEl.textContent = window.__latestDate + ' 프로그램별 실적';
 
   const tbl = document.getElementById('dashboard-table');
   tbl.innerHTML = `<tr><th>프로그램</th><th>시간대</th><th>구분</th><th>시청률</th><th>전회 대비</th></tr>` +
-    PROGRAMS.map(p=>{
+    todaysPrograms.map(p=>{
       const arrow = p.prev == null ? `<span style="color:var(--text-tertiary);">데이터 없음</span>` :
         (p.rating - p.prev >= 0 ? `<span class="delta-up">▲ ${(p.rating-p.prev).toFixed(3)}</span>` : `<span class="delta-down">▼ ${Math.abs(p.rating-p.prev).toFixed(3)}</span>`);
       const badge = p.type==='생방' ? '<span class="badge live">생방</span>' : '<span class="badge rerun">재방</span>';
@@ -899,23 +930,25 @@ function renderDashboard(){
 }
 
 /* ============ PROGRAM: VALUE MAP ============ */
+let valueMapChart;
 function renderValueMap(){
-  new Chart(document.getElementById('chart-valuemap'), {
+  if (valueMapChart) valueMapChart.destroy();
+  valueMapChart = new Chart(document.getElementById('chart-valuemap'), {
     type:'bubble',
     data:{ datasets:[{
       label:'프로그램',
-      data: PROGRAMS.map(p=>({x:p.viewers, y:p.duration, r: p.rating*140})),
+      data: PROGRAMS.map(p=>({x:p.viewers, y:p.avgView, r: p.rating*140})),
       backgroundColor: ACCENT_LIGHT, borderColor: ACCENT_COLOR, borderWidth:1.5
     }]},
     options:{
       responsive: true, maintainAspectRatio: false,
       plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: (ctx)=>{
         const p = PROGRAMS[ctx.dataIndex];
-        return `${p.name} · 시청률 ${p.rating}%`;
+        return `${p.name}(${p.date}) · 시청률 ${p.rating}%`;
       }}}},
       scales:{
         x:{ title:{display:true, text:'도달력 (시청자 수)', font:{weight:'bold'}}, grid:{color:'rgba(0,0,0,0.04)'} },
-        y:{ title:{display:true, text:'충성도 (방송 시간, 분)', font:{weight:'bold'}}, grid:{color:'rgba(0,0,0,0.04)'} }
+        y:{ title:{display:true, text:'충성도 (평균 시청지속시간, 분)', font:{weight:'bold'}}, grid:{color:'rgba(0,0,0,0.04)'} }
       }
     }
   });
@@ -970,9 +1003,14 @@ async function drawDNA(p){
     const top = [...audience].sort((a,b)=>b.rating_pct-a.rating_pct)[0];
     if (top && top.rating_pct > 0) tags.push(`${top.age_group} ${top.gender==='남'?'남성':'여성'} 시청층 집중`);
 
-    const sorted = [...audience].sort((a,b)=>b.rating_pct-a.rating_pct).slice(0,5);
+    const AGE_ORDER = ['4-9세','10대','20대','30대','40대','50대','60대+'];
+    const sorted = [...audience].sort((a,b)=>{
+      if (a.gender !== b.gender) return a.gender==='남' ? -1 : 1;
+      return AGE_ORDER.indexOf(a.age_group) - AGE_ORDER.indexOf(b.age_group);
+    });
     document.getElementById('dna-audience').innerHTML = `
-      <ul class="factor-list">
+      <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:4px;">${sorted.length}/14개 세그먼트 (일부 결측 가능)</div>
+      <ul class="factor-list" style="columns:2;">
         ${sorted.map(a=>`<li>${a.gender}·${a.age_group}: ${a.rating_pct.toFixed(3)}%</li>`).join('')}
       </ul>`;
   } else {
@@ -982,11 +1020,10 @@ async function drawDNA(p){
 }
 
 /* ============ PROGRAM: COMPARE ============ */
-let cmpChart;
 function renderCompare(){
   const a = document.getElementById('cmp-a'), b = document.getElementById('cmp-b');
-  fillSelect(a, PROGRAMS, null, p=>p.name); a.value=0;
-  fillSelect(b, PROGRAMS, null, p=>p.name); b.value=Math.min(1, PROGRAMS.length-1);
+  fillSelect(a, PROGRAMS, null, p=>`${p.date} ${p.name}`); a.value=0;
+  fillSelect(b, PROGRAMS, null, p=>`${p.date} ${p.name}`); b.value=Math.min(1, PROGRAMS.length-1);
   a.addEventListener('change', drawCompare);
   b.addEventListener('change', drawCompare);
   drawCompare();
@@ -994,16 +1031,35 @@ function renderCompare(){
 function drawCompare(){
   const pa = PROGRAMS[document.getElementById('cmp-a').value];
   const pb = PROGRAMS[document.getElementById('cmp-b').value];
-  if(cmpChart) cmpChart.destroy();
-  cmpChart = new Chart(document.getElementById('chart-compare'), {
-    type:'bar',
-    data:{ labels:['시청률','목표 달성률(%)','방송시간(분)'],
-      datasets:[
-        {label:pa.name, data:[pa.rating, pa.achievement, pa.duration], backgroundColor:'#e5e5ea', borderRadius:8},
-        {label:pb.name, data:[pb.rating, pb.achievement, pb.duration], backgroundColor: ACCENT_COLOR, borderRadius:8}
-      ]},
-    options:{ responsive: true, maintainAspectRatio: false, scales:{ y:{ beginAtZero:true, grid:{color:'rgba(0,0,0,0.04)'} }, x:{grid:{display:false}} } }
-  });
+  const metrics = [
+    { label: '시청률', unit: '%', va: pa.rating, vb: pb.rating },
+    { label: '도달률', unit: '%', va: pa.reach, vb: pb.reach },
+    { label: '점유율', unit: '%', va: pa.share, vb: pb.share },
+    { label: '평균 시청지속시간', unit: '분', va: pa.avgView, vb: pb.avgView },
+  ];
+  // 지표마다 단위(%/분)가 달라서 한 차트 축에 같이 못 그림 → 지표별로 행을 나눠서
+  // 그 행 안에서만(최대값 기준) 상대 비교 막대를 그리는 방식으로 표시
+  document.getElementById('compare-table-wrap').innerHTML = `
+    <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:700; color:var(--text-secondary); margin-bottom:10px;">
+      <span>${pa.name} (${pa.date})</span><span>${pb.name} (${pb.date})</span>
+    </div>
+    ${metrics.map(m=>{
+      const max = Math.max(m.va, m.vb, 0.0001);
+      const wa = Math.round((m.va/max)*100), wb = Math.round((m.vb/max)*100);
+      return `
+      <div style="margin-bottom:14px;">
+        <div style="font-size:12px; color:var(--text-secondary); margin-bottom:4px;">${m.label} (${m.unit})</div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <div style="flex:1; text-align:right; font-weight:700; font-size:13px;">${m.va.toFixed(2)}</div>
+          <div style="flex:2; display:flex; gap:2px;">
+            <div style="flex:1; display:flex; justify-content:flex-end;"><div style="height:14px; width:${wa}%; background:#e5e5ea; border-radius:4px 0 0 4px;"></div></div>
+            <div style="flex:1;"><div style="height:14px; width:${wb}%; background:${ACCENT_COLOR}; border-radius:0 4px 4px 0;"></div></div>
+          </div>
+          <div style="flex:1; font-weight:700; font-size:13px; color:${ACCENT_COLOR};">${m.vb.toFixed(2)}</div>
+        </div>
+      </div>`;
+    }).join('')}
+  `;
 }
 
 /* ============ SCHEDULE: MATCHING ============ */
@@ -1248,7 +1304,7 @@ function renderFatigue(){
   renderRisk();
   renderCounterfactual();
   renderRegression();
-  renderSankey();
+  // renderSankey(); // 공사중: 시청자 이동 지도 임시 비활성화 (관련 마크업도 함께 주석처리됨)
   renderFatigue();
 })();
 </script>
