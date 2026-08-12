@@ -508,7 +508,7 @@
             <div class="kpi-delta" id="kpi-avg-share-note"></div>
           </div>
           <div class="bento-card col-3">
-            <div class="card-label" id="kpi-rank-title">채널 순위 (종합·보간추정)</div>
+            <div class="card-label" id="kpi-rank-title">채널 순위 (종합·기간평균 실측)</div>
             <div class="kpi-value" id="kpi-rank">-</div>
             <div class="kpi-delta" id="kpi-rank-note"></div>
           </div>
@@ -1013,49 +1013,43 @@ async function loadPrograms(startDate, endDate) {
 }
 
 // 선택한 기간의 일별 평균 시청률 조회 (트렌드 차트용)
-// 선택 기간의 종합 채널순위 평균 계산
-// 바둑TV 자체의 과거 (시청률,순위) 기록을 기준으로, 선택 기간 평균 시청률에 해당하는 순위를 보간 추정
-// ⚠ 목표 시청률·기준곡선 둘 다 fact_channel_rank(플랫폼별 채널순위 원본) 기준으로 통일해야
-//   서로 다른 집계 방식이 섞이지 않음 (fact_rating은 프로그램별 상세집계라 기준이 다름)
+// 선택 기간의 종합 채널순위 — 전체 채널의 "그 기간 평균 시청률"을 구해서 실제로 순위를 매김
+// (바둑TV 혼자만의 과거 곡선으로 보간하던 방식 대신, 같은 기간 경쟁 채널들과 직접 비교)
 async function loadChannelRank(startDate, endDate){
-  // 1) 바둑TV의 전체 과거 (시청률,순위) 기록 조회 — 보간용 기준 곡선 (기간 제한 없이, 많을수록 정확)
   const { data: rows, error } = await sb
-    .from('fact_channel_rank').select('rating_pct, rank, date_key')
-    .eq('channel_id', window.__channelId).eq('category', '종합')
-    .not('rating_pct', 'is', null).not('rank', 'is', null)
-    .order('date_key', { ascending: true });
-  if (error || !rows || rows.length === 0) { console.error('채널순위 조회 실패', error); window.__periodRank = null; window.__periodRankTrend = null; return; }
+    .from('fact_channel_rank').select('channel_id, rating_pct')
+    .eq('category', '종합')
+    .gte('date_key', startDate).lte('date_key', endDate)
+    .not('rating_pct', 'is', null);
+  if (error || !rows || rows.length === 0) { console.error('채널순위 조회 실패', error); window.__periodRank = null; window.__periodRankTrend = null; window.__periodRankTotal = null; return; }
 
-  // 2) 선택 기간의 평균 시청률 — 같은 fact_channel_rank에서 기간만 필터링해서 계산 (기준곡선과 같은 잣대)
-  const periodRows = rows.filter(r => r.date_key >= startDate && r.date_key <= endDate);
-  if (periodRows.length === 0) { window.__periodRank = null; window.__periodRankTrend = null; return; }
-  const targetRating = periodRows.reduce((a,r)=>a+r.rating_pct,0) / periodRows.length;
+  const result = computeMarketRank(rows, window.__channelId);
+  window.__periodRank = result ? result.rank : null;
+  window.__periodRankTotal = result ? result.total : null;
 
-  const sortedByRating = [...rows].sort((a,b)=>a.rating_pct - b.rating_pct);
-  window.__periodRank = interpolateRank(sortedByRating, targetRating);
-
-  // 3) 비교용: 기간 시작 시점 시청률 기준 순위와 비교해서 변화 표시
-  if (periodRows.length >= 2) {
-    const startRank = interpolateRank(sortedByRating, periodRows[0].rating_pct);
-    window.__periodRankTrend = (startRank != null && window.__periodRank != null) ? Math.round(startRank - window.__periodRank) : null;
-  } else {
-    window.__periodRankTrend = null;
-  }
+  // 비교용: 선택 기간과 같은 길이의 "직전 기간" 순위와 비교
+  const days = Math.round((new Date(endDate) - new Date(startDate)) / 86400000) + 1;
+  const prevEnd = subtractDays(startDate, 2); // startDate 하루 전
+  const prevStart = subtractDays(prevEnd, days);
+  const { data: prevRows } = await sb
+    .from('fact_channel_rank').select('channel_id, rating_pct')
+    .eq('category', '종합')
+    .gte('date_key', prevStart).lte('date_key', prevEnd)
+    .not('rating_pct', 'is', null);
+  const prevResult = prevRows && prevRows.length ? computeMarketRank(prevRows, window.__channelId) : null;
+  window.__periodRankTrend = (prevResult && result) ? (prevResult.rank - result.rank) : null;
 }
 
-// 시청률 기준으로 정렬된 (rating_pct, rank) 배열에서, targetRating에 해당하는 순위를 선형보간
-function interpolateRank(sortedRows, targetRating){
-  if (targetRating <= sortedRows[0].rating_pct) return sortedRows[0].rank;
-  if (targetRating >= sortedRows[sortedRows.length-1].rating_pct) return sortedRows[sortedRows.length-1].rank;
-  for (let i = 0; i < sortedRows.length - 1; i++){
-    const a = sortedRows[i], b = sortedRows[i+1];
-    if (targetRating >= a.rating_pct && targetRating <= b.rating_pct){
-      if (b.rating_pct === a.rating_pct) return (a.rank + b.rank) / 2;
-      const t = (targetRating - a.rating_pct) / (b.rating_pct - a.rating_pct);
-      return a.rank + t * (b.rank - a.rank);
-    }
-  }
-  return null;
+// (channel_id, rating_pct) 행들을 채널별로 평균 내서 순위 매기고, targetChannelId의 순위/전체채널수를 반환
+function computeMarketRank(rows, targetChannelId){
+  const byChannel = {};
+  rows.forEach(r=>{ (byChannel[r.channel_id] = byChannel[r.channel_id] || []).push(r.rating_pct); });
+  const avgList = Object.entries(byChannel).map(([channelId, vals])=>({
+    channel_id: Number(channelId), avgRating: vals.reduce((a,b)=>a+b,0)/vals.length
+  })).sort((a,b)=> b.avgRating - a.avgRating);
+  const idx = avgList.findIndex(x=>x.channel_id === targetChannelId);
+  if (idx === -1) return null;
+  return { rank: idx + 1, total: avgList.length };
 }
 
 async function loadTrend(startDate, endDate) {
@@ -1249,14 +1243,14 @@ function renderDashboard(){
   document.getElementById('kpi-avg-share').textContent = todaysPrograms.length ? avgShare.toFixed(2) + '%' : '데이터 없음';
   document.getElementById('kpi-avg-share-note').textContent = window.__latestDate + ' 기준';
 
-  document.getElementById('kpi-rank').textContent = window.__periodRank != null ? (Math.round(window.__periodRank) + '위') : '데이터 없음';
+  document.getElementById('kpi-rank').textContent = window.__periodRank != null ? (window.__periodRank + '위' + (window.__periodRankTotal ? ` / ${window.__periodRankTotal}개` : '')) : '데이터 없음';
   const trendVal = window.__periodRankTrend;
   const rankNoteEl = document.getElementById('kpi-rank-note');
   if (trendVal == null || trendVal === 0) {
-    rankNoteEl.textContent = trendVal === 0 ? '기간 내 순위 변동 없음' : '';
+    rankNoteEl.textContent = trendVal === 0 ? '직전 동기간 대비 변동 없음' : '';
     rankNoteEl.className = 'kpi-delta';
   } else {
-    rankNoteEl.textContent = (trendVal > 0 ? '▲ ' : '▼ ') + Math.abs(trendVal) + '계단 (기간 시작 대비)';
+    rankNoteEl.textContent = (trendVal > 0 ? '▲ ' : '▼ ') + Math.abs(trendVal) + '계단 (직전 동기간 대비)';
     rankNoteEl.className = 'kpi-delta ' + (trendVal > 0 ? 'up' : 'down'); // 순위 숫자가 작아질수록(▲) 좋은 것
   }
 
