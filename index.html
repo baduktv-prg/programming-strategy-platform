@@ -1017,12 +1017,7 @@ async function loadPrograms(startDate, endDate) {
 // 선택 기간의 종합 채널순위 — 전체 채널의 "그 기간 평균 시청률"을 구해서 실제로 순위를 매김
 // (바둑TV 혼자만의 과거 곡선으로 보간하던 방식 대신, 같은 기간 경쟁 채널들과 직접 비교)
 async function loadChannelRank(startDate, endDate){
-  const { data: rows, error } = await sb
-    .from('fact_channel_rank').select('channel_id, rating_pct')
-    .eq('category', '종합')
-    .gte('date_key', startDate).lte('date_key', endDate)
-    .not('rating_pct', 'is', null)
-    .limit(100000); // 기본 1,000행 제한 해제 (206채널×기간이면 쉽게 넘어감)
+  const { data: rows, error } = await sb.rpc('get_market_avg_rating', { p_start: startDate, p_end: endDate, p_category: '종합' });
   if (error || !rows || rows.length === 0) { console.error('채널순위 조회 실패', error); window.__periodRank = null; window.__periodRankTrend = null; window.__periodRankTotal = null; return; }
 
   const result = computeMarketRank(rows, window.__channelId);
@@ -1033,23 +1028,14 @@ async function loadChannelRank(startDate, endDate){
   const days = Math.round((new Date(endDate) - new Date(startDate)) / 86400000) + 1;
   const prevEnd = subtractDays(startDate, 2); // startDate 하루 전
   const prevStart = subtractDays(prevEnd, days);
-  const { data: prevRows } = await sb
-    .from('fact_channel_rank').select('channel_id, rating_pct')
-    .eq('category', '종합')
-    .gte('date_key', prevStart).lte('date_key', prevEnd)
-    .not('rating_pct', 'is', null)
-    .limit(100000);
+  const { data: prevRows } = await sb.rpc('get_market_avg_rating', { p_start: prevStart, p_end: prevEnd, p_category: '종합' });
   const prevResult = prevRows && prevRows.length ? computeMarketRank(prevRows, window.__channelId) : null;
   window.__periodRankTrend = (prevResult && result) ? (prevResult.rank - result.rank) : null;
 }
 
-// (channel_id, rating_pct) 행들을 채널별로 평균 내서 순위 매기고, targetChannelId의 순위/전체채널수를 반환
+// DB에서 이미 채널별로 평균 낸 (channel_id, avg_rating) 목록을 받아 순위만 매김
 function computeMarketRank(rows, targetChannelId){
-  const byChannel = {};
-  rows.forEach(r=>{ (byChannel[r.channel_id] = byChannel[r.channel_id] || []).push(r.rating_pct); });
-  const avgList = Object.entries(byChannel).map(([channelId, vals])=>({
-    channel_id: Number(channelId), avgRating: vals.reduce((a,b)=>a+b,0)/vals.length
-  })).sort((a,b)=> b.avgRating - a.avgRating);
+  const avgList = [...rows].sort((a,b)=> b.avg_rating - a.avg_rating);
   const idx = avgList.findIndex(x=>x.channel_id === targetChannelId);
   if (idx === -1) return null;
   return { rank: idx + 1, total: avgList.length };
