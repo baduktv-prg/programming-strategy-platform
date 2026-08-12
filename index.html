@@ -971,7 +971,8 @@ async function loadPrograms(startDate, endDate) {
     .gte('date_key', startDate)
     .lte('date_key', endDate)
     .order('date_key', { ascending: true })
-    .order('start_time', { ascending: true });
+    .order('start_time', { ascending: true })
+    .limit(20000);
   if (progErr) { console.error('프로그램 조회 실패', progErr); PROGRAMS = []; return; }
 
   PROGRAMS = rows.map(r => {
@@ -1020,7 +1021,8 @@ async function loadChannelRank(startDate, endDate){
     .from('fact_channel_rank').select('channel_id, rating_pct')
     .eq('category', '종합')
     .gte('date_key', startDate).lte('date_key', endDate)
-    .not('rating_pct', 'is', null);
+    .not('rating_pct', 'is', null)
+    .limit(100000); // 기본 1,000행 제한 해제 (206채널×기간이면 쉽게 넘어감)
   if (error || !rows || rows.length === 0) { console.error('채널순위 조회 실패', error); window.__periodRank = null; window.__periodRankTrend = null; window.__periodRankTotal = null; return; }
 
   const result = computeMarketRank(rows, window.__channelId);
@@ -1035,7 +1037,8 @@ async function loadChannelRank(startDate, endDate){
     .from('fact_channel_rank').select('channel_id, rating_pct')
     .eq('category', '종합')
     .gte('date_key', prevStart).lte('date_key', prevEnd)
-    .not('rating_pct', 'is', null);
+    .not('rating_pct', 'is', null)
+    .limit(100000);
   const prevResult = prevRows && prevRows.length ? computeMarketRank(prevRows, window.__channelId) : null;
   window.__periodRankTrend = (prevResult && result) ? (prevResult.rank - result.rank) : null;
 }
@@ -1477,7 +1480,8 @@ async function drawMinuteChart(program, episode){
   document.getElementById('minute-title').textContent = `${program.name} · ${program.type} — ${episode.label}`;
   const { data: rows, error } = await sb.from('fact_rating_minute')
     .select('schedule_id, minute_offset, rating_pct').in('schedule_id', episode.schedule_ids)
-    .order('minute_offset', { ascending: true });
+    .order('minute_offset', { ascending: true })
+    .limit(20000);
   if (error) { console.error('분단위 조회 실패', error); return; }
 
   const byMinute = {};
@@ -1566,7 +1570,8 @@ async function fetchProgramHistory(programId){
     .from('fact_schedule')
     .select('date_key, start_time, is_rerun, fact_rating ( rating_pct )')
     .eq('program_id', programId)
-    .eq('channel_id', window.__channelId);
+    .eq('channel_id', window.__channelId)
+    .limit(5000);
   if (error) { console.error('프로그램 이력 조회 실패', error); historyCache[programId] = []; return []; }
   const history = rows.map(r => {
     const ratingRaw = r.fact_rating;
