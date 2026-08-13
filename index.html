@@ -653,6 +653,7 @@
                   <label style="margin-right:14px; font-size:12px;"><input type="checkbox" class="minute-comp-channel" value="GOLF & PBA"> GOLF&amp;PBA</label>
                   <label style="margin-right:14px; font-size:12px;"><input type="checkbox" class="minute-comp-channel" value="브레인TV"> 브레인TV</label>
                   <label style="margin-right:14px; font-size:12px;"><input type="checkbox" class="minute-comp-channel" value="빌리어즈TV"> 빌리어즈TV</label>
+                  <label style="margin-right:14px; font-size:12px;"><input type="checkbox" id="minute-comp-kbaduk"> K바둑</label>
                   <div style="font-size:11px; color:var(--text-tertiary); margin:12px 0 6px;">비교할 다른 바둑TV 프로그램 (경과시간 기준 비교)</div>
                   <select class="mini-filter" id="minute-cmp-program"></select>
                   <select class="mini-filter" id="minute-cmp-episode"></select>
@@ -1579,6 +1580,9 @@ function renderMinuteTab(){
     cb.checked = false;
     cb.onchange = renderMinuteComparisons;
   });
+  const kbadukCb = document.getElementById('minute-comp-kbaduk');
+  kbadukCb.checked = false;
+  kbadukCb.onchange = renderMinuteComparisons;
 
   const cmpProgSel = document.getElementById('minute-cmp-program');
   const cmpEpSel = document.getElementById('minute-cmp-episode');
@@ -1628,6 +1632,9 @@ async function drawMinuteChart(program, episode){
 
   // 경쟁채널 비교는 "전체 평균"이 아니라 개별 회차를 선택했을 때만 가능 (시계 시각 정렬이 필요해서)
   document.querySelectorAll('.minute-comp-channel').forEach(cb => { cb.disabled = episode.isAvg; if (episode.isAvg) cb.checked = false; });
+  const kbadukCbEl = document.getElementById('minute-comp-kbaduk');
+  kbadukCbEl.disabled = episode.isAvg;
+  if (episode.isAvg) kbadukCbEl.checked = false;
 
   await renderMinuteComparisons();
 }
@@ -1651,15 +1658,19 @@ async function renderMinuteComparisons(){
 
   const datasets = [{
     label: program.name, data: basePoints, borderColor: ACCENT_COLOR, backgroundColor: ACCENT_LIGHT,
-    fill:true, tension:0.3, pointRadius:0, pointHoverRadius:5, pointHoverBackgroundColor: ACCENT_COLOR, borderWidth:2, order:1
+    fill:true, tension:0.3, pointRadius:0, pointHoverRadius:5, pointHoverBackgroundColor: ACCENT_COLOR, borderWidth:2.5, order:1,
+    isChannelSeries:false
   }];
 
-  // 경쟁채널 오버레이 — 같은 시각(clock_time)에 경쟁채널이 어땠는지, 우리 방송 시작 기준 경과분으로 환산해서 정렬
-  const checkedCompetitors = Array.from(document.querySelectorAll('.minute-comp-channel:checked')).map(cb=>cb.value);
   const inst = window.__minuteEpisodeInst;
+  const startMin = inst ? hhmmToMin(inst.start) : null;
+  const clipToRange = (offset) => { let o = offset; if (o < -720) o += 1440; return o; };
+
+  // 경쟁채널 오버레이(GOLF&PBA/브레인TV/빌리어즈TV) — 시계 시각 기준, 우리 방송 시작 기준 경과분으로 환산
+  const checkedCompetitors = Array.from(document.querySelectorAll('.minute-comp-channel:checked')).map(cb=>cb.value);
+  const compColors = { 'GOLF & PBA':'#34c759', '브레인TV':'#af52de', '빌리어즈TV':'#ff2d55', 'K바둑':'#ff9500' };
+
   if (!episode.isAvg && checkedCompetitors.length > 0 && inst) {
-    const startMin = hhmmToMin(inst.start);
-    const compColors = { 'GOLF & PBA':'#34c759', '브레인TV':'#af52de', '빌리어즈TV':'#ff2d55' };
     for (const chName of checkedCompetitors) {
       const { data: chRow } = await sb.from('dim_channel').select('channel_id').eq('channel_name', chName).single();
       if (!chRow) continue;
@@ -1668,18 +1679,42 @@ async function renderMinuteComparisons(){
         .order('clock_time', { ascending:true }).limit(2000);
       const compPoints = (compRows||[]).map(r=>{
         const clockMin = hhmmToMin(r.clock_time.slice(0,5));
-        let offset = clockMin - startMin;
-        if (offset < -720) offset += 1440; // 자정 넘김 보정
-        return { x: offset, y: r.rating_pct };
+        return { x: clipToRange(clockMin - startMin), y: r.rating_pct };
       }).filter(p => p.x >= 0 && p.x <= maxMinute);
       datasets.push({
         label: chName, data: compPoints, borderColor: compColors[chName]||'#999', backgroundColor:'transparent',
-        fill:false, tension:0.3, pointRadius:0, borderWidth:1.5, borderDash:[4,3], order:2
+        fill:false, tension:0.3, pointRadius:0, borderWidth:2, order:2, isChannelSeries:true
       });
     }
   }
 
-  // 비교 프로그램 오버레이 — 우리 프로그램(방영일시 무관), 방송 시작 기준 경과시간으로 정렬
+  // K바둑 오버레이 — 자사 채널이라 저장 방식이 달라서(방송별 상대경과분) 별도 처리:
+  // 그날 K바둑 스케줄들을 찾아 각 스케줄의 시작시각+경과분으로 시계시각을 복원한 뒤, 우리 방송 기준으로 재환산
+  const kbadukChecked = document.getElementById('minute-comp-kbaduk')?.checked;
+  if (!episode.isAvg && kbadukChecked && inst) {
+    const { data: kChannelRow } = await sb.from('dim_channel').select('channel_id').eq('channel_name', 'K바둑').single();
+    if (kChannelRow) {
+      const { data: kSchedules } = await sb.from('fact_schedule')
+        .select('schedule_id, start_time').eq('channel_id', kChannelRow.channel_id).eq('date_key', inst.date);
+      const kScheduleIds = (kSchedules||[]).map(s=>s.schedule_id);
+      const kStartMap = {}; (kSchedules||[]).forEach(s=>{ kStartMap[s.schedule_id] = hhmmToMin(s.start_time.slice(0,5)); });
+      if (kScheduleIds.length) {
+        const { data: kMinuteRows } = await sb.from('fact_rating_minute')
+          .select('schedule_id, minute_offset, rating_pct').in('schedule_id', kScheduleIds).limit(20000);
+        const kPoints = (kMinuteRows||[]).map(r=>{
+          if (r.rating_pct == null) return null;
+          const clockMin = kStartMap[r.schedule_id] + r.minute_offset;
+          return { x: clipToRange(clockMin - startMin), y: r.rating_pct };
+        }).filter(p => p && p.x >= 0 && p.x <= maxMinute).sort((a,b)=>a.x-b.x);
+        datasets.push({
+          label: 'K바둑', data: kPoints, borderColor: compColors['K바둑'], backgroundColor:'transparent',
+          fill:false, tension:0.3, pointRadius:0, borderWidth:2, order:2, isChannelSeries:true
+        });
+      }
+    }
+  }
+
+  // 비교 프로그램 오버레이 — 우리 프로그램(방영일시 무관), 방송 시작 기준 경과시간으로 정렬. 범례엔 안 띄움(채널 아님)
   if (window.__minuteCmpEpisode) {
     const cmpEp = window.__minuteCmpEpisode;
     const { data: cmpRows } = await sb.from('fact_rating_minute')
@@ -1687,11 +1722,11 @@ async function renderMinuteComparisons(){
       .order('minute_offset', { ascending:true }).limit(20000);
     const cmpByMinute = {};
     (cmpRows||[]).forEach(r=>{ if(r.rating_pct==null) return; (cmpByMinute[r.minute_offset]=cmpByMinute[r.minute_offset]||[]).push(r.rating_pct); });
-    const cmpMinutes = Object.keys(cmpByMinute).map(Number).sort((a,b)=>a-b);
+    const cmpMinutes = Object.keys(cmpByMinute).map(Number).sort((a,b)=>a-b).filter(m=>m<=maxMinute);
     const cmpPoints = cmpMinutes.map(m=>({x:m, y: cmpByMinute[m].reduce((a,b)=>a+b,0)/cmpByMinute[m].length}));
     datasets.push({
-      label: window.__minuteCmpLabel || '비교 프로그램', data: cmpPoints, borderColor:'#8e8e93', backgroundColor:'transparent',
-      fill:false, tension:0.3, pointRadius:0, borderWidth:2, order:3
+      label: window.__minuteCmpLabel || '비교 프로그램', data: cmpPoints, borderColor:'#1d1d1f', backgroundColor:'transparent',
+      fill:false, tension:0.3, pointRadius:0, borderWidth:2, order:1, isChannelSeries:false
     });
   }
 
@@ -1701,13 +1736,16 @@ async function renderMinuteComparisons(){
     data:{ datasets },
     options:{ responsive:true, maintainAspectRatio:false,
       plugins:{
-        legend:{ display: datasets.length>1, position:'top', labels:{boxWidth:10, font:{size:11}} },
+        legend:{
+          display: datasets.some(d=>d.isChannelSeries), position:'top', labels:{boxWidth:10, font:{size:11},
+            filter: (item, data) => data.datasets[item.datasetIndex].isChannelSeries }
+        },
         tooltip:{ callbacks:{ title:(items)=> `${items[0].parsed.x}분`, label:(ctx)=> `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(3)}%` } }
       },
       interaction:{ mode:'index', intersect:false },
       scales:{
         y:{ beginAtZero:true, grid:{color:'rgba(0,0,0,0.04)'}, title:{display:true,text:'시청률(%)'} },
-        x:{ type:'linear', grid:{display:false}, title:{display:true,text:'경과 시간(분)'} }
+        x:{ type:'linear', grid:{display:false}, title:{display:true,text:'경과 시간(분)'}, min:0, max: maxMinute } // 기준 회차 길이에 딱 맞춤 (오버레이가 더 길어도 안 늘어남)
       }
     }
   });
