@@ -583,6 +583,7 @@
             <select class="mini-filter" id="dna-select"></select>
             <button class="chip-btn active" data-dna-type="전체">전체</button>
             <button class="chip-btn" data-dna-type="생방">생방</button>
+            <button class="chip-btn" data-dna-type="본방">본방</button>
             <button class="chip-btn" data-dna-type="재방">재방</button>
           </div>
           <div class="bento-grid">
@@ -601,6 +602,7 @@
               <div style="display:flex; gap:4px; margin-bottom:6px;">
                 <button class="chip-btn active" data-cmp-slot="a" data-type="전체">전체</button>
                 <button class="chip-btn" data-cmp-slot="a" data-type="생방">생방</button>
+                <button class="chip-btn" data-cmp-slot="a" data-type="본방">본방</button>
                 <button class="chip-btn" data-cmp-slot="a" data-type="재방">재방</button>
               </div>
               <div style="display:flex; gap:6px;">
@@ -613,6 +615,7 @@
               <div style="display:flex; gap:4px; margin-bottom:6px;">
                 <button class="chip-btn active" data-cmp-slot="b" data-type="전체">전체</button>
                 <button class="chip-btn" data-cmp-slot="b" data-type="생방">생방</button>
+                <button class="chip-btn" data-cmp-slot="b" data-type="본방">본방</button>
                 <button class="chip-btn" data-cmp-slot="b" data-type="재방">재방</button>
               </div>
               <div style="display:flex; gap:6px;">
@@ -635,6 +638,7 @@
             <select class="mini-filter" id="minute-episode-select"></select>
             <button class="chip-btn active" data-minute-type="전체">전체</button>
             <button class="chip-btn" data-minute-type="생방">생방</button>
+            <button class="chip-btn" data-minute-type="본방">본방</button>
             <button class="chip-btn" data-minute-type="재방">재방</button>
           </div>
           <div class="bento-grid">
@@ -642,6 +646,19 @@
               <div class="card-label" id="minute-title">분단위 시청률 흐름</div>
               <div id="minute-meta" style="font-size:12px; color:var(--text-secondary); margin-bottom:8px;"></div>
               <div class="chart-wrap"><canvas id="chart-minute"></canvas></div>
+              <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">
+                <button class="chip-btn" id="minute-compare-toggle-btn" type="button">비교 옵션 ▾</button>
+                <div id="minute-compare-panel" style="display:none; margin-top:10px;">
+                  <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:6px;">경쟁채널 (동일 시각 비교, 개별 회차 선택 시에만 가능)</div>
+                  <label style="margin-right:14px; font-size:12px;"><input type="checkbox" class="minute-comp-channel" value="GOLF & PBA"> GOLF&amp;PBA</label>
+                  <label style="margin-right:14px; font-size:12px;"><input type="checkbox" class="minute-comp-channel" value="브레인TV"> 브레인TV</label>
+                  <label style="margin-right:14px; font-size:12px;"><input type="checkbox" class="minute-comp-channel" value="빌리어즈TV"> 빌리어즈TV</label>
+                  <div style="font-size:11px; color:var(--text-tertiary); margin:12px 0 6px;">비교할 다른 바둑TV 프로그램 (경과시간 기준 비교)</div>
+                  <select class="mini-filter" id="minute-cmp-program"></select>
+                  <select class="mini-filter" id="minute-cmp-episode"></select>
+                  <button class="chip-btn" id="minute-cmp-clear-btn" type="button">비교 해제</button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1012,7 +1029,7 @@ async function loadPrograms(startDate, endDate) {
   const { data: rows, error: progErr } = await sb
     .from('fact_schedule')
     .select(`
-      schedule_id, date_key, start_time, end_time, is_rerun, players,
+      schedule_id, date_key, start_time, end_time, is_rerun, broadcast_type, players,
       dim_program!fact_schedule_program_id_fkey ( program_id, program_name ),
       fact_rating ( rating_pct, share_pct, viewers, reach_pct, avg_view_minutes, target_rating_pct, achievement_pct, prev_rating_pct )
     `)
@@ -1047,7 +1064,9 @@ async function loadPrograms(startDate, endDate) {
       avgView: rating.avg_view_minutes || 0,
       viewers: rating.viewers || 0,
       prev: rating.prev_rating_pct ?? null,
-      type: r.is_rerun ? '재방' : '생방',
+      type: r.broadcast_type === '재' ? '재방' : r.broadcast_type === '본' ? '본방'
+            : r.broadcast_type === '생' ? '생방'
+            : (r.is_rerun ? '재방' : '생방'), // broadcast_type이 아직 없는 옛 데이터 대비 (재적재 전까지 임시)
       players: r.players || '-',
       target: rating.target_rating_pct || 0,
       achievement: rating.achievement_pct || 0,
@@ -1321,7 +1340,7 @@ function renderDashboard(){
       const achieveTxt = hasTarget
         ? `${ratio >= 100 ? `<span class="delta-up">▲ ${ratio.toFixed(0)}%</span>` : `<span class="delta-down">▼ ${ratio.toFixed(0)}%</span>`} <span style="font-size:9px; color:var(--text-tertiary);">(${sourceTag})</span>`
         : `<span style="color:var(--text-tertiary);">목표 미설정</span>`;
-      const badge = p.type==='생방' ? '<span class="badge live">생방</span>' : (p.type==='재방' ? '<span class="badge rerun">재방</span>' : '<span class="badge rerun">혼합</span>');
+      const badge = p.type==='생방' ? '<span class="badge live">생방</span>' : p.type==='본방' ? '<span class="badge live">본방</span>' : (p.type==='재방' ? '<span class="badge rerun">재방</span>' : '<span class="badge rerun">혼합</span>');
       const timeLabel = isSingleDay ? `${p.start}–${p.end}` : `${p.date} ${p.start}`;
       const partsNote = p._parts > 1 ? ` <span style="font-size:10px; color:var(--text-tertiary);">(${p._parts}부 통합)</span>` : '';
       return `<tr><td><b>${p.name}</b>${partsNote}</td><td>${timeLabel}</td><td>${badge}</td><td>${p.rating.toFixed(3)}%</td><td>${achieveTxt}</td></tr>`;
@@ -1474,7 +1493,7 @@ async function drawDNA(g){
   const tags = [];
   if(g.type==='재방') tags.push('재방 강세형');
   if(isOldRerun) tags.push('구작 재방 (생방 기록 없음)');
-  if(g.type==='생방+재방') tags.push('생방+재방 혼합 편성');
+  // (3단계로 정확히 분리된 이후로는 '생방+재방' 혼합 그룹 자체가 안 생김)
   if(g.duration>200) tags.push('장시간 편성');
   if(hasTarget && achieveValue>120) tags.push('목표 초과 달성');
   if(g.start>='22:00'||g.start<'06:00') tags.push('심야·새벽 시간대');
@@ -1511,7 +1530,7 @@ function renderMinuteTab(){
 
   function buildEpisodes(g){
     return [{ label: `전체 평균 (${g.count}회)`, schedule_ids: g.schedule_ids, isAvg: true },
-      ...g.instances.map(inst => ({ label: `${inst.date} ${inst.start}`, schedule_ids: [inst.schedule_id], isAvg: false }))];
+      ...g.instances.map(inst => ({ label: `${inst.date} ${(inst.players && inst.players!=='-') ? inst.players : '대국자 정보없음'}`, schedule_ids: [inst.schedule_id], isAvg: false }))];
   }
   function refreshEpisodes(){
     const g = window.__minuteFiltered[progSel.value];
@@ -1540,63 +1559,156 @@ function renderMinuteTab(){
     const g = window.__minuteFiltered[progSel.value];
     drawMinuteChart(g, buildEpisodes(g)[epSel.value]);
   };
-  document.querySelectorAll('#program-minute .chip-btn').forEach(btn=>{
+  document.querySelectorAll('#program-minute .chip-btn[data-minute-type]').forEach(btn=>{
     btn.onclick = () => {
-      document.querySelectorAll('#program-minute .chip-btn').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('#program-minute .chip-btn[data-minute-type]').forEach(b=>b.classList.remove('active'));
       btn.classList.add('active');
       minuteTypeFilter = btn.dataset.minuteType;
       refreshProgramList();
     };
   });
 
+  // ---- 비교 옵션 패널 설정 ----
+  window.__minuteCmpEpisode = null; // 기간 바뀌면 비교 선택 초기화
+
+  const toggleBtn = document.getElementById('minute-compare-toggle-btn');
+  const panel = document.getElementById('minute-compare-panel');
+  toggleBtn.onclick = () => { panel.style.display = panel.style.display === 'none' ? 'block' : 'none'; };
+
+  document.querySelectorAll('.minute-comp-channel').forEach(cb=>{
+    cb.checked = false;
+    cb.onchange = renderMinuteComparisons;
+  });
+
+  const cmpProgSel = document.getElementById('minute-cmp-program');
+  const cmpEpSel = document.getElementById('minute-cmp-episode');
+  const allForCmp = aggregateByProgram(PROGRAMS).sort((a,b)=>a.name.localeCompare(b.name));
+  function buildCmpEpisodeOptions(){
+    const g = allForCmp[cmpProgSel.value];
+    const episodes = [{ label:`전체 평균 (${g.count}회)`, schedule_ids:g.schedule_ids, isAvg:true },
+      ...g.instances.map(inst=>({label:`${inst.date} ${(inst.players && inst.players!=='-') ? inst.players : '대국자 정보없음'}`, schedule_ids:[inst.schedule_id], isAvg:false}))];
+    fillSelect(cmpEpSel, episodes, null, e=>e.label);
+    cmpEpSel.value = 0;
+    cmpEpSel.__episodes = episodes;
+  }
+  function applyCmpSelection(){
+    const g = allForCmp[cmpProgSel.value];
+    const episodes = cmpEpSel.__episodes;
+    window.__minuteCmpEpisode = episodes[cmpEpSel.value];
+    window.__minuteCmpLabel = `${g.name}·${g.type} ${episodes[cmpEpSel.value].label}`;
+    renderMinuteComparisons();
+  }
+  fillSelect(cmpProgSel, allForCmp, null, g=>`${g.name} · ${g.type}`);
+  cmpProgSel.value = 0;
+  buildCmpEpisodeOptions();
+  cmpProgSel.onchange = () => { buildCmpEpisodeOptions(); applyCmpSelection(); };
+  cmpEpSel.onchange = applyCmpSelection;
+  document.getElementById('minute-cmp-clear-btn').onclick = () => { window.__minuteCmpEpisode = null; renderMinuteComparisons(); };
+
   refreshProgramList();
 }
 
 async function drawMinuteChart(program, episode){
+  window.__minuteProgram = program;
+  window.__minuteEpisode = episode;
+  window.__minuteEpisodeInst = episode.isAvg ? null : program.instances.find(x => x.schedule_id === episode.schedule_ids[0]);
+
   document.getElementById('minute-title').textContent = `${program.name} · ${program.type} — ${episode.label}`;
 
-  // 대진 / 시청률 표시 (개별 회차면 그 회차 값, 전체 평균이면 프로그램 통합 값)
   let metaPlayers, metaRating;
   if (episode.isAvg) {
     metaPlayers = program.players.length ? program.players.join(', ') : '정보 없음';
     metaRating = program.rating;
   } else {
-    const inst = program.instances.find(x => x.schedule_id === episode.schedule_ids[0]);
+    const inst = window.__minuteEpisodeInst;
     metaPlayers = (inst && inst.players && inst.players !== '-') ? inst.players : '정보 없음';
     metaRating = inst ? inst.rating : program.rating;
   }
   document.getElementById('minute-meta').innerHTML = `<b>대진:</b> ${metaPlayers} &nbsp;·&nbsp; <b>${episode.isAvg ? '평균' : '해당 회차'} 시청률:</b> ${metaRating.toFixed(3)}%`;
 
+  // 경쟁채널 비교는 "전체 평균"이 아니라 개별 회차를 선택했을 때만 가능 (시계 시각 정렬이 필요해서)
+  document.querySelectorAll('.minute-comp-channel').forEach(cb => { cb.disabled = episode.isAvg; if (episode.isAvg) cb.checked = false; });
+
+  await renderMinuteComparisons();
+}
+
+// 기준 차트 + (선택시) 경쟁채널 오버레이 + (선택시) 비교 프로그램 오버레이를 한 차트에 그림
+async function renderMinuteComparisons(){
+  const program = window.__minuteProgram;
+  const episode = window.__minuteEpisode;
+  if (!program || !episode) return;
+
   const { data: rows, error } = await sb.from('fact_rating_minute')
     .select('schedule_id, minute_offset, rating_pct').in('schedule_id', episode.schedule_ids)
-    .order('minute_offset', { ascending: true })
-    .limit(20000);
+    .order('minute_offset', { ascending: true }).limit(20000);
   if (error) { console.error('분단위 조회 실패', error); return; }
 
   const byMinute = {};
-  (rows||[]).forEach(r=>{
-    if (r.rating_pct == null) return;
-    (byMinute[r.minute_offset] = byMinute[r.minute_offset] || []).push(r.rating_pct);
-  });
+  (rows||[]).forEach(r=>{ if (r.rating_pct == null) return; (byMinute[r.minute_offset] = byMinute[r.minute_offset] || []).push(r.rating_pct); });
   const minutes = Object.keys(byMinute).map(Number).sort((a,b)=>a-b);
-  const labels = minutes.map(m=>`${m}분`);
-  const data = minutes.map(m => { const v = byMinute[m]; return v.reduce((a,b)=>a+b,0)/v.length; });
+  const basePoints = minutes.map(m => ({ x:m, y: byMinute[m].reduce((a,b)=>a+b,0)/byMinute[m].length }));
+  const maxMinute = minutes.length ? minutes[minutes.length-1] : 0;
+
+  const datasets = [{
+    label: program.name, data: basePoints, borderColor: ACCENT_COLOR, backgroundColor: ACCENT_LIGHT,
+    fill:true, tension:0.3, pointRadius:0, pointHoverRadius:5, pointHoverBackgroundColor: ACCENT_COLOR, borderWidth:2, order:1
+  }];
+
+  // 경쟁채널 오버레이 — 같은 시각(clock_time)에 경쟁채널이 어땠는지, 우리 방송 시작 기준 경과분으로 환산해서 정렬
+  const checkedCompetitors = Array.from(document.querySelectorAll('.minute-comp-channel:checked')).map(cb=>cb.value);
+  const inst = window.__minuteEpisodeInst;
+  if (!episode.isAvg && checkedCompetitors.length > 0 && inst) {
+    const startMin = hhmmToMin(inst.start);
+    const compColors = { 'GOLF & PBA':'#34c759', '브레인TV':'#af52de', '빌리어즈TV':'#ff2d55' };
+    for (const chName of checkedCompetitors) {
+      const { data: chRow } = await sb.from('dim_channel').select('channel_id').eq('channel_name', chName).single();
+      if (!chRow) continue;
+      const { data: compRows } = await sb.from('fact_competitor_minute_rating')
+        .select('clock_time, rating_pct').eq('channel_id', chRow.channel_id).eq('date_key', inst.date)
+        .order('clock_time', { ascending:true }).limit(2000);
+      const compPoints = (compRows||[]).map(r=>{
+        const clockMin = hhmmToMin(r.clock_time.slice(0,5));
+        let offset = clockMin - startMin;
+        if (offset < -720) offset += 1440; // 자정 넘김 보정
+        return { x: offset, y: r.rating_pct };
+      }).filter(p => p.x >= 0 && p.x <= maxMinute);
+      datasets.push({
+        label: chName, data: compPoints, borderColor: compColors[chName]||'#999', backgroundColor:'transparent',
+        fill:false, tension:0.3, pointRadius:0, borderWidth:1.5, borderDash:[4,3], order:2
+      });
+    }
+  }
+
+  // 비교 프로그램 오버레이 — 우리 프로그램(방영일시 무관), 방송 시작 기준 경과시간으로 정렬
+  if (window.__minuteCmpEpisode) {
+    const cmpEp = window.__minuteCmpEpisode;
+    const { data: cmpRows } = await sb.from('fact_rating_minute')
+      .select('minute_offset, rating_pct').in('schedule_id', cmpEp.schedule_ids)
+      .order('minute_offset', { ascending:true }).limit(20000);
+    const cmpByMinute = {};
+    (cmpRows||[]).forEach(r=>{ if(r.rating_pct==null) return; (cmpByMinute[r.minute_offset]=cmpByMinute[r.minute_offset]||[]).push(r.rating_pct); });
+    const cmpMinutes = Object.keys(cmpByMinute).map(Number).sort((a,b)=>a-b);
+    const cmpPoints = cmpMinutes.map(m=>({x:m, y: cmpByMinute[m].reduce((a,b)=>a+b,0)/cmpByMinute[m].length}));
+    datasets.push({
+      label: window.__minuteCmpLabel || '비교 프로그램', data: cmpPoints, borderColor:'#8e8e93', backgroundColor:'transparent',
+      fill:false, tension:0.3, pointRadius:0, borderWidth:2, order:3
+    });
+  }
 
   if (minuteChart) minuteChart.destroy();
   minuteChart = new Chart(document.getElementById('chart-minute'), {
     type:'line',
-    data:{ labels, datasets:[{
-      data, borderColor: ACCENT_COLOR, backgroundColor: ACCENT_LIGHT,
-      fill:true, tension:0.3, pointRadius:0, pointHoverRadius:5, pointHoverBackgroundColor: ACCENT_COLOR, borderWidth:2
-    }]},
+    data:{ datasets },
     options:{ responsive:true, maintainAspectRatio:false,
       plugins:{
-        legend:{display:false},
-        tooltip:{ callbacks:{ title: (items)=> `방송 시작 후 ${minutes[items[0].dataIndex]}분`, label: (ctx)=> `시청률 ${ctx.parsed.y.toFixed(3)}%` } }
+        legend:{ display: datasets.length>1, position:'top', labels:{boxWidth:10, font:{size:11}} },
+        tooltip:{ callbacks:{ title:(items)=> `${items[0].parsed.x}분`, label:(ctx)=> `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(3)}%` } }
       },
-      interaction: { mode:'index', intersect:false },
-      scales:{ y:{ beginAtZero:true, grid:{color:'rgba(0,0,0,0.04)'}, title:{display:true,text:'시청률(%)'} },
-               x:{ grid:{display:false}, title:{display:true,text:'방송 시작 후 경과 시간'}, ticks:{maxTicksLimit:12} } }
+      interaction:{ mode:'index', intersect:false },
+      scales:{
+        y:{ beginAtZero:true, grid:{color:'rgba(0,0,0,0.04)'}, title:{display:true,text:'시청률(%)'} },
+        x:{ type:'linear', grid:{display:false}, title:{display:true,text:'경과 시간(분)'} }
+      }
     }
   });
 }
