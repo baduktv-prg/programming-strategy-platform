@@ -611,6 +611,9 @@
           <div class="filter-row">
             <select class="mini-filter" id="minute-program-select"></select>
             <select class="mini-filter" id="minute-episode-select"></select>
+            <button class="chip-btn active" data-minute-type="전체">전체</button>
+            <button class="chip-btn" data-minute-type="생방">생방</button>
+            <button class="chip-btn" data-minute-type="재방">재방</button>
           </div>
           <div class="bento-grid">
             <div class="bento-card col-12">
@@ -1455,31 +1458,53 @@ async function drawDNA(g){
 /* ============ PROGRAM: COMPARE ============ */
 /* ============ PROGRAM: MINUTE-BY-MINUTE ============ */
 let minuteChart;
+let minuteTypeFilter = '전체';
 function renderMinuteTab(){
   const progSel = document.getElementById('minute-program-select');
   const epSel = document.getElementById('minute-episode-select');
-  const grouped = aggregateByProgram(PROGRAMS).sort((a,b)=>a.name.localeCompare(b.name));
-  fillSelect(progSel, grouped, null, g=>`${g.name} · ${g.type}`);
-  progSel.value = 0;
+  const allGrouped = aggregateByProgram(PROGRAMS).sort((a,b)=>a.name.localeCompare(b.name));
 
   function buildEpisodes(g){
     return [{ label: `전체 평균 (${g.count}회)`, schedule_ids: g.schedule_ids, isAvg: true },
       ...g.instances.map(inst => ({ label: `${inst.date} ${inst.start}`, schedule_ids: [inst.schedule_id], isAvg: false }))];
   }
   function refreshEpisodes(){
-    const g = grouped[progSel.value];
+    const g = window.__minuteFiltered[progSel.value];
     const episodes = buildEpisodes(g);
     fillSelect(epSel, episodes, null, e=>e.label);
     epSel.value = 0;
     drawMinuteChart(g, episodes[0]);
   }
+  function refreshProgramList(){
+    const filtered = minuteTypeFilter === '전체' ? allGrouped : allGrouped.filter(g=>g.type===minuteTypeFilter);
+    window.__minuteFiltered = filtered;
+    if (filtered.length === 0) {
+      progSel.innerHTML = '<option>해당하는 프로그램 없음</option>';
+      epSel.innerHTML = '';
+      if (minuteChart) { minuteChart.destroy(); minuteChart = null; }
+      document.getElementById('minute-meta').textContent = '';
+      return;
+    }
+    fillSelect(progSel, filtered, null, g=> minuteTypeFilter==='전체' ? `${g.name} · ${g.type}` : g.name);
+    progSel.value = 0;
+    refreshEpisodes();
+  }
+
   progSel.onchange = refreshEpisodes;
   epSel.onchange = () => {
-    const g = grouped[progSel.value];
+    const g = window.__minuteFiltered[progSel.value];
     drawMinuteChart(g, buildEpisodes(g)[epSel.value]);
   };
+  document.querySelectorAll('#program-minute .chip-btn').forEach(btn=>{
+    btn.onclick = () => {
+      document.querySelectorAll('#program-minute .chip-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      minuteTypeFilter = btn.dataset.minuteType;
+      refreshProgramList();
+    };
+  });
 
-  refreshEpisodes();
+  refreshProgramList();
 }
 
 async function drawMinuteChart(program, episode){
