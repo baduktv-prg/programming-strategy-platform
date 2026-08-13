@@ -1368,11 +1368,39 @@ async function fetchAudience(scheduleIds){
   return Object.values(byKey).map(x=>({ gender:x.gender, age_group:x.age_group, rating_pct:x.sum/x.n }));
 }
 async function drawDNA(g){
+  // 재방은 프로그램마스터 목표가 아니라 "시간대 목표"로 비교 (대시보드와 동일 기준)
+  let targetLabel, targetValue, achieveValue, hasTarget;
+  if (g.type === '재방') {
+    const hourlyTargets = g.instances.map(inst => getHourlyTargetAvg(inst.start, inst.end)).filter(v => v != null);
+    hasTarget = hourlyTargets.length > 0;
+    targetValue = hasTarget ? hourlyTargets.reduce((a,b)=>a+b,0)/hourlyTargets.length : 0;
+    achieveValue = hasTarget ? (g.rating / targetValue) * 100 : 0;
+    targetLabel = '시간대 목표';
+  } else {
+    hasTarget = g.target > 0;
+    targetValue = g.target;
+    achieveValue = g.achievement;
+    targetLabel = '목표 시청률';
+  }
+
+  // 재방인데 같은 프로그램의 생방 기록이 선택 기간 안에 있으면 "생방 대비 유지율" 계산, 없으면 "구작 재방" 태그
+  let liveCompareLine = '';
+  let isOldRerun = false;
+  if (g.type === '재방') {
+    const liveGroup = (window.__dnaGrouped || []).find(x => x.program_id === g.program_id && x.type !== '재방');
+    if (liveGroup) {
+      const retention = (g.rating / liveGroup.rating) * 100;
+      liveCompareLine = `<li><b>생방 대비 유지율:</b> ${retention.toFixed(0)}% (생방 평균 ${liveGroup.rating.toFixed(3)}%)</li>`;
+    } else {
+      isOldRerun = true;
+    }
+  }
+
   if(dnaChart) dnaChart.destroy();
   dnaChart = new Chart(document.getElementById('chart-dna'), {
     type:'bar',
-    data:{ labels:['목표 시청률','실제 시청률'], datasets:[{
-      data:[g.target, g.rating], backgroundColor:[ '#e5e5ea', ACCENT_COLOR ], borderRadius: 8
+    data:{ labels:[targetLabel,'실제 시청률'], datasets:[{
+      data:[targetValue, g.rating], backgroundColor:[ '#e5e5ea', ACCENT_COLOR ], borderRadius: 8
     }]},
     options:{ responsive: true, maintainAspectRatio: false, plugins:{legend:{display:false}}, scales:{ y:{ beginAtZero:true, grid:{color:'rgba(0,0,0,0.04)'} }, x:{grid:{display:false}} } }
   });
@@ -1387,7 +1415,8 @@ async function drawDNA(g){
     <ul class="factor-list">
       <li><b>대진:</b> ${playersTxt}</li>
       <li><b>평균 방송 시간:</b> ${g.duration.toFixed(0)}분</li>
-      <li><b>목표 대비 실적:</b> ${g.target>0 ? g.achievement.toFixed(0)+'%' : '목표 미설정'}</li>
+      <li><b>${targetLabel} 대비 실적:</b> ${hasTarget ? achieveValue.toFixed(0)+'%' : '목표 미설정'}</li>
+      ${liveCompareLine}
     </ul>
     <div class="card-label" style="margin-top:14px;">성·연령대별 시청률 ${g.count>1?'(평균)':''}</div>
     <div id="dna-audience">불러오는 중...</div>
@@ -1395,9 +1424,10 @@ async function drawDNA(g){
 
   const tags = [];
   if(g.type==='재방') tags.push('재방 강세형');
+  if(isOldRerun) tags.push('구작 재방 (생방 기록 없음)');
   if(g.type==='생방+재방') tags.push('생방+재방 혼합 편성');
   if(g.duration>200) tags.push('장시간 편성');
-  if(g.achievement>120) tags.push('목표 초과 달성');
+  if(hasTarget && achieveValue>120) tags.push('목표 초과 달성');
   if(g.start>='22:00'||g.start<'06:00') tags.push('심야·새벽 시간대');
 
   const audience = await fetchAudience(g.schedule_ids);
