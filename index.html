@@ -615,6 +615,7 @@
           <div class="bento-grid">
             <div class="bento-card col-12">
               <div class="card-label" id="minute-title">분단위 시청률 흐름</div>
+              <div id="minute-meta" style="font-size:12px; color:var(--text-secondary); margin-bottom:8px;"></div>
               <div class="chart-wrap"><canvas id="chart-minute"></canvas></div>
             </div>
           </div>
@@ -1483,6 +1484,19 @@ function renderMinuteTab(){
 
 async function drawMinuteChart(program, episode){
   document.getElementById('minute-title').textContent = `${program.name} · ${program.type} — ${episode.label}`;
+
+  // 대진 / 시청률 표시 (개별 회차면 그 회차 값, 전체 평균이면 프로그램 통합 값)
+  let metaPlayers, metaRating;
+  if (episode.isAvg) {
+    metaPlayers = program.players.length ? program.players.join(', ') : '정보 없음';
+    metaRating = program.rating;
+  } else {
+    const inst = program.instances.find(x => x.schedule_id === episode.schedule_ids[0]);
+    metaPlayers = (inst && inst.players && inst.players !== '-') ? inst.players : '정보 없음';
+    metaRating = inst ? inst.rating : program.rating;
+  }
+  document.getElementById('minute-meta').innerHTML = `<b>대진:</b> ${metaPlayers} &nbsp;·&nbsp; <b>${episode.isAvg ? '평균' : '해당 회차'} 시청률:</b> ${metaRating.toFixed(3)}%`;
+
   const { data: rows, error } = await sb.from('fact_rating_minute')
     .select('schedule_id, minute_offset, rating_pct').in('schedule_id', episode.schedule_ids)
     .order('minute_offset', { ascending: true })
@@ -1503,9 +1517,14 @@ async function drawMinuteChart(program, episode){
     type:'line',
     data:{ labels, datasets:[{
       data, borderColor: ACCENT_COLOR, backgroundColor: ACCENT_LIGHT,
-      fill:true, tension:0.3, pointRadius:0, borderWidth:2
+      fill:true, tension:0.3, pointRadius:0, pointHoverRadius:5, pointHoverBackgroundColor: ACCENT_COLOR, borderWidth:2
     }]},
-    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{ callbacks:{ title: (items)=> `방송 시작 후 ${minutes[items[0].dataIndex]}분`, label: (ctx)=> `시청률 ${ctx.parsed.y.toFixed(3)}%` } }
+      },
+      interaction: { mode:'index', intersect:false },
       scales:{ y:{ beginAtZero:true, grid:{color:'rgba(0,0,0,0.04)'}, title:{display:true,text:'시청률(%)'} },
                x:{ grid:{display:false}, title:{display:true,text:'방송 시작 후 경과 시간'}, ticks:{maxTicksLimit:12} } }
     }
