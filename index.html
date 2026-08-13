@@ -1343,7 +1343,7 @@ function renderDashboard(){
         ? `${ratio >= 100 ? `<span class="delta-up">▲ ${ratio.toFixed(0)}%</span>` : `<span class="delta-down">▼ ${ratio.toFixed(0)}%</span>`} <span style="font-size:9px; color:var(--text-tertiary);">(${sourceTag})</span>`
         : `<span style="color:var(--text-tertiary);">목표 미설정</span>`;
       const badge = p.type==='생방' ? '<span class="badge live">생방</span>' : p.type==='본방' ? '<span class="badge live">본방</span>' : (p.type==='재방' ? '<span class="badge rerun">재방</span>' : '<span class="badge rerun">혼합</span>');
-      const timeLabel = isSingleDay ? `${p.start}–${p.end}` : `${p.date} ${p.start}`;
+      const timeLabel = isSingleDay ? `${p.start}–${p.end}` : `${p.date} / ${p.start}`;
       const partsNote = p._parts > 1 ? ` <span style="font-size:10px; color:var(--text-tertiary);">(${p._parts}부 통합)</span>` : '';
       return `<tr><td><b>${p.name}</b>${partsNote}</td><td>${timeLabel}</td><td>${badge}</td><td>${p.rating.toFixed(3)}%</td><td>${achieveTxt}</td></tr>`;
     }).join('');
@@ -1958,7 +1958,7 @@ function renderCounterfactual(){
   const sel = document.getElementById('cf-current');
   const vsel = document.getElementById('cf-virtual');
   const vdropdown = document.getElementById('cf-virtual-dropdown');
-  fillSelect(sel, PROGRAMS, null, p=>`${p.date} ${p.start} ${p.name}`); sel.value=0;
+  fillSelect(sel, PROGRAMS, null, p=>`${p.date} / ${p.start} · ${p.name}`); sel.value=0;
   let selectedVirtual = ALL_PROGRAMS[0] || null;
   vsel.value = selectedVirtual ? selectedVirtual.program_name : '';
 
@@ -2046,7 +2046,7 @@ function renderRegression(){
     const name = names[progSel.value];
     const date = dates[dateSel.value];
     const matches = PROGRAMS.map((p,idx)=>({p,idx})).filter(x=> x.p.name===name && x.p.date===date && (regTypeFilter==='전체' || x.p.type===regTypeFilter));
-    playersSel.innerHTML = matches.map(x=>`<option value="${x.idx}">${(x.p.players && x.p.players!=='-') ? x.p.players : '대국자 정보없음'} · ${x.p.type}</option>`).join('') || '<option>없음</option>';
+    playersSel.innerHTML = matches.map(x=>`<option value="${x.idx}">${(x.p.players && x.p.players!=='-') ? x.p.players : '대국자 정보없음'}</option>`).join('') || '<option>없음</option>';
     playersSel.__matches = matches;
     playersSel.value = matches.length ? matches[0].idx : 0;
     update();
