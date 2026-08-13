@@ -654,10 +654,6 @@
                   <label style="margin-right:14px; font-size:12px;"><input type="checkbox" class="minute-comp-channel" value="브레인TV"> 브레인TV</label>
                   <label style="margin-right:14px; font-size:12px;"><input type="checkbox" class="minute-comp-channel" value="빌리어즈TV"> 빌리어즈TV</label>
                   <label style="margin-right:14px; font-size:12px;"><input type="checkbox" id="minute-comp-kbaduk"> K바둑</label>
-                  <div style="font-size:11px; color:var(--text-tertiary); margin:12px 0 6px;">비교할 다른 바둑TV 프로그램 (경과시간 기준 비교)</div>
-                  <select class="mini-filter" id="minute-cmp-program"></select>
-                  <select class="mini-filter" id="minute-cmp-episode"></select>
-                  <button class="chip-btn" id="minute-cmp-clear-btn" type="button">비교 해제</button>
                 </div>
               </div>
             </div>
@@ -777,9 +773,14 @@
         </div>
 
         <div class="subscreen active" data-parent="audience" id="audience-regression">
-          <div class="filter-row">
+          <div class="filter-row" style="flex-wrap:wrap; gap:6px;">
+            <button class="chip-btn active" data-reg-type="전체">전체</button>
+            <button class="chip-btn" data-reg-type="생방">생방</button>
+            <button class="chip-btn" data-reg-type="본방">본방</button>
+            <button class="chip-btn" data-reg-type="재방">재방</button>
             <select class="mini-filter" id="regression-program-select"></select>
             <select class="mini-filter" id="regression-date-select"></select>
+            <select class="mini-filter" id="regression-players-select"></select>
           </div>
           <div class="bento-grid">
             <div class="bento-card col-6">
@@ -1570,8 +1571,6 @@ function renderMinuteTab(){
   });
 
   // ---- 비교 옵션 패널 설정 ----
-  window.__minuteCmpEpisode = null; // 기간 바뀌면 비교 선택 초기화
-
   const toggleBtn = document.getElementById('minute-compare-toggle-btn');
   const panel = document.getElementById('minute-compare-panel');
   toggleBtn.onclick = () => { panel.style.display = panel.style.display === 'none' ? 'block' : 'none'; };
@@ -1583,31 +1582,6 @@ function renderMinuteTab(){
   const kbadukCb = document.getElementById('minute-comp-kbaduk');
   kbadukCb.checked = false;
   kbadukCb.onchange = renderMinuteComparisons;
-
-  const cmpProgSel = document.getElementById('minute-cmp-program');
-  const cmpEpSel = document.getElementById('minute-cmp-episode');
-  const allForCmp = aggregateByProgram(PROGRAMS).sort((a,b)=>a.name.localeCompare(b.name));
-  function buildCmpEpisodeOptions(){
-    const g = allForCmp[cmpProgSel.value];
-    const episodes = [{ label:`전체 평균 (${g.count}회)`, schedule_ids:g.schedule_ids, isAvg:true },
-      ...g.instances.map(inst=>({label:`${inst.date} ${(inst.players && inst.players!=='-') ? inst.players : '대국자 정보없음'}`, schedule_ids:[inst.schedule_id], isAvg:false}))];
-    fillSelect(cmpEpSel, episodes, null, e=>e.label);
-    cmpEpSel.value = 0;
-    cmpEpSel.__episodes = episodes;
-  }
-  function applyCmpSelection(){
-    const g = allForCmp[cmpProgSel.value];
-    const episodes = cmpEpSel.__episodes;
-    window.__minuteCmpEpisode = episodes[cmpEpSel.value];
-    window.__minuteCmpLabel = `${g.name}·${g.type} ${episodes[cmpEpSel.value].label}`;
-    renderMinuteComparisons();
-  }
-  fillSelect(cmpProgSel, allForCmp, null, g=>`${g.name} · ${g.type}`);
-  cmpProgSel.value = 0;
-  buildCmpEpisodeOptions();
-  cmpProgSel.onchange = () => { buildCmpEpisodeOptions(); applyCmpSelection(); };
-  cmpEpSel.onchange = applyCmpSelection;
-  document.getElementById('minute-cmp-clear-btn').onclick = () => { window.__minuteCmpEpisode = null; renderMinuteComparisons(); };
 
   refreshProgramList();
 }
@@ -1639,7 +1613,7 @@ async function drawMinuteChart(program, episode){
   await renderMinuteComparisons();
 }
 
-// 기준 차트 + (선택시) 경쟁채널 오버레이 + (선택시) 비교 프로그램 오버레이를 한 차트에 그림
+// 기준 차트 + (선택시) 경쟁채널 오버레이를 한 차트에 그림
 async function renderMinuteComparisons(){
   const program = window.__minuteProgram;
   const episode = window.__minuteEpisode;
@@ -1714,21 +1688,6 @@ async function renderMinuteComparisons(){
     }
   }
 
-  // 비교 프로그램 오버레이 — 우리 프로그램(방영일시 무관), 방송 시작 기준 경과시간으로 정렬. 범례엔 안 띄움(채널 아님)
-  if (window.__minuteCmpEpisode) {
-    const cmpEp = window.__minuteCmpEpisode;
-    const { data: cmpRows } = await sb.from('fact_rating_minute')
-      .select('minute_offset, rating_pct').in('schedule_id', cmpEp.schedule_ids)
-      .order('minute_offset', { ascending:true }).limit(20000);
-    const cmpByMinute = {};
-    (cmpRows||[]).forEach(r=>{ if(r.rating_pct==null) return; (cmpByMinute[r.minute_offset]=cmpByMinute[r.minute_offset]||[]).push(r.rating_pct); });
-    const cmpMinutes = Object.keys(cmpByMinute).map(Number).sort((a,b)=>a-b).filter(m=>m<=maxMinute);
-    const cmpPoints = cmpMinutes.map(m=>({x:m, y: cmpByMinute[m].reduce((a,b)=>a+b,0)/cmpByMinute[m].length}));
-    datasets.push({
-      label: window.__minuteCmpLabel || '비교 프로그램', data: cmpPoints, borderColor:'#1d1d1f', backgroundColor:'transparent',
-      fill:false, tension:0.3, pointRadius:0, borderWidth:2, order:1, isChannelSeries:false
-    });
-  }
 
   if (minuteChart) minuteChart.destroy();
   minuteChart = new Chart(document.getElementById('chart-minute'), {
@@ -2054,25 +2013,59 @@ async function fetchMinutes(scheduleId){
   return data || [];
 }
 
+let regTypeFilter = '전체';
 function renderRegression(){
   const progSel = document.getElementById('regression-program-select');
   const dateSel = document.getElementById('regression-date-select');
+  const playersSel = document.getElementById('regression-players-select');
 
-  const uniqueNames = [...new Set(PROGRAMS.map(p=>p.name))].sort((a,b)=>a.localeCompare(b));
-  progSel.innerHTML = uniqueNames.map((n,i)=>`<option value="${i}">${n}</option>`).join('');
-  progSel.value = 0;
-
-  let matches = [];
+  function typeFiltered(){
+    return regTypeFilter === '전체' ? PROGRAMS : PROGRAMS.filter(p=>p.type===regTypeFilter);
+  }
+  function refreshPrograms(){
+    const pool = typeFiltered();
+    const uniqueNames = [...new Set(pool.map(p=>p.name))].sort((a,b)=>a.localeCompare(b));
+    progSel.innerHTML = uniqueNames.map((n,i)=>`<option value="${i}">${n}</option>`).join('') || '<option>없음</option>';
+    progSel.__names = uniqueNames;
+    progSel.value = 0;
+    refreshDates();
+  }
   function refreshDates(){
-    const name = uniqueNames[progSel.value];
-    matches = PROGRAMS.map((p,idx)=>({p,idx})).filter(x=>x.p.name===name);
-    dateSel.innerHTML = matches.map(x=>`<option value="${x.idx}">${x.p.date} · ${x.p.type}</option>`).join('');
-    dateSel.value = matches.length ? matches[0].idx : 0;
+    const names = progSel.__names || [];
+    const name = names[progSel.value];
+    const pool = typeFiltered().filter(p=>p.name===name);
+    const uniqueDates = [...new Set(pool.map(p=>p.date))].sort();
+    dateSel.innerHTML = uniqueDates.map((d,i)=>`<option value="${i}">${d}</option>`).join('') || '<option>없음</option>';
+    dateSel.__dates = uniqueDates;
+    dateSel.value = 0;
+    refreshPlayers();
+  }
+  function refreshPlayers(){
+    const dates = dateSel.__dates || [];
+    const names = progSel.__names || [];
+    const name = names[progSel.value];
+    const date = dates[dateSel.value];
+    const matches = PROGRAMS.map((p,idx)=>({p,idx})).filter(x=> x.p.name===name && x.p.date===date && (regTypeFilter==='전체' || x.p.type===regTypeFilter));
+    playersSel.innerHTML = matches.map(x=>`<option value="${x.idx}">${(x.p.players && x.p.players!=='-') ? x.p.players : '대국자 정보없음'} · ${x.p.type}</option>`).join('') || '<option>없음</option>';
+    playersSel.__matches = matches;
+    playersSel.value = matches.length ? matches[0].idx : 0;
     update();
   }
 
+  progSel.onchange = refreshDates;
+  dateSel.onchange = refreshPlayers;
+  playersSel.onchange = update;
+  document.querySelectorAll('#audience-regression .chip-btn[data-reg-type]').forEach(btn=>{
+    btn.onclick = () => {
+      document.querySelectorAll('#audience-regression .chip-btn[data-reg-type]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      regTypeFilter = btn.dataset.regType;
+      refreshPrograms();
+    };
+  });
+
   async function update(){
-    const idx = Number(dateSel.value);
+    const idx = Number(playersSel.value);
     const p = PROGRAMS[idx];
     // 날짜가 달라도 "진짜 시간"이 이어져 있으면(간격 60분 이내) 직전/직후로 인정 (자정 넘김 대응)
     const prevCand = PROGRAMS[idx-1];
@@ -2128,9 +2121,7 @@ function renderRegression(){
       ? `"${p.name}" → 다음 방송 "${next.name}" 종료 경계`
       : `종료 경계 (이 방송이 당일 마지막 방송이라 다음 방송 없음)`;
   }
-  progSel.onchange = refreshDates;
-  dateSel.onchange = update;
-  refreshDates();
+  refreshPrograms();
 }
 
 /* ============ AUDIENCE: SANKEY ============ */
