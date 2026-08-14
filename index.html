@@ -371,40 +371,41 @@
   ::-webkit-scrollbar-thumb { background: #d1d1d6; border-radius: 10px; }
   ::-webkit-scrollbar-track { background: transparent; }
 @media print {
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
   body.print-mode .sidebar, body.print-mode .topbar, body.print-mode .btn-report,
-  body.print-mode .subtabs, body.print-mode .filter-row { display:none !important; }
+  body.print-mode .subtabs, body.print-mode .filter-row, body.print-mode #pin-add-btn { display:none !important; }
   body.print-mode .screen { display:none !important; }
-  body.print-mode .screen.print-include { display:block !important; page-break-after: always; }
   body.print-mode .content { padding:0; overflow:visible; }
   body.print-mode .main { overflow:visible; }
+  body.print-mode #report-print-container { display:block !important; }
+  .report-print-item { page-break-inside: avoid; margin-bottom: 28px; }
+  .report-cover { page-break-after: always; }
 }
+.report-print-item .bento-card { box-shadow:none; border:1px solid #eee; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
 <div id="report-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:1000; align-items:center; justify-content:center;">
-  <div style="background:#fff; border-radius:16px; padding:28px; width:360px; box-shadow:0 20px 60px rgba(0,0,0,0.2);">
-    <div style="font-size:16px; font-weight:700; margin-bottom:4px;">보고서에 포함할 화면 선택</div>
-    <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:16px;">현재 각 탭에서 보고 있는 화면 그대로 PDF로 저장됩니다.</div>
-    <label style="display:flex; align-items:center; gap:8px; padding:8px 0; font-size:13px; cursor:pointer;">
-      <input type="checkbox" class="report-check" value="dashboard" checked> Dashboard
-    </label>
-    <label style="display:flex; align-items:center; gap:8px; padding:8px 0; font-size:13px; cursor:pointer;">
-      <input type="checkbox" class="report-check" value="program" checked> 프로그램 분석
-    </label>
-    <label style="display:flex; align-items:center; gap:8px; padding:8px 0; font-size:13px; cursor:pointer;">
-      <input type="checkbox" class="report-check" value="schedule"> 편성 분석
-    </label>
-    <label style="display:flex; align-items:center; gap:8px; padding:8px 0; font-size:13px; cursor:pointer;">
-      <input type="checkbox" class="report-check" value="audience"> 시청자 분석
-    </label>
-    <div style="display:flex; gap:8px; margin-top:20px;">
+  <div style="background:#fff; border-radius:16px; padding:28px; width:520px; max-height:82vh; display:flex; flex-direction:column; box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+    <div style="font-size:16px; font-weight:700; margin-bottom:4px;">보고서 만들기</div>
+    <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:14px;">각 화면 우측 하단의 "+ 보고서에 추가" 버튼으로 담은 항목들이에요. 순서 조정, 코멘트 작성, 삭제가 가능합니다.</div>
+    <input id="report-title-input" placeholder="보고서 제목" value="바둑TV 편성전략 리포트" style="padding:10px 12px; border:1px solid var(--border); border-radius:10px; font-size:13px; margin-bottom:14px; font-family:inherit;">
+    <div id="report-pin-list" style="overflow-y:auto; flex:1; margin-bottom:14px; border-top:1px solid var(--border); padding-top:10px;"></div>
+    <div style="display:flex; gap:8px;">
       <button onclick="closeReportModal()" style="flex:1; padding:10px; border-radius:10px; border:1px solid var(--border); background:#fff; cursor:pointer; font-weight:600;">취소</button>
       <button onclick="generateReport()" style="flex:1; padding:10px; border-radius:10px; border:none; background:var(--accent); color:#fff; cursor:pointer; font-weight:600;">PDF로 저장</button>
     </div>
   </div>
 </div>
+
+<button id="pin-add-btn" onclick="captureCurrentPanel()" type="button" style="position:fixed; bottom:24px; right:24px; z-index:150; padding:12px 20px; border-radius:999px; border:none; background:#1d1d1f; color:#fff; font-weight:700; font-size:13px; cursor:pointer; box-shadow:0 6px 20px rgba(0,0,0,0.25); display:flex; align-items:center; gap:8px;">
+  + 보고서에 추가
+  <span id="pin-count-badge" style="display:none; background:var(--accent); color:#fff; border-radius:999px; padding:1px 7px; font-size:11px;">0</span>
+</button>
+
+<div id="report-print-container" style="display:none;"></div>
 <div class="app">
 
   <!-- ================= SIDEBAR ================= -->
@@ -445,7 +446,7 @@
       <div class="nav-group" data-group="audience">
         <div class="nav-item" data-screen="audience"><span>시청자 분석</span><span class="nav-caret">▸</span></div>
         <div class="nav-sub-wrap">
-          <div class="nav-sub active" data-screen="audience" data-sub="regression">시청자 이탈 분석</div>
+          <div class="nav-sub active" data-screen="audience" data-sub="regression">시청자 이탈 분석 (공사중)</div>
           <!-- 공사중: 시청자 이동 지도 (추정치 기반 목업) 임시 비활성화
           <div class="nav-sub" data-screen="audience" data-sub="sankey">시청자 이동 지도</div>
           -->
@@ -765,7 +766,7 @@
       <!-- ============ AUDIENCE ============ -->
       <div class="screen" id="screen-audience">
         <div class="subtabs">
-          <div class="subtab active" data-parent="audience" data-tab="regression">시청자 이탈 분석</div>
+          <div class="subtab active" data-parent="audience" data-tab="regression">시청자 이탈 분석 (공사중)</div>
           <!-- 공사중: 이동 지도 (추정치 기반 목업) 임시 비활성화
           <div class="subtab" data-parent="audience" data-tab="sankey">이동 지도</div>
           -->
@@ -2256,36 +2257,148 @@ async function renderFatigue(){
 }
 
 /* ============ REPORT (PDF) ============ */
+/* ============ REPORT (핀 기반) ============ */
+window.__pinnedItems = [];
+
+// 지금 활성화된 서브화면(bento-grid)을 캡처해서 핀 목록에 추가
+// 캔버스(Chart.js)는 이미지로 굽고, 나머지(비교분석 막대, 텍스트 등)는 HTML 그대로 보존
+function captureCurrentPanel(){
+  const activeScreen = document.querySelector('.screen.active');
+  const activeSub = activeScreen ? Array.from(activeScreen.querySelectorAll('.subscreen')).find(el => getComputedStyle(el).display !== 'none') : null;
+  if (!activeScreen || !activeSub) { alert('캡처할 화면을 못 찾았어요. 화면을 한 번 클릭해서 열어주신 다음 다시 시도해주세요.'); return; }
+  const grid = activeSub.querySelector('.bento-grid') || activeSub;
+  if (!grid || !grid.innerHTML.trim()) { alert('캡처할 내용이 비어있어요.'); return; }
+
+  const clone = grid.cloneNode(true);
+  const origCanvases = grid.querySelectorAll('canvas');
+  const cloneCanvases = clone.querySelectorAll('canvas');
+  origCanvases.forEach((origCanvas, i) => {
+    const chartInstance = (typeof Chart !== 'undefined' && Chart.getChart) ? Chart.getChart(origCanvas) : null;
+    if (chartInstance && cloneCanvases[i]) {
+      const img = document.createElement('img');
+      img.src = chartInstance.toBase64Image();
+      img.style.width = '100%';
+      img.style.display = 'block';
+      cloneCanvases[i].replaceWith(img);
+    } else if (cloneCanvases[i]) {
+      cloneCanvases[i].replaceWith(document.createTextNode('(차트 없음)'));
+    }
+  });
+
+  const subtabActive = document.querySelector(`.subtab.active[data-parent]`);
+  const topbarTitle = document.getElementById('topbar-title')?.textContent || '';
+  const defaultTitle = (topbarTitle ? topbarTitle + ' — ' : '') + (subtabActive ? subtabActive.textContent.trim() : '캡처 항목');
+
+  window.__pinnedItems.push({
+    id: Date.now() + '_' + Math.floor(Math.random()*1000),
+    title: defaultTitle,
+    html: clone.innerHTML,
+    comment: ''
+  });
+  updatePinBadge();
+  const btn = document.getElementById('pin-add-btn');
+  const orig = btn.style.background;
+  btn.style.background = '#34c759';
+  setTimeout(()=>{ btn.style.background = orig; }, 350);
+}
+
+function updatePinBadge(){
+  const badge = document.getElementById('pin-count-badge');
+  const n = window.__pinnedItems.length;
+  badge.textContent = n;
+  badge.style.display = n > 0 ? 'inline-block' : 'none';
+}
+
+function removePin(id){
+  window.__pinnedItems = window.__pinnedItems.filter(p=>p.id!==id);
+  renderPinListInModal();
+  updatePinBadge();
+}
+function movePin(id, dir){
+  const idx = window.__pinnedItems.findIndex(p=>p.id===id);
+  const swapWith = idx + dir;
+  if (idx<0 || swapWith<0 || swapWith>=window.__pinnedItems.length) return;
+  const tmp = window.__pinnedItems[idx];
+  window.__pinnedItems[idx] = window.__pinnedItems[swapWith];
+  window.__pinnedItems[swapWith] = tmp;
+  renderPinListInModal();
+}
+function updatePinComment(id, text){
+  const item = window.__pinnedItems.find(p=>p.id===id);
+  if (item) item.comment = text;
+}
+function updatePinTitle(id, text){
+  const item = window.__pinnedItems.find(p=>p.id===id);
+  if (item) item.title = text;
+}
+
+function renderPinListInModal(){
+  const wrap = document.getElementById('report-pin-list');
+  if (window.__pinnedItems.length === 0) {
+    wrap.innerHTML = '<div style="text-align:center; padding:30px 10px; color:var(--text-tertiary); font-size:13px;">아직 추가된 항목이 없어요.<br>각 화면 우측 하단의 "+ 보고서에 추가" 버튼을 눌러 담아주세요.</div>';
+    return;
+  }
+  wrap.innerHTML = window.__pinnedItems.map((item, i) => `
+    <div style="border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:10px;">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+        <span style="font-size:11px; color:var(--text-tertiary); font-weight:700;">#${i+1}</span>
+        <input value="${item.title.replace(/"/g,'&quot;')}" oninput="updatePinTitle('${item.id}', this.value)"
+          style="flex:1; border:none; border-bottom:1px solid var(--border); font-size:13px; font-weight:600; padding:2px 4px; font-family:inherit;">
+        <button onclick="movePin('${item.id}', -1)" style="border:none; background:#f0f0f0; border-radius:6px; width:24px; height:24px; cursor:pointer;">↑</button>
+        <button onclick="movePin('${item.id}', 1)" style="border:none; background:#f0f0f0; border-radius:6px; width:24px; height:24px; cursor:pointer;">↓</button>
+        <button onclick="removePin('${item.id}')" style="border:none; background:#ffebeb; color:#ff3b30; border-radius:6px; width:24px; height:24px; cursor:pointer;">✕</button>
+      </div>
+      <textarea placeholder="코멘트 (선택)" oninput="updatePinComment('${item.id}', this.value)"
+        style="width:100%; min-height:44px; border:1px solid var(--border); border-radius:8px; padding:8px; font-size:12px; font-family:inherit; resize:vertical;">${item.comment}</textarea>
+    </div>
+  `).join('');
+}
+
 function openReportModal(){
+  renderPinListInModal();
   document.getElementById('report-modal').style.display = 'flex';
 }
 function closeReportModal(){
   document.getElementById('report-modal').style.display = 'none';
 }
+
 function generateReport(){
-  const checked = Array.from(document.querySelectorAll('.report-check:checked')).map(c=>c.value);
-  if (checked.length === 0) { alert('최소 1개 화면은 선택해주세요.'); return; }
+  if (window.__pinnedItems.length === 0) { alert('먼저 각 화면에서 "+ 보고서에 추가"로 항목을 담아주세요.'); return; }
   closeReportModal();
 
-  document.querySelectorAll('.screen').forEach(el=>el.classList.remove('print-include'));
-  checked.forEach(name=>{
-    const el = document.getElementById('screen-'+name);
-    if (el) el.classList.add('print-include');
-  });
+  const title = document.getElementById('report-title-input').value || '바둑TV 편성전략 리포트';
+  const periodFrom = document.getElementById('date-from').value;
+  const periodTo = document.getElementById('date-to').value;
+  const genDate = new Date().toISOString().slice(0,10);
+
+  const container = document.getElementById('report-print-container');
+  container.innerHTML = `
+    <div class="report-cover" style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:90vh; text-align:center;">
+      <div style="font-size:28px; font-weight:800; margin-bottom:12px;">${title}</div>
+      <div style="font-size:14px; color:#666;">분석 기간: ${periodFrom} ~ ${periodTo}</div>
+      <div style="font-size:12px; color:#999; margin-top:6px;">생성일: ${genDate}</div>
+    </div>
+    ${window.__pinnedItems.map(item => `
+      <div class="report-print-item">
+        <div style="font-size:16px; font-weight:700; margin-bottom:10px;">${item.title}</div>
+        <div class="bento-grid">${item.html}</div>
+        ${item.comment ? `<div style="margin-top:10px; padding:12px; background:#f5f5f7; border-radius:10px; font-size:13px; line-height:1.6; white-space:pre-wrap;"><b>코멘트</b><br>${item.comment.replace(/</g,'&lt;')}</div>` : ''}
+      </div>
+    `).join('')}
+  `;
+
   document.body.classList.add('print-mode');
 
-  // 방금 숨김→표시로 바뀐 차트들이 올바른 크기로 다시 그려질 시간을 줌
-  // (바로 print()를 부르면 Chart.js의 리사이즈 감지가 아직 안 끝나서 빈 차트로 캡처됨)
+  // 인쇄용 이미지/레이아웃이 자리잡을 시간을 살짝 줌
   requestAnimationFrame(()=>{
     requestAnimationFrame(()=>{
-      Object.values(Chart.instances || {}).forEach(c => { try { c.resize(); } catch(e){} });
       setTimeout(()=> window.print(), 150);
     });
   });
 }
 window.addEventListener('afterprint', ()=>{
   document.body.classList.remove('print-mode');
-  document.querySelectorAll('.screen').forEach(el=>el.classList.remove('print-include'));
+  document.getElementById('report-print-container').innerHTML = '';
 });
 
 /* ============ INIT ============ */
