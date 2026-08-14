@@ -178,6 +178,12 @@
   .chip-btn:hover { border-color: rgba(0,0,0,0.15); }
   .chip-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
+  table.data-table th, table.data-table td { padding: 9px 10px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  table.data-table th { cursor: pointer; color: var(--text-secondary); font-weight: 700; user-select: none; }
+  table.data-table th:hover { color: var(--accent); }
+  table.data-table th .sort-arrow { font-size: 10px; margin-left: 3px; color: var(--accent); }
+  table.data-table tbody tr:hover { background: var(--accent-light); }
+
   .btn-report {
     font-family: inherit; font-size: 13px; font-weight: 700; padding: 10px 20px;
     background: var(--text-primary); color: #fff; border: none;
@@ -563,6 +569,12 @@
         </div>
 
         <div class="subscreen active" data-parent="program" id="program-value-map">
+          <div class="filter-row" style="margin-bottom:8px;">
+            <button class="chip-btn active" data-vm-type="전체">전체</button>
+            <button class="chip-btn" data-vm-type="생방">생방</button>
+            <button class="chip-btn" data-vm-type="본방">본방</button>
+            <button class="chip-btn" data-vm-type="재방">재방</button>
+          </div>
           <div class="filter-row" style="margin-bottom:12px;">
             <span style="font-size:12px; color:var(--text-secondary); align-self:center; margin-right:4px;">시간대:</span>
             <button class="chip-btn active" data-hour-range="0,24">전체</button>
@@ -573,8 +585,10 @@
           </div>
           <div class="bento-grid">
             <div class="bento-card col-12">
-              <div class="card-label" id="valuemap-title">프로그램 가치 지도 — X: 도달력(시청자수) · Y: 충성도(평균 시청지속시간) · Bubble: 시청률</div>
-              <div class="chart-wrap tall"><canvas id="chart-valuemap"></canvas></div>
+              <div class="card-label" id="valuemap-title">프로그램 목록</div>
+              <div style="overflow-x:auto;">
+                <table class="data-table" id="valuemap-table" style="width:100%; font-size:13px; border-collapse:collapse;"></table>
+              </div>
             </div>
           </div>
         </div>
@@ -1359,43 +1373,68 @@ function renderDashboard(){
 }
 
 /* ============ PROGRAM: VALUE MAP ============ */
-let valueMapChart;
 let valueMapHourRange = [0, 24];
+let valueMapTypeFilter = '전체';
+let valueMapSort = { key: 'rating', dir: -1 };
+
+const VM_COLUMNS = [
+  { key:'name', label:'프로그램명', fmt:(p)=>p.name },
+  { key:'type', label:'구분', fmt:(p)=>p.type },
+  { key:'date', label:'날짜/시간', fmt:(p)=>`${p.date} ${p.start}` },
+  { key:'players', label:'대진', fmt:(p)=>p.players||'-' },
+  { key:'rating', label:'시청률(%)', fmt:(p)=>p.rating.toFixed(3), numeric:true },
+  { key:'reach', label:'도달률(%)', fmt:(p)=>p.reach.toFixed(3), numeric:true },
+  { key:'share', label:'점유율(%)', fmt:(p)=>p.share.toFixed(2), numeric:true },
+  { key:'avgView', label:'시청지속(분)', fmt:(p)=>p.avgView.toFixed(1), numeric:true },
+];
+
 function renderValueMap(){
-  const filtered = PROGRAMS.filter(p=>{
+  let filtered = PROGRAMS.filter(p=>{
     const hour = Number(p.start.split(':')[0]);
     return hour >= valueMapHourRange[0] && hour < valueMapHourRange[1];
   });
+  if (valueMapTypeFilter !== '전체') filtered = filtered.filter(p=>p.type===valueMapTypeFilter);
 
-  if (valueMapChart) valueMapChart.destroy();
-  valueMapChart = new Chart(document.getElementById('chart-valuemap'), {
-    type:'bubble',
-    data:{ datasets:[{
-      label:'프로그램',
-      data: filtered.map(p=>({x:p.reach, y:p.avgView, r: p.rating*140})),
-      backgroundColor: ACCENT_LIGHT, borderColor: ACCENT_COLOR, borderWidth:1.5
-    }]},
-    options:{
-      responsive: true, maintainAspectRatio: false,
-      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: (ctx)=>{
-        const p = filtered[ctx.dataIndex];
-        return [`${p.name} (${p.date} ${p.start})`, `대진: ${p.players||'-'}`, `시청률 ${p.rating.toFixed(3)}% · 도달률 ${p.reach}% · 시청지속 ${p.avgView.toFixed(1)}분`];
-      }}}},
-      scales:{
-        x:{ title:{display:true, text:'도달률', font:{weight:'bold'}}, grid:{color:'rgba(0,0,0,0.04)'} },
-        y:{ title:{display:true, text:'시청시간(분)', font:{weight:'bold'}}, grid:{color:'rgba(0,0,0,0.04)'} }
-      }
-    }
+  const col = VM_COLUMNS.find(c=>c.key===valueMapSort.key);
+  filtered.sort((a,b)=>{
+    const va = a[valueMapSort.key], vb = b[valueMapSort.key];
+    if (col.numeric) return (va - vb) * valueMapSort.dir;
+    return String(va).localeCompare(String(vb)) * valueMapSort.dir;
   });
+
   const titleEl = document.getElementById('valuemap-title');
-  if (titleEl) titleEl.textContent = `프로그램 가치 지도 (${filtered.length}건) — X: 도달력(시청자수) · Y: 충성도(평균 시청지속시간) · Bubble: 시청률`;
+  if (titleEl) titleEl.textContent = `프로그램 목록 (${filtered.length}건)`;
+
+  const table = document.getElementById('valuemap-table');
+  table.innerHTML = `
+    <thead><tr>${VM_COLUMNS.map(c=>`
+      <th data-sort-key="${c.key}">${c.label}${valueMapSort.key===c.key ? `<span class="sort-arrow">${valueMapSort.dir===1?'▲':'▼'}</span>` : ''}</th>
+    `).join('')}</tr></thead>
+    <tbody>${filtered.map(p=>`<tr>${VM_COLUMNS.map(c=>`<td>${c.fmt(p)}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${VM_COLUMNS.length}" style="color:var(--text-tertiary);">데이터 없음</td></tr>`}</tbody>
+  `;
+  table.querySelectorAll('th[data-sort-key]').forEach(th=>{
+    th.onclick = () => {
+      const key = th.dataset.sortKey;
+      if (valueMapSort.key === key) valueMapSort.dir *= -1;
+      else valueMapSort = { key, dir: VM_COLUMNS.find(c=>c.key===key).numeric ? -1 : 1 };
+      renderValueMap();
+    };
+  });
 }
 
-document.querySelectorAll('#program-value-map .chip-btn').forEach(btn=>{
+document.querySelectorAll('#program-value-map .chip-btn[data-hour-range]').forEach(btn=>{
   btn.addEventListener('click', ()=>{
-    document.querySelectorAll('#program-value-map .chip-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('#program-value-map .chip-btn[data-hour-range]').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
     valueMapHourRange = btn.dataset.hourRange.split(',').map(Number);
+    renderValueMap();
+  });
+});
+document.querySelectorAll('#program-value-map .chip-btn[data-vm-type]').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('#program-value-map .chip-btn[data-vm-type]').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    valueMapTypeFilter = btn.dataset.vmType;
     renderValueMap();
   });
 });
