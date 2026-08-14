@@ -1868,20 +1868,34 @@ async function fetchProgramHistory(programId){
   if (historyCache[programId]) return historyCache[programId];
   const { data: rows, error } = await sb
     .from('fact_schedule')
-    .select('date_key, start_time, is_rerun, fact_rating ( rating_pct )')
+    .select('date_key, start_time, end_time, is_rerun, fact_rating ( rating_pct )')
     .eq('program_id', programId)
     .eq('channel_id', window.__channelId)
+    .order('date_key', { ascending: true }).order('start_time', { ascending: true })
     .limit(5000);
   if (error) { console.error('프로그램 이력 조회 실패', error); historyCache[programId] = []; return []; }
-  const history = rows.map(r => {
+
+  // 원시 행 → 부 나뉨(1부/2부) 통합 (mergeParts 재사용) → 이력 포인트로 변환
+  // (예전엔 원본 행 그대로 카운트해서 부 나뉜 방송이 방영 2회로 잘못 잡히던 버그가 있었음)
+  const raw = rows.map(r => {
     const ratingRaw = r.fact_rating;
     const ratingObj = Array.isArray(ratingRaw) ? ratingRaw[0] : ratingRaw;
     const rating = ratingObj?.rating_pct;
     if (rating == null) return null;
-    const dow = new Date(r.date_key + 'T00:00:00').getDay();
-    const hour = Number(r.start_time.split(':')[0]);
-    return { rating, dow, hour, isRerun: r.is_rerun };
+    const start = r.start_time.slice(0,5), end = r.end_time.slice(0,5);
+    const absStart = trueAbsoluteMinutes(r.date_key, start);
+    const absEnd = trueAbsoluteMinutes(r.date_key, end);
+    return { program_id: programId, date: r.date_key, start, end, rating,
+      duration: Math.max(1, absEnd - absStart), isRerun: r.is_rerun, _absStart: absStart, _absEnd: absEnd };
   }).filter(Boolean);
+
+  const merged = mergeParts(raw);
+  const history = merged.map(m => ({
+    rating: m.rating,
+    dow: new Date(m.date + 'T00:00:00').getDay(),
+    hour: Number(m.start.split(':')[0]),
+    isRerun: m.isRerun,
+  }));
   historyCache[programId] = history;
   return history;
 }
@@ -2229,20 +2243,14 @@ function renderSankey(){
 let fatigueChart;
 let fatigueAggChart;
 async function renderFatigue(){
-  // 바둑TV에서 재방 2회 이상 편성된 적 있는 프로그램만 후보로
-  const { data: rerunRows, error } = await sb
-    .from('fact_schedule')
-    .select('schedule_id, program_id, date_key, start_time, dim_program!fact_schedule_program_id_fkey ( program_id, program_name )')
-    .eq('channel_id', window.__channelId).eq('is_rerun', true)
-    .order('date_key', { ascending: true }).order('start_time', { ascending: true });
-  if (error) { console.error('피로도 후보 조회 실패', error); return; }
-
+  // 바둑TV에서 재방 2회 이상 편성된 프로그램만 후보로
+  // (PROGRAMS는 loadPrograms 단계에서 이미 부 나뉨 통합이 끝난 상태 — 예전엔 fact_schedule을 직접 다시 조회해서
+  //  1부/2부가 별개 회차로 잘못 카운트되는 버그가 있었음)
+  const rerunPrograms = PROGRAMS.filter(p=>p.type==='재방');
   const byProgram = {};
-  (rerunRows||[]).forEach(r=>{
-    const raw = r.dim_program; const prog = Array.isArray(raw) ? raw[0] : raw;
-    if (!prog) return;
-    if (!byProgram[prog.program_id]) byProgram[prog.program_id] = { program_id: prog.program_id, name: prog.program_name, rows: [] };
-    byProgram[prog.program_id].rows.push({ schedule_id: r.schedule_id, date: r.date_key, start: r.start_time });
+  rerunPrograms.forEach(p=>{
+    if (!byProgram[p.program_id]) byProgram[p.program_id] = { program_id: p.program_id, name: p.name, rows: [] };
+    byProgram[p.program_id].rows.push({ date: p.date, start: p.start, rating: p.rating });
   });
   const candidates = Object.values(byProgram).filter(g => g.rows.length >= 2)
     .sort((a,b)=> b.rows.length - a.rows.length);
@@ -2257,21 +2265,12 @@ async function renderFatigue(){
   fillSelect(sel, candidates, null, c=>`${c.name} (재방 ${c.rows.length}회)`);
   sel.value = 0;
 
-  // 모든 스케줄의 실제 시청률을 한 번에 조회 (개별 + 전체 평균 계산에 재사용)
-  const allScheduleIds = [];
-  candidates.forEach(c => c.rows.forEach(r => allScheduleIds.push(r.schedule_id)));
-  const { data: ratingRows } = await sb.from('fact_rating')
-    .select('schedule_id, rating_pct').in('schedule_id', allScheduleIds);
-  const ratingMap = {};
-  (ratingRows||[]).forEach(r=>{ ratingMap[r.schedule_id] = r.rating_pct; });
-
   // 시간대 대비 비율(%) = 실제시청률 / 그 시간대 목표 * 100 (목표 없으면 null)
   function normalizedRatio(row){
-    const rating = ratingMap[row.schedule_id];
     const hour = Number(row.start.split(':')[0]);
     const target = HOURLY_TARGET[hour];
-    if (rating == null || target == null || target === 0) return null;
-    return (rating / target) * 100;
+    if (row.rating == null || target == null || target === 0) return null;
+    return (row.rating / target) * 100;
   }
 
   // ---- 전체 프로그램 재방 회차별 산점도 (평균으로 뭉개지 않고 실제 분포를 그대로 표시) ----
@@ -2321,7 +2320,6 @@ async function renderFatigue(){
   update();
 }
 
-/* ============ REPORT (PDF) ============ */
 /* ============ REPORT (핀 기반) ============ */
 window.__pinnedItems = [];
 
