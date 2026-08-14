@@ -899,11 +899,16 @@ function mergeParts(list){
         const wavg = (key)=> (prev[key]*prev.duration + p[key]*p.duration) / totalDur;
         prev.rating = wavg('rating'); prev.share = wavg('share'); prev.reach = wavg('reach');
         prev.avgView = wavg('avgView'); prev.viewers = Math.round(wavg('viewers'));
+        // 이 부(part)가 "합쳐진 회차 시작" 기준으로 몇 분째 시작하는지 기록 → 분단위 이어붙이기(concat)에 사용
+        const offsetMin = Math.round(p._absStart - prev.partOffsets[0].absStart);
+        prev.partOffsets.push({ schedule_id: p.schedule_id, offsetMin, absStart: p._absStart });
+        prev.schedule_ids = prev.partOffsets.map(x=>x.schedule_id);
         prev.duration = totalDur; prev.end = p.end; prev._absEnd = p._absEnd; prev._parts = (prev._parts||1)+1;
         return;
       }
     }
-    merged.push({...p, _parts: 1});
+    merged.push({...p, _parts: 1, schedule_ids: [p.schedule_id],
+      partOffsets: [{ schedule_id: p.schedule_id, offsetMin: 0, absStart: p._absStart }] });
   });
   return merged;
 }
@@ -931,7 +936,7 @@ function getHourlyTargetAvg(start, end){
 
 // 선택 기간 전체를 "진짜 시간" 기준 하나의 흐름으로 보고 부 나뉨 통합 (날짜 경계 포함)
 function getMergedPrograms(){
-  return mergeParts(PROGRAMS);
+  return PROGRAMS; // 이제 loadPrograms 단계에서 이미 부 나뉨 통합이 끝난 상태
 }
 // 같은 program_id의 여러 회차를 평균으로 통합 (DNA 분석용)
 function aggregateByProgram(list){
@@ -952,7 +957,7 @@ function aggregateByProgram(list){
       duration: sum('duration')/n,
       start: g.instances[0].start, end: g.instances[0].end,
       players, count: n,
-      schedule_ids: g.instances.map(x=>x.schedule_id),
+      schedule_ids: g.instances.flatMap(x=>x.schedule_ids || [x.schedule_id]),
     };
   });
 }
@@ -974,7 +979,7 @@ function aggregateByProgramAndPlayers(list){
       avgView: sum('avgView')/n, target: sum('target')/n, achievement: sum('achievement')/n,
       duration: sum('duration')/n,
       count: n,
-      schedule_ids: g.instances.map(x=>x.schedule_id),
+      schedule_ids: g.instances.flatMap(x=>x.schedule_ids || [x.schedule_id]),
     };
   });
 }
@@ -1082,6 +1087,9 @@ async function loadPrograms(startDate, endDate) {
     p._absEnd = trueAbsoluteMinutes(p.date, p.end);
   });
   PROGRAMS.sort((a,b)=> a._absStart - b._absStart);
+  // 부 나뉨(1부/2부)을 여기서 전역으로 통합 — 이후 모든 화면(DNA/비교/분단위/이탈분석 등)이
+  // "회차" 단위로 일관되게 보게 됨 (이전엔 대시보드만 통합해서 봤고 나머지는 부별로 따로 보였음)
+  PROGRAMS = mergeParts(PROGRAMS);
 }
 
 // 선택한 기간의 일별 평균 시청률 조회 (트렌드 차트용)
@@ -1533,7 +1541,7 @@ function renderMinuteTab(){
 
   function buildEpisodes(g){
     return [{ label: `전체 평균 (${g.count}회)`, schedule_ids: g.schedule_ids, isAvg: true },
-      ...g.instances.map(inst => ({ label: `${inst.date} ${(inst.players && inst.players!=='-') ? inst.players : '대국자 정보없음'}`, schedule_ids: [inst.schedule_id], isAvg: false }))];
+      ...g.instances.map(inst => ({ label: `${inst.date} ${(inst.players && inst.players!=='-') ? inst.players : '대국자 정보없음'}`, schedule_ids: inst.schedule_ids, partOffsets: inst.partOffsets, isAvg: false }))];
   }
   function refreshEpisodes(){
     const g = window.__minuteFiltered[progSel.value];
@@ -1590,7 +1598,7 @@ function renderMinuteTab(){
 async function drawMinuteChart(program, episode){
   window.__minuteProgram = program;
   window.__minuteEpisode = episode;
-  window.__minuteEpisodeInst = episode.isAvg ? null : program.instances.find(x => x.schedule_id === episode.schedule_ids[0]);
+  window.__minuteEpisodeInst = episode.isAvg ? null : program.instances.find(x => x.schedule_ids && x.schedule_ids[0] === episode.schedule_ids[0]);
 
   document.getElementById('minute-title').textContent = `${program.name} · ${program.type} — ${episode.label}`;
 
@@ -1625,11 +1633,23 @@ async function renderMinuteComparisons(){
     .order('minute_offset', { ascending: true }).limit(20000);
   if (error) { console.error('분단위 조회 실패', error); return; }
 
-  const byMinute = {};
-  (rows||[]).forEach(r=>{ if (r.rating_pct == null) return; (byMinute[r.minute_offset] = byMinute[r.minute_offset] || []).push(r.rating_pct); });
-  const minutes = Object.keys(byMinute).map(Number).sort((a,b)=>a-b);
-  const basePoints = minutes.map(m => ({ x:m, y: byMinute[m].reduce((a,b)=>a+b,0)/byMinute[m].length }));
-  const maxMinute = minutes.length ? minutes[minutes.length-1] : 0;
+  let basePoints, maxMinute;
+  if (episode.isAvg) {
+    // 전체 평균: 서로 다른 회차들을 minute_offset 기준으로 평균
+    const byMinute = {};
+    (rows||[]).forEach(r=>{ if (r.rating_pct == null) return; (byMinute[r.minute_offset] = byMinute[r.minute_offset] || []).push(r.rating_pct); });
+    const minutes = Object.keys(byMinute).map(Number).sort((a,b)=>a-b);
+    basePoints = minutes.map(m => ({ x:m, y: byMinute[m].reduce((a,b)=>a+b,0)/byMinute[m].length }));
+    maxMinute = minutes.length ? minutes[minutes.length-1] : 0;
+  } else {
+    // 개별 회차(부 나뉨 포함): 평균 내지 않고 부별로 이어붙임 (2부는 1부 끝난 시점부터 경과분 이어짐)
+    const offsetMap = {}; (episode.partOffsets||[]).forEach(po=>{ offsetMap[po.schedule_id] = po.offsetMin; });
+    basePoints = (rows||[])
+      .filter(r=>r.rating_pct != null)
+      .map(r => ({ x: (offsetMap[r.schedule_id]||0) + r.minute_offset, y: r.rating_pct }))
+      .sort((a,b)=>a.x-b.x);
+    maxMinute = basePoints.length ? basePoints[basePoints.length-1].x : 0;
+  }
 
   const datasets = [{
     label: program.name, data: basePoints, borderColor: ACCENT_COLOR, backgroundColor: ACCENT_LIGHT,
@@ -2074,19 +2094,25 @@ function renderRegression(){
     const prev = prevCand && (p._absStart - prevCand._absEnd) <= 60 ? prevCand : null;
     const next = nextCand && (nextCand._absStart - p._absEnd) <= 60 ? nextCand : null;
 
-    const [ownMinutes, prevMinutes, nextMinutes] = await Promise.all([
-      fetchMinutes(p.schedule_id), fetchMinutes(prev?.schedule_id), fetchMinutes(next?.schedule_id)
+    // 부 나뉨(1부/2부) 대응: 시작 경계는 이 방송의 "첫 부", 종료 경계는 "마지막 부"의 분단위 데이터를 써야 함
+    const pFirstSid = p.schedule_ids ? p.schedule_ids[0] : p.schedule_id;
+    const pLastSid = p.schedule_ids ? p.schedule_ids[p.schedule_ids.length-1] : p.schedule_id;
+    const prevLastSid = prev ? (prev.schedule_ids ? prev.schedule_ids[prev.schedule_ids.length-1] : prev.schedule_id) : null;
+    const nextFirstSid = next ? (next.schedule_ids ? next.schedule_ids[0] : next.schedule_id) : null;
+
+    const [ownHeadSrc, ownTailSrc, prevMinutes, nextMinutes] = await Promise.all([
+      fetchMinutes(pFirstSid), fetchMinutes(pLastSid), fetchMinutes(prevLastSid), fetchMinutes(nextFirstSid)
     ]);
 
     // 시작 경계: 직전 프로그램의 마지막 WINDOW_MIN분 + 이 프로그램의 첫 WINDOW_MIN분
     const prevTail = prevMinutes.filter(m => m.minute_offset >= (prevMinutes.length ? prevMinutes[prevMinutes.length-1].minute_offset - WINDOW_MIN : 0));
-    const ownHead = ownMinutes.filter(m => m.minute_offset <= WINDOW_MIN);
+    const ownHead = ownHeadSrc.filter(m => m.minute_offset <= WINDOW_MIN);
     const startLabels = [...prevTail.map(m=>`이전 -${prevTail[prevTail.length-1].minute_offset - m.minute_offset}분`), ...ownHead.map(m=>`+${m.minute_offset}분`)];
     const startData = [...prevTail.map(m=>m.rating_pct), ...ownHead.map(m=>m.rating_pct)];
     const startBoundaryIdx = prevTail.length; // 이 지점이 "시작(0분)"
 
-    // 종료 경계: 이 프로그램의 마지막 WINDOW_MIN분 + 다음 프로그램의 첫 WINDOW_MIN분
-    const ownTail = ownMinutes.filter(m => m.minute_offset >= (ownMinutes.length ? ownMinutes[ownMinutes.length-1].minute_offset - WINDOW_MIN : 0));
+    // 종료 경계: 이 프로그램(마지막 부)의 마지막 WINDOW_MIN분 + 다음 프로그램의 첫 WINDOW_MIN분
+    const ownTail = ownTailSrc.filter(m => m.minute_offset >= (ownTailSrc.length ? ownTailSrc[ownTailSrc.length-1].minute_offset - WINDOW_MIN : 0));
     const nextHead = nextMinutes.filter(m => m.minute_offset <= WINDOW_MIN);
     const endLabels = [...ownTail.map((m,i)=>`종료 -${ownTail.length-1-i}분`), ...nextHead.map(m=>`다음 +${m.minute_offset}분`)];
     const endData = [...ownTail.map(m=>m.rating_pct), ...nextHead.map(m=>m.rating_pct)];
