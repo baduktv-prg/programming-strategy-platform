@@ -721,6 +721,10 @@
 
         <div class="subscreen" data-parent="schedule" id="schedule-adjacency" style="display:none;">
           <div class="filter-row">
+            <button class="chip-btn active" data-adj-type="전체">전체</button>
+            <button class="chip-btn" data-adj-type="생방">생방</button>
+            <button class="chip-btn" data-adj-type="본방">본방</button>
+            <button class="chip-btn" data-adj-type="재방">재방</button>
             <div class="searchable-wrap">
               <input class="mini-filter" id="adj-program" placeholder="기준 프로그램 검색 또는 클릭" autocomplete="off">
               <div class="searchable-dropdown-list" id="adj-program-dropdown"></div>
@@ -1145,18 +1149,19 @@ function attachSearchableDropdown(input, listEl, items, labelFn, onSelect){
       ? filtered.map((it,i)=>`<div class="searchable-dropdown-item" data-idx="${i}">${labelFn(it)}</div>`).join('')
       : `<div class="searchable-dropdown-item" style="color:var(--text-tertiary); cursor:default;">일치하는 프로그램 없음</div>`;
     listEl.querySelectorAll('.searchable-dropdown-item[data-idx]').forEach(el=>{
-      el.addEventListener('mousedown', (e)=>{
+      el.onmousedown = (e)=>{
         e.preventDefault(); // input blur보다 먼저 처리되게
         const it = filtered[Number(el.dataset.idx)];
         input.value = labelFn(it);
         listEl.classList.remove('open');
         onSelect(it);
-      });
+      };
     });
   }
-  input.addEventListener('focus', ()=>{ renderList(''); listEl.classList.add('open'); });
-  input.addEventListener('input', ()=>{ renderList(input.value); listEl.classList.add('open'); });
-  input.addEventListener('blur', ()=>{ setTimeout(()=>listEl.classList.remove('open'), 150); });
+  // addEventListener 대신 프로퍼티 할당 — 같은 input에 여러 번 재호출돼도(예: 필터 칩 바뀔 때마다) 리스너가 안 쌓이고 매번 덮어써짐
+  input.onfocus = ()=>{ renderList(''); listEl.classList.add('open'); };
+  input.oninput = ()=>{ renderList(input.value); listEl.classList.add('open'); };
+  input.onblur = ()=>{ setTimeout(()=>listEl.classList.remove('open'), 150); };
 }
 
 /* ============ NAV LOGIC ============ */
@@ -2020,11 +2025,12 @@ async function loadFullHistory(){
 
 // 기준 프로그램 바로 뒤에 이어진 방송들을, 그 방송의 대회유형별로 묶어서
 // "그 대회유형 전체 평균" 대비 "이 프로그램 뒤에서만의 평균"을 비교
-async function computeAdjacencyStats(leadingProgramId){
+async function computeAdjacencyStats(leadingProgramId, typeFilter){
   const all = await loadFullHistory();
   const followers = [];
   all.forEach((p,i)=>{
     if (p.program_id !== leadingProgramId) return;
+    if (typeFilter !== '전체' && p.type !== typeFilter) return; // 기준 프로그램이 이 타입으로 방영된 경우만
     const next = all[i+1];
     if (next && (next._absStart - p._absEnd) <= 60) followers.push(next);
   });
@@ -2049,12 +2055,26 @@ function renderAdjacency(){
   const sel = document.getElementById('adj-program');
   const dropdown = document.getElementById('adj-program-dropdown');
   let selectedProgram = null;
+  let adjTypeFilter = '전체';
+
+  async function refreshProgramList(){
+    const all = await loadFullHistory();
+    const filtered = adjTypeFilter === '전체' ? all : all.filter(p=>p.type===adjTypeFilter);
+    const seen = new Map();
+    filtered.forEach(p=>{ if (!seen.has(p.program_id)) seen.set(p.program_id, { program_id: p.program_id, program_name: p.name }); });
+    const list = Array.from(seen.values()).sort((a,b)=>a.program_name.localeCompare(b.program_name));
+    sel.value = '';
+    selectedProgram = null;
+    document.getElementById('adj-table').innerHTML = '';
+    document.getElementById('adj-title').textContent = '이 프로그램 뒤엔 어떤 대회유형이 잘 맞을까';
+    attachSearchableDropdown(sel, dropdown, list, p=>p.program_name, (it)=>{ selectedProgram = it; update(); });
+  }
 
   async function update(){
     if (!selectedProgram) { document.getElementById('adj-table').innerHTML = ''; return; }
-    document.getElementById('adj-title').textContent = `"${selectedProgram.program_name}" 뒤엔 어떤 대회유형이 잘 맞을까`;
+    document.getElementById('adj-title').textContent = `"${selectedProgram.program_name}"(${adjTypeFilter}) 뒤엔 어떤 대회유형이 잘 맞을까`;
     document.getElementById('adj-table').innerHTML = `<tr><td>계산 중...</td></tr>`;
-    const { totalFollowers, results } = await computeAdjacencyStats(selectedProgram.program_id);
+    const { totalFollowers, results } = await computeAdjacencyStats(selectedProgram.program_id, adjTypeFilter);
     if (totalFollowers === 0) {
       document.getElementById('adj-table').innerHTML = `<tr><td style="color:var(--text-tertiary); padding:12px;">이 프로그램 바로 뒤에 이어진 방송 이력이 없어요.</td></tr>`;
       return;
@@ -2075,7 +2095,17 @@ function renderAdjacency(){
       }).join('')}
     `;
   }
-  attachSearchableDropdown(sel, dropdown, ALL_PROGRAMS, p=>p.program_name, (it)=>{ selectedProgram = it; update(); });
+
+  document.querySelectorAll('#schedule-adjacency .chip-btn[data-adj-type]').forEach(btn=>{
+    btn.onclick = () => {
+      document.querySelectorAll('#schedule-adjacency .chip-btn[data-adj-type]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      adjTypeFilter = btn.dataset.adjType;
+      refreshProgramList();
+    };
+  });
+
+  refreshProgramList();
 }
 
 /* ============ SCHEDULE: COUNTERFACTUAL ============ */
