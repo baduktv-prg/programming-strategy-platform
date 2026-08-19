@@ -156,6 +156,11 @@
   select.period-select:hover, select.mini-filter:hover { border-color: rgba(0,0,0,0.15); }
 
   .searchable-wrap { position: relative; display: inline-block; }
+  .searchable-wrap::after {
+    content: '▾'; position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+    color: var(--text-tertiary); pointer-events: none; font-size: 12px;
+  }
+  .searchable-wrap input.mini-filter { padding-right: 30px; }
   .searchable-dropdown-list {
     position: absolute; top: 100%; left: 0; right: 0; z-index: 50; margin-top: 4px;
     max-height: 240px; overflow-y: auto; background: #fff; border: 1px solid var(--border);
@@ -2030,6 +2035,17 @@ function renderMatching(){
   refreshProgramList();
 }
 
+function heatColor(score){
+  const s = Math.max(0, Math.min(100, score));
+  const stops = [[0,255,59,48],[50,255,204,0],[100,52,199,89]]; // 빨강 → 노랑 → 초록
+  let lo = stops[0], hi = stops[stops.length-1];
+  for (let i=0;i<stops.length-1;i++){ if (s>=stops[i][0] && s<=stops[i+1][0]) { lo=stops[i]; hi=stops[i+1]; break; } }
+  const range = (hi[0]-lo[0]) || 1;
+  const t = (s-lo[0])/range;
+  const r = Math.round(lo[1]+(hi[1]-lo[1])*t), g = Math.round(lo[2]+(hi[2]-lo[2])*t), b = Math.round(lo[3]+(hi[3]-lo[3])*t);
+  return `rgb(${r},${g},${b})`;
+}
+
 function renderHeatmap(history, fullHistory){
   const days = ['월','화','수','목','금','토','일'];
   const times = ['09:00','13:00','20:00','22:00'];
@@ -2042,27 +2058,27 @@ function renderHeatmap(history, fullHistory){
   });
   const top3 = [...cells].sort((a,b)=>b.s-a.s).slice(0,3).map(c=>`${c.d}_${c.t}`);
 
-  let html = '<div style="display:grid; grid-template-columns:60px repeat(7,1fr); gap:6px; font-size:12px;">';
-  html += '<div></div>' + days.map(d=>`<div style="text-align:center; color:var(--text-secondary); font-weight:700;">${d}</div>`).join('');
+  let html = '<div style="display:grid; grid-template-columns:64px repeat(7,1fr); gap:8px; font-size:13px;">';
+  html += '<div></div>' + days.map(d=>`<div style="text-align:center; color:var(--text-secondary); font-weight:700; padding-bottom:4px;">${d}</div>`).join('');
   times.forEach(t=>{
     html += `<div style="color:var(--text-secondary); font-weight:700; display:flex; align-items:center;">${t}</div>`;
     days.forEach(d=>{
       const cell = cells.find(c=>c.d===d && c.t===t);
       const s = cell.s;
-      const alpha = s/100;
+      const bg = heatColor(s);
       const rank = top3.indexOf(`${d}_${t}`);
-      const badge = rank>=0 ? `<span style="position:absolute; top:2px; right:4px; font-size:9px; background:#fff; color:var(--accent); border-radius:6px; padding:0 4px; font-weight:800;">TOP${rank+1}</span>` : '';
-      // 실측이면 실선 테두리, 추정이면 점선(불확실함을 시각적으로 표시), 근거 없으면 테두리 없음
-      let border = '';
-      if (rank>=0) border = 'border:2px solid #ff9500;';
-      else if (cell.basis === 'actual') border = 'border:1px solid rgba(0,0,0,0.15);';
-      else if (cell.basis && cell.basis !== 'none') border = 'border:1px dashed rgba(0,0,0,0.25);';
+      const badge = rank>=0 ? `<span style="position:absolute; top:3px; right:4px; font-size:9px; background:rgba(0,0,0,0.35); color:#fff; border-radius:6px; padding:1px 5px; font-weight:800;">TOP${rank+1}</span>` : '';
+      // 실측이면 실선 테두리, 추정이면 점선(불확실함을 시각적으로 표시)
+      let border = 'border:2px solid transparent;';
+      if (rank>=0) border = 'border:2px solid #1d1d1f;';
+      else if (cell.basis === 'actual') border = 'border:2px solid rgba(0,0,0,0.25);';
+      else if (cell.basis && cell.basis !== 'none') border = 'border:2px dashed rgba(0,0,0,0.35);';
       const title = `${BASIS_LABEL[cell.basis]||''}`;
-      html += `<div title="${title}" style="position:relative; height:38px; border-radius:8px; background:rgba(0,113,229,${alpha}); ${border} display:flex; align-items:center; justify-content:center; color:${alpha>0.5?'#fff':'#1d1d1f'}; font-weight:700;">${badge}${s}</div>`;
+      html += `<div title="${title}" style="position:relative; height:56px; border-radius:10px; background:${bg}; ${border} display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:16px; text-shadow:0 1px 3px rgba(0,0,0,0.35);">${badge}${s}</div>`;
     });
   });
   html += '</div>';
-  html += `<div style="margin-top:8px; font-size:11px; color:var(--text-tertiary);">실선 테두리 = 실제 방영 이력 기준 · 점선 테두리 = 유사 프로그램으로 추정 · 칸에 마우스 올리면 근거 확인 가능</div>`;
+  html += `<div style="margin-top:10px; font-size:11px; color:var(--text-tertiary);">🔴 낮음 → 🟡 보통 → 🟢 높음 · 실선 테두리 = 실제 방영 이력 기준 · 점선 테두리 = 유사 프로그램으로 추정 · 검정 테두리 = TOP3 · 칸에 마우스 올리면 근거 확인</div>`;
   document.getElementById('heatmap').innerHTML = html;
 }
 
