@@ -147,13 +147,13 @@
   .topbar-sub { font-size: 13px; color: var(--text-secondary); margin-top: 4px; font-weight: 500; }
   .topbar-right { display: flex; gap: 12px; align-items: center; }
   
-  select.period-select, select.mini-filter {
+  select.period-select, select.mini-filter, input.mini-filter {
     font-family: inherit; font-size: 13px; font-weight: 600; padding: 10px 16px;
     border: 1px solid var(--border); border-radius: var(--radius-pill);
     background: #fff; color: var(--text-primary); cursor: pointer;
     box-shadow: var(--shadow-sm); outline: none; transition: all 0.2s;
   }
-  select.period-select:hover, select.mini-filter:hover { border-color: rgba(0,0,0,0.15); }
+  select.period-select:hover, select.mini-filter:hover, input.mini-filter:hover { border-color: rgba(0,0,0,0.15); }
 
   .searchable-wrap { position: relative; display: inline-block; }
   .searchable-wrap::after {
@@ -2067,7 +2067,7 @@ function renderHeatmap(history, fullHistory){
       const s = cell.s;
       const bg = heatColor(s);
       const rank = top3.indexOf(`${d}_${t}`);
-      const badge = rank>=0 ? `<span style="position:absolute; top:3px; right:4px; font-size:9px; background:rgba(0,0,0,0.35); color:#fff; border-radius:6px; padding:1px 5px; font-weight:800;">TOP${rank+1}</span>` : '';
+      const badge = rank>=0 ? `<span style="position:absolute; top:3px; right:4px; font-size:9px; background:#ff3b30; color:#fff; border-radius:6px; padding:1px 5px; font-weight:800;">TOP${rank+1}</span>` : '';
       // 실측이면 실선 테두리, 추정이면 점선(불확실함을 시각적으로 표시)
       let border = 'border:2px solid transparent;';
       if (rank>=0) border = 'border:2px solid #1d1d1f;';
