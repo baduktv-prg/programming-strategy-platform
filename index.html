@@ -685,6 +685,10 @@
 
         <div class="subscreen active" data-parent="schedule" id="schedule-matching">
           <div class="filter-row">
+            <button class="chip-btn active" data-match-type="전체">전체</button>
+            <button class="chip-btn" data-match-type="생방">생방</button>
+            <button class="chip-btn" data-match-type="본방">본방</button>
+            <button class="chip-btn" data-match-type="재방">재방</button>
             <div class="searchable-wrap">
               <input class="mini-filter" id="match-program" placeholder="프로그램 검색 또는 클릭" autocomplete="off">
               <div class="searchable-dropdown-list" id="match-program-dropdown"></div>
@@ -1854,7 +1858,7 @@ async function fetchProgramHistory(programId){
   if (historyCache[programId]) return historyCache[programId];
   const { data: rows, error } = await sb
     .from('fact_schedule')
-    .select('date_key, start_time, end_time, is_rerun, fact_rating ( rating_pct )')
+    .select('date_key, start_time, end_time, is_rerun, broadcast_type, players, dim_program!fact_schedule_program_id_fkey ( tournament_type ), fact_rating ( rating_pct )')
     .eq('program_id', programId)
     .eq('channel_id', window.__channelId)
     .order('date_key', { ascending: true }).order('start_time', { ascending: true })
@@ -1868,11 +1872,15 @@ async function fetchProgramHistory(programId){
     const ratingObj = Array.isArray(ratingRaw) ? ratingRaw[0] : ratingRaw;
     const rating = ratingObj?.rating_pct;
     if (rating == null) return null;
+    const progRaw = r.dim_program; const prog = Array.isArray(progRaw) ? progRaw[0] : progRaw;
     const start = r.start_time.slice(0,5), end = r.end_time.slice(0,5);
     const absStart = trueAbsoluteMinutes(r.date_key, start);
     const absEnd = trueAbsoluteMinutes(r.date_key, end);
+    const type = r.broadcast_type === '재' ? '재방' : r.broadcast_type === '본' ? '본방'
+      : r.broadcast_type === '생' ? '생방' : (r.is_rerun ? '재방' : '생방');
     return { program_id: programId, date: r.date_key, start, end, rating,
-      duration: Math.max(1, absEnd - absStart), isRerun: r.is_rerun, _absStart: absStart, _absEnd: absEnd };
+      players: (r.players && r.players !== '-') ? r.players : null, tournament_type: prog?.tournament_type || null,
+      duration: Math.max(1, absEnd - absStart), isRerun: r.is_rerun, type, _absStart: absStart, _absEnd: absEnd };
   }).filter(Boolean);
 
   const merged = mergeParts(raw);
@@ -1881,6 +1889,8 @@ async function fetchProgramHistory(programId){
     dow: new Date(m.date + 'T00:00:00').getDay(),
     hour: Number(m.start.split(':')[0]),
     isRerun: m.isRerun,
+    players: m.players, tournament_type: m.tournament_type,
+    type: m.type,
   }));
   historyCache[programId] = history;
   return history;
@@ -1890,39 +1900,95 @@ async function fetchProgramHistory(programId){
 // 예측 시청률 = 전체평균×20% + 같은요일평균×30% + 비슷한시간대평균×50% (시간대를 요일보다 중요하게)
 // 점수 = 100 × (예측 시청률 ÷ 이 프로그램의 역대 최고 시청률)
 // → 100점 = "이 프로그램이 낼 수 있는 최고 성과를 이 슬롯에서도 낼 것으로 예측됨"
-function computeMatchScore(history, dowLabel, timeStr){
+// 궁합 점수 계산 — 가중치 조합 대신, 정직하게 "실측 데이터 우선" 원칙으로:
+// 1) 이 요일+시간대에 실제로 방영된 이력이 있으면 → 그 실측 평균을 그대로 씀
+// 2) 없으면 → 유사 프로그램(장르+대국자 → 장르만 → 비슷한 RT 순으로 범위 확대)이
+//    그 슬롯에서 실제로 냈던 성과로 추정
+function computeMatchScore(history, dowLabel, timeStr, fullHistory){
   const dow = DOW_INDEX[dowLabel[0]];
   const hour = Number(timeStr.split(':')[0]);
-  if (history.length === 0) return { score: 50, avgAll: null, avgDow: null, avgHour: null, n: 0 };
+  if (history.length === 0) return { score: 50, basis: 'none', n: 0, peak: null };
 
-  const avgAll = history.reduce((a,h)=>a+h.rating,0) / history.length;
-  const sameDow = history.filter(h => h.dow === dow);
-  const avgDow = sameDow.length ? sameDow.reduce((a,h)=>a+h.rating,0)/sameDow.length : avgAll;
-  const nearHour = history.filter(h => Math.abs(h.hour - hour) <= 2);
-  const avgHour = nearHour.length ? nearHour.reduce((a,h)=>a+h.rating,0)/nearHour.length : avgAll;
-  const predicted = avgAll*0.2 + avgDow*0.3 + avgHour*0.5;
   const peak = Math.max(...history.map(h=>h.rating));
-
-  let score = peak > 0 ? Math.round(100 * predicted / peak) : 50;
-  score = Math.max(10, Math.min(99, score));
+  const toScore = (avgRating) => peak > 0 ? Math.max(10, Math.min(99, Math.round(100 * avgRating / peak))) : 50;
 
   const liveHist = history.filter(h=>!h.isRerun);
   const rerunHist = history.filter(h=>h.isRerun);
   const liveAvg = liveHist.length ? liveHist.reduce((a,h)=>a+h.rating,0)/liveHist.length : null;
   const rerunAvg = rerunHist.length ? rerunHist.reduce((a,h)=>a+h.rating,0)/rerunHist.length : null;
+  const common = { n: history.length, peak, liveN: liveHist.length, rerunN: rerunHist.length, liveAvg, rerunAvg };
 
-  return { score, avgAll, avgDow, avgHour, n: history.length, peak, predicted,
-    liveN: liveHist.length, rerunN: rerunHist.length, liveAvg, rerunAvg };
+  // 1) 실측: 이 요일+시간대에 진짜로 방영된 적 있는지
+  const exact = history.filter(h => h.dow === dow && h.hour === hour);
+  if (exact.length > 0) {
+    const avgRating = exact.reduce((a,h)=>a+h.rating,0)/exact.length;
+    return { score: toScore(avgRating), basis: 'actual', basisN: exact.length, avgRating, ...common };
+  }
+
+  // 2) 추정: 전체 이력(fullHistory)이 없으면 추정 불가 → 기본값
+  if (!fullHistory || fullHistory.length === 0) return { score: 50, basis: 'none', basisN: 0, ...common };
+
+  const repPlayers = mostCommon(history.map(h=>h.players).filter(Boolean));
+  const repGenre = mostCommon(history.map(h=>h.tournament_type).filter(Boolean));
+  const others = fullHistory;
+  const atSlot = (pool) => pool.filter(p => p.dow === dow && p.hour === hour);
+
+  let pool = [], basis = 'none';
+  if (repGenre) {
+    const tier1 = others.filter(p => p.tournament_type === repGenre && repPlayers && p.players === repPlayers);
+    const tier1Match = atSlot(tier1);
+    if (tier1Match.length >= 2) { pool = tier1Match; basis = 'similar_genre_players'; }
+    else {
+      const tier2 = others.filter(p => p.tournament_type === repGenre);
+      const tier2Match = atSlot(tier2);
+      if (tier2Match.length >= 2) { pool = tier2Match; basis = 'similar_genre'; }
+    }
+  }
+  if (pool.length === 0 && peak > 0) {
+    const lo = peak * 0.7, hi = peak * 1.3;
+    const tier3Match = atSlot(others.filter(p => p.rating >= lo && p.rating <= hi));
+    if (tier3Match.length > 0) { pool = tier3Match; basis = 'similar_rt'; }
+  }
+  if (pool.length === 0) return { score: 50, basis: 'none', basisN: 0, ...common };
+
+  const avgRating = pool.reduce((a,h)=>a+h.rating,0)/pool.length;
+  return { score: toScore(avgRating), basis, basisN: pool.length, avgRating, ...common };
 }
+function mostCommon(arr){
+  if (!arr.length) return null;
+  const counts = {};
+  arr.forEach(v=>{ counts[v] = (counts[v]||0)+1; });
+  return Object.entries(counts).sort((a,b)=>b[1]-a[1])[0][0];
+}
+
+const BASIS_LABEL = {
+  actual: '실측 데이터',
+  similar_genre_players: '유사 장르+동일 대국자로 추정',
+  similar_genre: '유사 장르로 추정',
+  similar_rt: '비슷한 시청률 수준 프로그램으로 추정',
+  none: '추정 불가 (기본값)',
+};
+
 
 function renderMatching(){
   const sel = document.getElementById('match-program');
   const dropdown = document.getElementById('match-program-dropdown');
   const day = document.getElementById('match-day');
   const time = document.getElementById('match-time');
+  let selectedProgram = null;
+  let matchTypeFilter = '전체';
 
-  let selectedProgram = ALL_PROGRAMS[0] || null;
-  sel.value = selectedProgram ? selectedProgram.program_name : '';
+  async function refreshProgramList(){
+    const all = await loadFullHistory();
+    const filtered = matchTypeFilter === '전체' ? all : all.filter(p=>p.type===matchTypeFilter);
+    const seen = new Map();
+    filtered.forEach(p=>{ if (!seen.has(p.program_id)) seen.set(p.program_id, { program_id: p.program_id, program_name: p.name }); });
+    const list = Array.from(seen.values()).sort((a,b)=>a.program_name.localeCompare(b.program_name));
+    selectedProgram = list[0] || null;
+    sel.value = selectedProgram ? selectedProgram.program_name : '';
+    attachSearchableDropdown(sel, dropdown, list, p=>p.program_name, (it)=>{ selectedProgram = it; update(); });
+    update();
+  }
 
   async function update(){
     const p = selectedProgram;
@@ -1934,35 +2000,44 @@ function renderMatching(){
     }
     document.getElementById('match-score').textContent = '계산 중...';
     document.getElementById('match-factors').innerHTML = '';
-    const history = await fetchProgramHistory(p.program_id);
-    const { score, avgAll, avgDow, avgHour, n, peak, liveN, rerunN, liveAvg, rerunAvg } = computeMatchScore(history, day.value, time.value);
+    let history = await fetchProgramHistory(p.program_id);
+    if (matchTypeFilter !== '전체') history = history.filter(h=>h.type===matchTypeFilter); // 선택한 타입의 과거 이력만으로 예측
+    const fullHistory = await loadFullHistory();
+    const { score, basis, basisN, avgRating, n, peak, liveN, rerunN, liveAvg, rerunAvg } = computeMatchScore(history, day.value, time.value, fullHistory);
 
     document.getElementById('match-score').textContent = score+'점';
     document.getElementById('match-factors').innerHTML = n === 0
       ? `<li>과거 방영 이력이 없어 기본 점수(50점)로 표시됩니다</li>`
       : `
-      <li>역대 최고 시청률 ${(peak*100).toFixed(3)}% 대비 예측</li>
-      <li>과거 ${n}회 방영 평균 ${(avgAll*100).toFixed(3)}%
+      <li><b>${day.value} ${time.value} 기준:</b> ${BASIS_LABEL[basis]}${basisN ? ` (${basisN}건)` : ''}${avgRating!=null ? ` · 평균 ${(avgRating*100).toFixed(3)}%` : ''}</li>
+      <li>역대 최고 시청률 ${(peak*100).toFixed(3)}% 대비 환산</li>
+      <li>이 프로그램 과거 ${n}회 방영
         <span style="color:var(--text-tertiary);">(생방 ${liveN}회${liveAvg!=null?' 평균 '+(liveAvg*100).toFixed(3)+'%':''} · 재방 ${rerunN}회${rerunAvg!=null?' 평균 '+(rerunAvg*100).toFixed(3)+'%':''})</span></li>
-      <li>${day.value} 방영 시 평균 ${(avgDow*100).toFixed(3)}% (${avgDow>avgAll?'▲ 전체 평균보다 높음':'▼ 전체 평균보다 낮음'})</li>
-      <li>${time.value} 전후 시간대 평균 ${(avgHour*100).toFixed(3)}% (${avgHour>avgAll?'▲ 전체 평균보다 높음':'▼ 전체 평균보다 낮음'})</li>
     `;
-    renderHeatmap(history);
+    renderHeatmap(history, fullHistory);
   }
-  attachSearchableDropdown(sel, dropdown, ALL_PROGRAMS, p=>p.program_name, (it)=>{ selectedProgram = it; update(); });
+
+  document.querySelectorAll('#schedule-matching .chip-btn[data-match-type]').forEach(btn=>{
+    btn.onclick = () => {
+      document.querySelectorAll('#schedule-matching .chip-btn[data-match-type]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      matchTypeFilter = btn.dataset.matchType;
+      refreshProgramList();
+    };
+  });
   day.addEventListener('change', update);
   time.addEventListener('change', update);
-  update();
+  refreshProgramList();
 }
 
-function renderHeatmap(history){
+function renderHeatmap(history, fullHistory){
   const days = ['월','화','수','목','금','토','일'];
   const times = ['09:00','13:00','20:00','22:00'];
   const cells = [];
   days.forEach(d=>{
     times.forEach(t=>{
-      const { score: s } = computeMatchScore(history, d+'요일', t);
-      cells.push({ d, t, s });
+      const { score: s, basis } = computeMatchScore(history, d+'요일', t, fullHistory);
+      cells.push({ d, t, s, basis });
     });
   });
   const top3 = [...cells].sort((a,b)=>b.s-a.s).slice(0,3).map(c=>`${c.d}_${c.t}`);
@@ -1977,11 +2052,17 @@ function renderHeatmap(history){
       const alpha = s/100;
       const rank = top3.indexOf(`${d}_${t}`);
       const badge = rank>=0 ? `<span style="position:absolute; top:2px; right:4px; font-size:9px; background:#fff; color:var(--accent); border-radius:6px; padding:0 4px; font-weight:800;">TOP${rank+1}</span>` : '';
-      const border = rank>=0 ? 'border:2px solid #ff9500;' : '';
-      html += `<div style="position:relative; height:38px; border-radius:8px; background:rgba(0,113,229,${alpha}); ${border} display:flex; align-items:center; justify-content:center; color:${alpha>0.5?'#fff':'#1d1d1f'}; font-weight:700;">${badge}${s}</div>`;
+      // 실측이면 실선 테두리, 추정이면 점선(불확실함을 시각적으로 표시), 근거 없으면 테두리 없음
+      let border = '';
+      if (rank>=0) border = 'border:2px solid #ff9500;';
+      else if (cell.basis === 'actual') border = 'border:1px solid rgba(0,0,0,0.15);';
+      else if (cell.basis && cell.basis !== 'none') border = 'border:1px dashed rgba(0,0,0,0.25);';
+      const title = `${BASIS_LABEL[cell.basis]||''}`;
+      html += `<div title="${title}" style="position:relative; height:38px; border-radius:8px; background:rgba(0,113,229,${alpha}); ${border} display:flex; align-items:center; justify-content:center; color:${alpha>0.5?'#fff':'#1d1d1f'}; font-weight:700;">${badge}${s}</div>`;
     });
   });
   html += '</div>';
+  html += `<div style="margin-top:8px; font-size:11px; color:var(--text-tertiary);">실선 테두리 = 실제 방영 이력 기준 · 점선 테두리 = 유사 프로그램으로 추정 · 칸에 마우스 올리면 근거 확인 가능</div>`;
   document.getElementById('heatmap').innerHTML = html;
 }
 
@@ -1994,7 +2075,7 @@ async function loadFullHistory(){
   if (FULL_HISTORY_CACHE) return FULL_HISTORY_CACHE;
   const { data: rows, error } = await sb.from('fact_schedule')
     .select(`
-      schedule_id, program_id, date_key, start_time, end_time, is_rerun, broadcast_type,
+      schedule_id, program_id, date_key, start_time, end_time, is_rerun, broadcast_type, players,
       dim_program!fact_schedule_program_id_fkey ( program_id, program_name, tournament_type ),
       fact_rating ( rating_pct )
     `)
@@ -2011,7 +2092,9 @@ async function loadFullHistory(){
     const start = r.start_time.slice(0,5), end = r.end_time.slice(0,5);
     return {
       program_id: r.program_id, name: prog.program_name, tournament_type: prog.tournament_type || null,
+      players: (r.players && r.players !== '-') ? r.players : null,
       date: r.date_key, start, end, rating, duration: 1,
+      dow: new Date(r.date_key + 'T00:00:00').getDay(), hour: Number(start.split(':')[0]),
       type: r.broadcast_type==='재' ? '재방' : r.broadcast_type==='본' ? '본방' : r.broadcast_type==='생' ? '생방' : (r.is_rerun ? '재방' : '생방'),
       isRerun: r.is_rerun,
       _absStart: trueAbsoluteMinutes(r.date_key, start), _absEnd: trueAbsoluteMinutes(r.date_key, end),
@@ -2125,7 +2208,8 @@ function renderCounterfactual(){
 
     const dowLabel = ['일요일','월요일','화요일','수요일','목요일','금요일','토요일'][new Date(p.date+'T00:00:00').getDay()];
     const history = await fetchProgramHistory(virtual.program_id);
-    const { predicted, n } = computeMatchScore(history, dowLabel, p.start);
+    const fullHistory = await loadFullHistory();
+    const { avgRating: predicted, basis, n } = computeMatchScore(history, dowLabel, p.start, fullHistory);
 
     document.getElementById('cf-compare-wrap').innerHTML = `
       <div class="cf-box current">
@@ -2139,16 +2223,16 @@ function renderCounterfactual(){
         <div class="cf-box-label">가상: "${virtual.program_name}"을(를) 넣었다면</div>
         <div class="prog-name">${virtual.program_name}</div>
         <div class="prog-meta">${p.date} ${p.start}–${p.end} (예측)</div>
-        <div class="prog-rating" style="color:var(--accent);">${n>0 ? (predicted*100).toFixed(3)+'%' : '이력 없음'}</div>
+        <div class="prog-rating" style="color:var(--accent);">${predicted!=null ? (predicted*100).toFixed(3)+'%' : '이력 없음'}</div>
       </div>
     `;
-    if (n === 0) {
+    if (predicted == null) {
       document.getElementById('cf-comment').textContent = `"${virtual.program_name}"의 바둑TV 방영 이력이 없어 예측할 수 없습니다.`;
     } else {
       const diff = predicted - p.rating;
       const pct = p.rating > 0 ? Math.round((diff/p.rating)*100) : null;
       document.getElementById('cf-comment').textContent =
-        `과거 ${n}회 방영 이력 기반 예측 — 실제 대비 ${pct!=null ? (pct>=0?'+':'')+pct+'%' : '비교 불가'} ${diff>=0?'높을':'낮을'} 것으로 예측됩니다. (⚠ 공사중: 예측 로직은 편성 궁합 분석과 동일한 방식이며 정교화가 더 필요합니다)`;
+        `${BASIS_LABEL[basis]} 기반 예측 — 실제 대비 ${pct!=null ? (pct>=0?'+':'')+pct+'%' : '비교 불가'} ${diff>=0?'높을':'낮을'} 것으로 예측됩니다. (⚠ 공사중: 예측 로직은 편성 궁합 분석과 동일한 방식이며 정교화가 더 필요합니다)`;
     }
   }
   sel.addEventListener('change', update);
