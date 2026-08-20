@@ -2048,41 +2048,45 @@ function heatColor(score){
 
 function renderHeatmap(history, fullHistory){
   const days = ['월','화','수','목','금','토','일'];
-  const times = ['09:00','13:00','20:00','22:00'];
+  // 방송일 기준 2시~25시(=다음날 새벽1시)까지 24개 시간대 전체
+  const times = [];
+  for (let h = 2; h <= 25; h++) {
+    const realHour = h % 24;
+    times.push({ label: `${h}시`, timeStr: `${String(realHour).padStart(2,'0')}:00` });
+  }
   const cells = [];
   days.forEach(d=>{
     times.forEach(t=>{
-      const { score: s, basis } = computeMatchScore(history, d+'요일', t, fullHistory);
-      cells.push({ d, t, s, basis });
+      const { score: s, basis } = computeMatchScore(history, d+'요일', t.timeStr, fullHistory);
+      cells.push({ d, t: t.label, s, basis });
     });
   });
   const top3 = [...cells].sort((a,b)=>b.s-a.s).slice(0,3).map(c=>`${c.d}_${c.t}`);
 
-  let html = '<div style="display:grid; grid-template-columns:64px repeat(7,1fr); gap:8px; font-size:13px;">';
-  html += '<div></div>' + days.map(d=>`<div style="text-align:center; color:var(--text-secondary); font-weight:700; padding-bottom:4px;">${d}</div>`).join('');
+  let html = '<div style="max-height:640px; overflow-y:auto;"><div style="display:grid; grid-template-columns:52px repeat(7,1fr); gap:6px; font-size:12px;">';
+  html += '<div></div>' + days.map(d=>`<div style="text-align:center; color:var(--text-secondary); font-weight:700; padding-bottom:4px; position:sticky; top:0; background:#fff;">${d}</div>`).join('');
   times.forEach(t=>{
-    html += `<div style="color:var(--text-secondary); font-weight:700; display:flex; align-items:center;">${t}</div>`;
+    html += `<div style="color:var(--text-secondary); font-weight:700; display:flex; align-items:center; font-size:11px;">${t.label}</div>`;
     days.forEach(d=>{
-      const cell = cells.find(c=>c.d===d && c.t===t);
+      const cell = cells.find(c=>c.d===d && c.t===t.label);
       const s = cell.s;
       const bg = heatColor(s);
-      const rank = top3.indexOf(`${d}_${t}`);
-      const badge = rank>=0 ? `<span style="position:absolute; top:3px; right:4px; font-size:9px; background:#ff3b30; color:#fff; border-radius:6px; padding:1px 5px; font-weight:800;">TOP${rank+1}</span>` : '';
+      const rank = top3.indexOf(`${d}_${t.label}`);
+      const badge = rank>=0 ? `<span style="position:absolute; top:2px; right:3px; font-size:8px; background:#ff3b30; color:#fff; border-radius:5px; padding:0px 4px; font-weight:800;">TOP${rank+1}</span>` : '';
       // 실측이면 실선 테두리, 추정이면 점선(불확실함을 시각적으로 표시)
       let border = 'border:2px solid transparent;';
       if (rank>=0) border = 'border:2px solid #1d1d1f;';
       else if (cell.basis === 'actual') border = 'border:2px solid rgba(0,0,0,0.25);';
       else if (cell.basis && cell.basis !== 'none') border = 'border:2px dashed rgba(0,0,0,0.35);';
       const title = `${BASIS_LABEL[cell.basis]||''}`;
-      html += `<div title="${title}" style="position:relative; height:56px; border-radius:10px; background:${bg}; ${border} display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:16px; text-shadow:0 1px 3px rgba(0,0,0,0.35);">${badge}${s}</div>`;
+      html += `<div title="${title}" style="position:relative; height:34px; border-radius:8px; background:${bg}; ${border} display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:13px; text-shadow:0 1px 3px rgba(0,0,0,0.35);">${badge}${s}</div>`;
     });
   });
-  html += '</div>';
+  html += '</div></div>';
   html += `<div style="margin-top:10px; font-size:11px; color:var(--text-tertiary);">🔴 낮음 → 🟡 보통 → 🟢 높음 · 실선 테두리 = 실제 방영 이력 기준 · 점선 테두리 = 유사 프로그램으로 추정 · 검정 테두리 = TOP3 · 칸에 마우스 올리면 근거 확인</div>`;
   document.getElementById('heatmap').innerHTML = html;
 }
 
-/* ============ SCHEDULE: RECOMMEND ============ */
 /* ============ SCHEDULE: ADJACENCY (인접 프로그램 궁합) ============ */
 let FULL_HISTORY_CACHE = null;
 
