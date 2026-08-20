@@ -2014,10 +2014,10 @@ function renderMatching(){
     document.getElementById('match-factors').innerHTML = n === 0
       ? `<li>과거 방영 이력이 없어 기본 점수(50점)로 표시됩니다</li>`
       : `
-      <li><b>${day.value} ${time.value} 기준:</b> ${BASIS_LABEL[basis]}${basisN ? ` (${basisN}건)` : ''}${avgRating!=null ? ` · 평균 ${(avgRating*100).toFixed(3)}%` : ''}</li>
-      <li>역대 최고 시청률 ${(peak*100).toFixed(3)}% 대비 환산</li>
+      <li><b>${day.value} ${time.value} 기준:</b> ${BASIS_LABEL[basis]}${basisN ? ` (${basisN}건)` : ''}${avgRating!=null ? ` · 평균 ${avgRating.toFixed(3)}%` : ''}</li>
+      <li>역대 최고 시청률 ${peak.toFixed(3)}% 대비 환산</li>
       <li>이 프로그램 과거 ${n}회 방영
-        <span style="color:var(--text-tertiary);">(생방 ${liveN}회${liveAvg!=null?' 평균 '+(liveAvg*100).toFixed(3)+'%':''} · 재방 ${rerunN}회${rerunAvg!=null?' 평균 '+(rerunAvg*100).toFixed(3)+'%':''})</span></li>
+        <span style="color:var(--text-tertiary);">(생방 ${liveN}회${liveAvg!=null?' 평균 '+liveAvg.toFixed(3)+'%':''} · 재방 ${rerunN}회${rerunAvg!=null?' 평균 '+rerunAvg.toFixed(3)+'%':''})</span></li>
     `;
     renderHeatmap(history, fullHistory);
   }
@@ -2243,7 +2243,7 @@ function renderCounterfactual(){
         <div class="cf-box-label">가상: "${virtual.program_name}"을(를) 넣었다면</div>
         <div class="prog-name">${virtual.program_name}</div>
         <div class="prog-meta">${p.date} ${p.start}–${p.end} (예측)</div>
-        <div class="prog-rating" style="color:var(--accent);">${predicted!=null ? (predicted*100).toFixed(3)+'%' : '이력 없음'}</div>
+        <div class="prog-rating" style="color:var(--accent);">${predicted!=null ? predicted.toFixed(3)+'%' : '이력 없음'}</div>
       </div>
     `;
     if (predicted == null) {
