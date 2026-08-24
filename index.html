@@ -730,8 +730,8 @@
 
         <div class="subscreen" data-parent="schedule" id="schedule-adjacency" style="display:none;">
           <div class="filter-row">
-            <button class="chip-btn active" data-adj-mode="out">뒤에 올 프로그램 (리드아웃)</button>
-            <button class="chip-btn" data-adj-mode="in">앞에 올 프로그램 (리드인)</button>
+            <button class="chip-btn active" data-adj-mode="in">앞에 올 프로그램 (리드인)</button>
+            <button class="chip-btn" data-adj-mode="out">뒤에 올 프로그램 (리드아웃)</button>
           </div>
           <div class="filter-row">
             <button class="chip-btn active" data-adj-type="전체">전체</button>
@@ -2217,7 +2217,7 @@ function renderAdjacency(){
   const dropdown = document.getElementById('adj-program-dropdown');
   let selectedProgram = null;
   let adjTypeFilter = '전체';
-  let adjMode = 'out'; // 'out' = 리드아웃(뒤), 'in' = 리드인(앞)
+  let adjMode = 'in'; // 'in' = 리드인(앞), 'out' = 리드아웃(뒤)
 
   async function refreshProgramList(){
     const all = await loadFullHistory();
