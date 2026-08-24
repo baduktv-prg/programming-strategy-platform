@@ -2320,7 +2320,11 @@ function renderCounterfactual(){
     const name = names[progSel.value];
     const pool = typeFiltered().filter(p=>p.name===name);
     const uniqueDates = [...new Set(pool.map(p=>p.date))].sort();
-    dateSel.innerHTML = uniqueDates.map((d,i)=>`<option value="${i}">${d}</option>`).join('') || '<option>없음</option>';
+    dateSel.innerHTML = uniqueDates.map((d,i)=>{
+      const inst = pool.find(p=>p.date===d);
+      const playersTxt = (inst && inst.players && inst.players!=='-') ? inst.players : '대국자 정보없음';
+      return `<option value="${i}">${d} · ${playersTxt}</option>`;
+    }).join('') || '<option>없음</option>';
     dateSel.__dates = uniqueDates;
     dateSel.value = 0;
     update();
@@ -2362,7 +2366,7 @@ function renderCounterfactual(){
       <div class="cf-box current">
         <div class="cf-box-label">실제 편성 실적</div>
         <div class="prog-name">${p.name}</div>
-        <div class="prog-meta">${p.date} ${p.start}–${p.end} · ${p.type}</div>
+        <div class="prog-meta">${p.date} ${p.start}–${p.end} · ${p.type} · 대진: ${(p.players && p.players!=='-') ? p.players : '정보없음'}</div>
         <div class="prog-rating">${p.rating.toFixed(3)}%</div>
       </div>
       <div class="cf-arrow">→</div>
