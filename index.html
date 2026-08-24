@@ -753,8 +753,15 @@
         </div>
 
         <div class="subscreen" data-parent="schedule" id="schedule-counterfactual" style="display:none;">
+          <div class="filter-row" style="flex-wrap:wrap;">
+            <button class="chip-btn active" data-cf-type="전체">전체</button>
+            <button class="chip-btn" data-cf-type="생방">생방</button>
+            <button class="chip-btn" data-cf-type="본방">본방</button>
+            <button class="chip-btn" data-cf-type="재방">재방</button>
+            <select class="mini-filter" id="cf-current-program"></select>
+            <select class="mini-filter" id="cf-current-date"></select>
+          </div>
           <div class="filter-row">
-            <select class="mini-filter" id="cf-current"></select>
             <span style="align-self:center; color:var(--text-tertiary);">→ 이 자리에 대신</span>
             <div class="searchable-wrap">
               <input class="mini-filter" id="cf-virtual" placeholder="프로그램 검색 또는 클릭" autocomplete="off">
@@ -2291,17 +2298,59 @@ function renderAdjacency(){
 
 /* ============ SCHEDULE: COUNTERFACTUAL ============ */
 function renderCounterfactual(){
-  const sel = document.getElementById('cf-current');
+  const progSel = document.getElementById('cf-current-program');
+  const dateSel = document.getElementById('cf-current-date');
   const vsel = document.getElementById('cf-virtual');
   const vdropdown = document.getElementById('cf-virtual-dropdown');
-  fillSelect(sel, PROGRAMS, null, p=>`${p.date} / ${p.start} · ${p.name}`); sel.value=0;
+  let cfTypeFilter = '전체';
+
+  function typeFiltered(){
+    return cfTypeFilter === '전체' ? PROGRAMS : PROGRAMS.filter(p=>p.type===cfTypeFilter);
+  }
+  function refreshPrograms(){
+    const pool = typeFiltered();
+    const uniqueNames = [...new Set(pool.map(p=>p.name))].sort((a,b)=>a.localeCompare(b));
+    progSel.innerHTML = uniqueNames.map((n,i)=>`<option value="${i}">${n}</option>`).join('') || '<option>없음</option>';
+    progSel.__names = uniqueNames;
+    progSel.value = 0;
+    refreshDates();
+  }
+  function refreshDates(){
+    const names = progSel.__names || [];
+    const name = names[progSel.value];
+    const pool = typeFiltered().filter(p=>p.name===name);
+    const uniqueDates = [...new Set(pool.map(p=>p.date))].sort();
+    dateSel.innerHTML = uniqueDates.map((d,i)=>`<option value="${i}">${d}</option>`).join('') || '<option>없음</option>';
+    dateSel.__dates = uniqueDates;
+    dateSel.value = 0;
+    update();
+  }
+  function currentProgram(){
+    const names = progSel.__names || [];
+    const dates = dateSel.__dates || [];
+    const name = names[progSel.value];
+    const date = dates[dateSel.value];
+    return typeFiltered().find(p => p.name===name && p.date===date) || null;
+  }
+
+  progSel.onchange = refreshDates;
+  dateSel.onchange = update;
+  document.querySelectorAll('#schedule-counterfactual .chip-btn[data-cf-type]').forEach(btn=>{
+    btn.onclick = () => {
+      document.querySelectorAll('#schedule-counterfactual .chip-btn[data-cf-type]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      cfTypeFilter = btn.dataset.cfType;
+      refreshPrograms();
+    };
+  });
+
   let selectedVirtual = ALL_PROGRAMS[0] || null;
   vsel.value = selectedVirtual ? selectedVirtual.program_name : '';
 
   async function update(){
-    const p = PROGRAMS[sel.value];
+    const p = currentProgram();
     const virtual = selectedVirtual;
-    if (!virtual) { document.getElementById('cf-comment').textContent = '가상 대체 프로그램을 선택해주세요.'; return; }
+    if (!p || !virtual) { document.getElementById('cf-comment').textContent = '프로그램을 선택해주세요.'; return; }
     document.getElementById('cf-comment').textContent = '계산 중...';
 
     const dowLabel = ['일요일','월요일','화요일','수요일','목요일','금요일','토요일'][new Date(p.date+'T00:00:00').getDay()];
@@ -2333,9 +2382,8 @@ function renderCounterfactual(){
         `${BASIS_LABEL[basis]} 기반 예측 — 실제 대비 ${pct!=null ? (pct>=0?'+':'')+pct+'%' : '비교 불가'} ${diff>=0?'높을':'낮을'} 것으로 예측됩니다. (⚠ 공사중: 예측 로직은 편성 궁합 분석과 동일한 방식이며 정교화가 더 필요합니다)`;
     }
   }
-  sel.addEventListener('change', update);
   attachSearchableDropdown(vsel, vdropdown, ALL_PROGRAMS, p=>p.program_name, (it)=>{ selectedVirtual = it; update(); });
-  update();
+  refreshPrograms();
 }
 
 /* ============ AUDIENCE: REGRESSION ============ */
