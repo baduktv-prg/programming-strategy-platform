@@ -448,7 +448,7 @@
         <div class="nav-item" data-screen="schedule"><span>편성 분석</span><span class="nav-caret">▸</span></div>
         <div class="nav-sub-wrap">
           <div class="nav-sub active" data-screen="schedule" data-sub="matching">편성 궁합 분석</div>
-          <div class="nav-sub" data-screen="schedule" data-sub="adjacency">인접 프로그램 궁합</div>
+          <div class="nav-sub" data-screen="schedule" data-sub="adjacency">리드인/리드아웃 분석</div>
           <div class="nav-sub" data-screen="schedule" data-sub="counterfactual">가상 편성 시나리오 (공사중)</div>
         </div>
       </div>
@@ -684,7 +684,7 @@
       <div class="screen" id="screen-schedule">
         <div class="subtabs">
           <div class="subtab active" data-parent="schedule" data-tab="matching">궁합 분석</div>
-          <div class="subtab" data-parent="schedule" data-tab="adjacency">인접 프로그램 궁합</div>
+          <div class="subtab" data-parent="schedule" data-tab="adjacency">리드인/리드아웃 분석</div>
           <div class="subtab" data-parent="schedule" data-tab="counterfactual">가상 편성 시나리오 (공사중)</div>
         </div>
 
@@ -729,6 +729,10 @@
         </div>
 
         <div class="subscreen" data-parent="schedule" id="schedule-adjacency" style="display:none;">
+          <div class="filter-row">
+            <button class="chip-btn active" data-adj-mode="out">뒤에 올 프로그램 (리드아웃)</button>
+            <button class="chip-btn" data-adj-mode="in">앞에 올 프로그램 (리드인)</button>
+          </div>
           <div class="filter-row">
             <button class="chip-btn active" data-adj-type="전체">전체</button>
             <button class="chip-btn" data-adj-type="생방">생방</button>
@@ -2142,6 +2146,40 @@ async function loadFullHistory(){
 
 // 기준 프로그램 바로 뒤에 이어진 방송들을, 그 방송의 대회유형별로 묶어서
 // "그 대회유형 전체 평균" 대비 "이 프로그램 뒤에서만의 평균"을 비교
+// 리드인 분석 — "앞에 뭐가 오면 이 프로그램 자체가 더 잘 되는지"
+// (리드아웃과 달리, 평균 내는 대상이 "뒤에 온 프로그램"이 아니라 "기준 프로그램 자기 자신"으로 바뀜)
+async function computeLeadInStats(targetProgramId, typeFilter){
+  const all = await loadFullHistory();
+  const targetInstances = all.filter(p => p.program_id === targetProgramId && (typeFilter === '전체' || p.type === typeFilter));
+  const avg = arr => arr.reduce((a,b)=>a+b,0)/arr.length;
+  const normType = t => t ? String(t).replace(/\s/g, '') : '(미분류)';
+  const targetOverallAvg = targetInstances.length ? avg(targetInstances.map(p=>p.rating)) : 0;
+
+  const pairs = []; // {lead, target}
+  all.forEach((p,i)=>{
+    if (p.program_id !== targetProgramId) return;
+    if (typeFilter !== '전체' && p.type !== typeFilter) return;
+    const prev = all[i-1];
+    if (prev && (p._absStart - prev._absEnd) <= 60) pairs.push({ lead: prev, target: p });
+  });
+
+  const byType = {};
+  pairs.forEach(({lead, target})=>{
+    const t = normType(lead.tournament_type);
+    if (!byType[t]) byType[t] = { ratings: [], items: [] };
+    byType[t].ratings.push(target.rating);
+    byType[t].items.push({ name: lead.name, date: target.date, start: target.start, rating: target.rating });
+  });
+
+  const results = Object.keys(byType).map(t=>{
+    const withLeadAvg = avg(byType[t].ratings);
+    const lift = targetOverallAvg > 0 ? ((withLeadAvg - targetOverallAvg) / targetOverallAvg) * 100 : null;
+    return { type: t, n: byType[t].ratings.length, baseAvg: targetOverallAvg, followAvg: withLeadAvg, lift, items: byType[t].items };
+  }).sort((a,b)=> (b.lift ?? -999) - (a.lift ?? -999));
+
+  return { totalFollowers: pairs.length, results };
+}
+
 async function computeAdjacencyStats(leadingProgramId, typeFilter){
   const all = await loadFullHistory();
   const followers = [];
@@ -2157,13 +2195,18 @@ async function computeAdjacencyStats(leadingProgramId, typeFilter){
   const baselineByType = {};
   all.forEach(p=>{ const t = normType(p.tournament_type); (baselineByType[t]=baselineByType[t]||[]).push(p.rating); });
   const followByType = {};
-  followers.forEach(p=>{ const t = normType(p.tournament_type); (followByType[t]=followByType[t]||[]).push(p.rating); });
+  followers.forEach(p=>{
+    const t = normType(p.tournament_type);
+    if (!followByType[t]) followByType[t] = { ratings: [], items: [] };
+    followByType[t].ratings.push(p.rating);
+    followByType[t].items.push({ name: p.name, date: p.date, start: p.start, rating: p.rating });
+  });
 
   const results = Object.keys(followByType).map(t=>{
-    const followAvg = avg(followByType[t]);
+    const followAvg = avg(followByType[t].ratings);
     const baseAvg = avg(baselineByType[t] || [followAvg]);
     const lift = baseAvg > 0 ? ((followAvg - baseAvg) / baseAvg) * 100 : null;
-    return { type: t, n: followByType[t].length, followAvg, baseAvg, lift };
+    return { type: t, n: followByType[t].ratings.length, followAvg, baseAvg, lift, items: followByType[t].items };
   }).sort((a,b)=> (b.lift ?? -999) - (a.lift ?? -999));
 
   return { totalFollowers: followers.length, results };
@@ -2174,6 +2217,7 @@ function renderAdjacency(){
   const dropdown = document.getElementById('adj-program-dropdown');
   let selectedProgram = null;
   let adjTypeFilter = '전체';
+  let adjMode = 'out'; // 'out' = 리드아웃(뒤), 'in' = 리드인(앞)
 
   async function refreshProgramList(){
     const all = await loadFullHistory();
@@ -2184,31 +2228,50 @@ function renderAdjacency(){
     sel.value = '';
     selectedProgram = null;
     document.getElementById('adj-table').innerHTML = '';
-    document.getElementById('adj-title').textContent = '이 프로그램 뒤엔 어떤 대회유형이 잘 맞을까';
+    document.getElementById('adj-title').textContent = adjMode==='out' ? '이 프로그램 뒤엔 어떤 대회유형이 잘 맞을까' : '이 프로그램 앞엔 어떤 대회유형이 잘 맞을까';
     attachSearchableDropdown(sel, dropdown, list, p=>p.program_name, (it)=>{ selectedProgram = it; update(); });
   }
 
+  document.querySelectorAll('#schedule-adjacency .chip-btn[data-adj-mode]').forEach(btn=>{
+    btn.onclick = () => {
+      document.querySelectorAll('#schedule-adjacency .chip-btn[data-adj-mode]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      adjMode = btn.dataset.adjMode;
+      if (selectedProgram) update(); else refreshProgramList();
+    };
+  });
+
   async function update(){
     if (!selectedProgram) { document.getElementById('adj-table').innerHTML = ''; return; }
-    document.getElementById('adj-title').textContent = `"${selectedProgram.program_name}"(${adjTypeFilter}) 뒤엔 어떤 대회유형이 잘 맞을까`;
+    const posLabel = adjMode==='out' ? '뒤' : '앞';
+    document.getElementById('adj-title').textContent = `"${selectedProgram.program_name}"(${adjTypeFilter}) ${posLabel}엔 어떤 대회유형이 잘 맞을까`;
     document.getElementById('adj-table').innerHTML = `<tr><td>계산 중...</td></tr>`;
-    const { totalFollowers, results } = await computeAdjacencyStats(selectedProgram.program_id, adjTypeFilter);
+    const { totalFollowers, results } = adjMode==='out'
+      ? await computeAdjacencyStats(selectedProgram.program_id, adjTypeFilter)
+      : await computeLeadInStats(selectedProgram.program_id, adjTypeFilter);
     if (totalFollowers === 0) {
-      document.getElementById('adj-table').innerHTML = `<tr><td style="color:var(--text-tertiary); padding:12px;">이 프로그램 바로 뒤에 이어진 방송 이력이 없어요.</td></tr>`;
+      document.getElementById('adj-table').innerHTML = `<tr><td style="color:var(--text-tertiary); padding:12px;">이 프로그램 바로 ${posLabel}에 이어진 방송 이력이 없어요.</td></tr>`;
       return;
     }
+    const colHeader = adjMode==='out' ? '뒤에 온 대회유형' : '앞에 온 대회유형';
+    const followColHeader = adjMode==='out' ? '이 프로그램 뒤 평균' : '이 리드인일 때 평균';
     document.getElementById('adj-table').innerHTML = `
-      <tr><th style="text-align:left; padding:8px;">뒤에 온 대회유형</th><th style="padding:8px;">표본(n)</th><th style="padding:8px;">전체 평균</th><th style="padding:8px;">이 프로그램 뒤 평균</th><th style="padding:8px;">차이</th></tr>
-      ${results.map(r=>{
+      <tr><th style="text-align:left; padding:8px;">${colHeader}</th><th style="padding:8px;">표본(n)</th><th style="padding:8px;">전체 평균</th><th style="padding:8px;">${followColHeader}</th><th style="padding:8px;">차이</th></tr>
+      ${results.map((r,i)=>{
         const liftTxt = r.lift==null ? '-' : (r.lift>=0?'▲ +':'▼ ') + Math.abs(r.lift).toFixed(0) + '%';
         const liftColor = r.lift==null ? 'var(--text-tertiary)' : (r.lift>=0 ? '#34c759' : '#ff3b30');
         const lowConfidence = r.n <= 2 ? ` <span style="color:var(--text-tertiary); font-size:10px;">(표본 적음)</span>` : '';
-        return `<tr style="border-bottom:1px solid var(--border);">
-          <td style="padding:8px;">${r.type}${lowConfidence}</td>
+        return `<tr style="border-bottom:1px solid var(--border); cursor:pointer;" onclick="document.getElementById('adj-detail-${i}').style.display = document.getElementById('adj-detail-${i}').style.display==='none' ? 'table-row' : 'none';">
+          <td style="padding:8px;">▸ ${r.type}${lowConfidence}</td>
           <td style="padding:8px; text-align:center;">${r.n}</td>
           <td style="padding:8px; text-align:center;">${r.baseAvg.toFixed(3)}%</td>
           <td style="padding:8px; text-align:center; font-weight:700;">${r.followAvg.toFixed(3)}%</td>
           <td style="padding:8px; text-align:center; font-weight:700; color:${liftColor};">${liftTxt}</td>
+        </tr>
+        <tr id="adj-detail-${i}" style="display:none; background:var(--accent-light);">
+          <td colspan="5" style="padding:8px 8px 8px 24px; font-size:12px;">
+            ${r.items.map(it=>`<div style="padding:3px 0;">${it.date} ${it.start} · <b>${it.name}</b> · ${it.rating.toFixed(3)}%</div>`).join('')}
+          </td>
         </tr>`;
       }).join('')}
     `;
