@@ -449,7 +449,7 @@
         <div class="nav-sub-wrap">
           <div class="nav-sub active" data-screen="schedule" data-sub="matching">편성 궁합 분석</div>
           <div class="nav-sub" data-screen="schedule" data-sub="adjacency">리드인/리드아웃 분석</div>
-          <div class="nav-sub" data-screen="schedule" data-sub="counterfactual">가상 편성 시나리오 (공사중)</div>
+          <div class="nav-sub" data-screen="schedule" data-sub="counterfactual">가상 편성 시나리오</div>
         </div>
       </div>
 
@@ -685,7 +685,7 @@
         <div class="subtabs">
           <div class="subtab active" data-parent="schedule" data-tab="matching">궁합 분석</div>
           <div class="subtab" data-parent="schedule" data-tab="adjacency">리드인/리드아웃 분석</div>
-          <div class="subtab" data-parent="schedule" data-tab="counterfactual">가상 편성 시나리오 (공사중)</div>
+          <div class="subtab" data-parent="schedule" data-tab="counterfactual">가상 편성 시나리오</div>
         </div>
 
         <div class="subscreen active" data-parent="schedule" id="schedule-matching">
@@ -771,7 +771,7 @@
           </div>
           <div class="bento-grid">
             <div class="bento-card col-12">
-              <div class="card-label">실제 편성 실적 vs 가상 대체 프로그램 예측 실적 (공사중 · 과거 이력 기반 예측)</div>
+              <div class="card-label">실제 편성 실적 vs 가상 대체 프로그램 예측 실적 (과거 이력 기반 예측)</div>
               <div class="cf-compare" id="cf-compare-wrap" style="margin-top:12px;"></div>
               <div class="comment-box" id="cf-comment"></div>
             </div>
@@ -1932,7 +1932,8 @@ function computeMatchScore(history, dowLabel, timeStr, fullHistory){
   const rerunHist = history.filter(h=>h.isRerun);
   const liveAvg = liveHist.length ? liveHist.reduce((a,h)=>a+h.rating,0)/liveHist.length : null;
   const rerunAvg = rerunHist.length ? rerunHist.reduce((a,h)=>a+h.rating,0)/rerunHist.length : null;
-  const common = { n: history.length, peak, liveN: liveHist.length, rerunN: rerunHist.length, liveAvg, rerunAvg };
+  const repPlayers = mostCommon(history.map(h=>h.players).filter(Boolean)); // 이 프로그램의 대표(가장 흔한) 대국자
+  const common = { n: history.length, peak, liveN: liveHist.length, rerunN: rerunHist.length, liveAvg, rerunAvg, repPlayers };
 
   // 1) 실측: 이 요일+시간대에 진짜로 방영된 적 있는지
   const exact = history.filter(h => h.dow === dow && h.hour === hour);
@@ -1944,7 +1945,6 @@ function computeMatchScore(history, dowLabel, timeStr, fullHistory){
   // 2) 추정: 전체 이력(fullHistory)이 없으면 추정 불가 → 기본값
   if (!fullHistory || fullHistory.length === 0) return { score: 50, basis: 'none', basisN: 0, ...common };
 
-  const repPlayers = mostCommon(history.map(h=>h.players).filter(Boolean));
   const repGenre = mostCommon(history.map(h=>h.tournament_type).filter(Boolean));
   const repGenreNorm = repGenre ? repGenre.replace(/\s/g,'') : null; // "세계 기전"/"세계기전" 같은 띄어쓰기 차이 무시하고 비교
   const repNames = extractPlayerNames(repPlayers);
@@ -2383,7 +2383,7 @@ function renderCounterfactual(){
       const diff = predicted - p.rating;
       const pct = p.rating > 0 ? Math.round((diff/p.rating)*100) : null;
       document.getElementById('cf-comment').textContent =
-        `${BASIS_LABEL[basis]} 기반 예측 — 실제 대비 ${pct!=null ? (pct>=0?'+':'')+pct+'%' : '비교 불가'} ${diff>=0?'높을':'낮을'} 것으로 예측됩니다. (⚠ 공사중: 예측 로직은 편성 궁합 분석과 동일한 방식이며 정교화가 더 필요합니다)`;
+        `${BASIS_LABEL[basis]} 기반 예측 — 실제 대비 ${pct!=null ? (pct>=0?'+':'')+pct+'%' : '비교 불가'} ${diff>=0?'높을':'낮을'} 것으로 예측됩니다.`;
     }
   }
   attachSearchableDropdown(vsel, vdropdown, ALL_PROGRAMS, p=>p.program_name, (it)=>{ selectedVirtual = it; update(); });
