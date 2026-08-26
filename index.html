@@ -450,6 +450,7 @@
           <div class="nav-sub active" data-screen="schedule" data-sub="matching">편성 궁합 분석</div>
           <div class="nav-sub" data-screen="schedule" data-sub="adjacency">리드인/리드아웃 분석</div>
           <div class="nav-sub" data-screen="schedule" data-sub="counterfactual">가상 편성 시나리오</div>
+          <div class="nav-sub" data-screen="schedule" data-sub="weekly">주간 편성안 추천</div>
         </div>
       </div>
 
@@ -686,6 +687,7 @@
           <div class="subtab active" data-parent="schedule" data-tab="matching">궁합 분석</div>
           <div class="subtab" data-parent="schedule" data-tab="adjacency">리드인/리드아웃 분석</div>
           <div class="subtab" data-parent="schedule" data-tab="counterfactual">가상 편성 시나리오</div>
+          <div class="subtab" data-parent="schedule" data-tab="weekly">주간 편성안 추천</div>
         </div>
 
         <div class="subscreen active" data-parent="schedule" id="schedule-matching">
@@ -774,6 +776,26 @@
               <div class="card-label">실제 편성 실적 vs 가상 대체 프로그램 예측 실적 (과거 이력 기반 예측)</div>
               <div class="cf-compare" id="cf-compare-wrap" style="margin-top:12px;"></div>
               <div class="comment-box" id="cf-comment"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="subscreen" data-parent="schedule" id="schedule-weekly" style="display:none;">
+          <div class="filter-row" style="flex-wrap:wrap;">
+            <select class="mini-filter" id="ws-day">
+              <option>월요일</option><option>화요일</option><option>수요일</option><option>목요일</option><option>금요일</option><option>토요일</option><option>일요일</option>
+            </select>
+            <select class="mini-filter" id="ws-time"></select>
+            <button class="chip-btn active" data-ws-type="유동">유동 슬롯 (추천 받기)</button>
+            <button class="chip-btn" data-ws-type="고정">고정 슬롯 (생방/본방 직접입력)</button>
+            <input class="mini-filter" id="ws-fixed-name" placeholder="고정 편성 프로그램명 입력" style="display:none; flex:1; min-width:180px;">
+            <button class="chip-btn" style="background:#1d1d1f; color:#fff;" onclick="addWeeklySlot()">+ 슬롯 추가</button>
+          </div>
+          <div class="bento-grid">
+            <div class="bento-card col-12">
+              <div class="card-label">주간 편성안 (초안 · 최종 확정 전 검토용)</div>
+              <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:10px;">유동 슬롯은 궁합분석과 같은 엔진으로 상위 5개 후보를 추천합니다. 실제 확정은 사람이 직접 검토 후 결정해주세요.</div>
+              <table class="data-table" id="ws-table" style="width:100%; border-collapse:collapse;"></table>
             </div>
           </div>
         </div>
@@ -2297,6 +2319,115 @@ function renderAdjacency(){
 }
 
 /* ============ SCHEDULE: COUNTERFACTUAL ============ */
+/* ============ SCHEDULE: WEEKLY (주간 편성안 추천) ============ */
+let weeklySlots = [];
+let weeklySlotSeq = 0;
+let wsTypeFilter = '유동';
+
+function renderWeekly(){
+  // 시간 셀렉트 채우기 (2시~25시, 궁합분석과 동일한 방송일 기준)
+  const timeSel = document.getElementById('ws-time');
+  if (!timeSel.__filled) {
+    timeSel.innerHTML = Array.from({length:24}, (_,i)=>{
+      const h = i + 2, real = h % 24;
+      return `<option value="${String(real).padStart(2,'0')}:00" ${h===20?'selected':''}>${h}시</option>`;
+    }).join('');
+    timeSel.__filled = true;
+  }
+  document.querySelectorAll('#schedule-weekly .chip-btn[data-ws-type]').forEach(btn=>{
+    btn.onclick = () => {
+      document.querySelectorAll('#schedule-weekly .chip-btn[data-ws-type]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      wsTypeFilter = btn.dataset.wsType;
+      document.getElementById('ws-fixed-name').style.display = wsTypeFilter==='고정' ? 'block' : 'none';
+    };
+  });
+  renderWeeklyTable();
+}
+
+function addWeeklySlot(){
+  const day = document.getElementById('ws-day').value;
+  const time = document.getElementById('ws-time').value;
+  const fixedName = document.getElementById('ws-fixed-name').value.trim();
+  if (wsTypeFilter === '고정' && !fixedName) { alert('고정 편성 프로그램명을 입력해주세요.'); return; }
+  weeklySlots.push({
+    id: weeklySlotSeq++, day, time, type: wsTypeFilter,
+    fixedName: wsTypeFilter==='고정' ? fixedName : null,
+    candidates: null, chosen: null,
+  });
+  document.getElementById('ws-fixed-name').value = '';
+  renderWeeklyTable();
+}
+function removeWeeklySlot(id){
+  weeklySlots = weeklySlots.filter(s=>s.id!==id);
+  renderWeeklyTable();
+}
+async function loadCandidatesForSlot(id){
+  const slot = weeklySlots.find(s=>s.id===id);
+  if (!slot) return;
+  slot.candidates = 'loading';
+  renderWeeklyTable();
+
+  const all = await loadFullHistory();
+  const byProgram = {};
+  all.forEach(p=>{ (byProgram[p.program_id] = byProgram[p.program_id] || {name:p.name, items:[]}).items.push(p); });
+  const results = Object.entries(byProgram).map(([pid, g])=>{
+    const r = computeMatchScore(g.items, slot.day, slot.time, all);
+    return { program_id: Number(pid), name: g.name, ...r };
+  }).filter(r=>r.n >= 2) // 표본 너무 적은 건 후보에서 제외
+    .sort((a,b)=>b.score-a.score).slice(0, 5);
+
+  slot.candidates = results;
+  renderWeeklyTable();
+}
+function chooseCandidate(slotId, programId){
+  const slot = weeklySlots.find(s=>s.id===slotId);
+  if (!slot) return;
+  slot.chosen = slot.candidates.find(c=>c.program_id===programId);
+  renderWeeklyTable();
+}
+
+const WS_DAY_ORDER = ['월요일','화요일','수요일','목요일','금요일','토요일','일요일'];
+function renderWeeklyTable(){
+  const table = document.getElementById('ws-table');
+  if (weeklySlots.length === 0) {
+    table.innerHTML = `<tr><td style="padding:16px; color:var(--text-tertiary); text-align:center;">아직 추가된 슬롯이 없어요. 위에서 요일/시간을 골라 "+ 슬롯 추가"를 눌러주세요.</td></tr>`;
+    return;
+  }
+  const sorted = [...weeklySlots].sort((a,b)=>{
+    const d = WS_DAY_ORDER.indexOf(a.day) - WS_DAY_ORDER.indexOf(b.day);
+    return d !== 0 ? d : a.time.localeCompare(b.time);
+  });
+  table.innerHTML = `
+    <tr><th style="text-align:left; padding:8px;">요일</th><th style="padding:8px;">시간</th><th style="padding:8px;">구분</th><th style="text-align:left; padding:8px;">편성 내용</th><th style="padding:8px;"></th></tr>
+    ${sorted.map(slot=>{
+      let contentHtml;
+      if (slot.type === '고정') {
+        contentHtml = `<b>${slot.fixedName}</b> <span style="font-size:10px; color:var(--text-tertiary);">(고정)</span>`;
+      } else if (!slot.candidates) {
+        contentHtml = `<button class="chip-btn" onclick="loadCandidatesForSlot(${slot.id})">추천 보기</button>`;
+      } else if (slot.candidates === 'loading') {
+        contentHtml = `계산 중...`;
+      } else if (slot.chosen) {
+        contentHtml = `<b style="color:var(--accent);">${slot.chosen.name}</b> <span style="font-size:11px; color:var(--text-tertiary);">(${slot.chosen.score}점 · ${BASIS_LABEL[slot.chosen.basis]})</span> <button class="chip-btn" style="font-size:10px; padding:4px 8px;" onclick="loadCandidatesForSlot(${slot.id})">다시 추천</button>`;
+      } else {
+        contentHtml = slot.candidates.length === 0
+          ? `추천 가능한 후보가 없어요 (표본 부족)`
+          : `<div style="display:flex; flex-wrap:wrap; gap:6px;">${slot.candidates.map(c=>
+              `<button class="chip-btn" style="font-size:11px;" onclick="chooseCandidate(${slot.id}, ${c.program_id})">${c.name} · ${c.score}점</button>`
+            ).join('')}</div>`;
+      }
+      return `<tr style="border-bottom:1px solid var(--border);">
+        <td style="padding:8px;">${slot.day}</td>
+        <td style="padding:8px; text-align:center;">${slot.time}</td>
+        <td style="padding:8px; text-align:center;">${slot.type==='고정' ? '<span class="badge live">고정</span>' : '<span class="badge rerun">유동</span>'}</td>
+        <td style="padding:8px;">${contentHtml}</td>
+        <td style="padding:8px; text-align:center;"><button onclick="removeWeeklySlot(${slot.id})" style="border:none; background:#ffebeb; color:#ff3b30; border-radius:6px; width:24px; height:24px; cursor:pointer;">✕</button></td>
+      </tr>`;
+    }).join('')}
+  `;
+}
+
 function renderCounterfactual(){
   const progSel = document.getElementById('cf-current-program');
   const dateSel = document.getElementById('cf-current-date');
@@ -2823,6 +2954,7 @@ window.addEventListener('afterprint', ()=>{
   renderMatching();
   renderAdjacency();
   renderCounterfactual();
+  renderWeekly();
   renderRegression();
   // renderSankey(); // 공사중: 시청자 이동 지도 임시 비활성화 (관련 마크업도 함께 주석처리됨)
   renderFatigue();
