@@ -2641,7 +2641,7 @@ async function loadCellRecommendations(day, startIdx, endIdx){
 
   const renderChip = (c) => `
     <button class="chip-btn" onclick='chooseRecommendation(${JSON.stringify({name:c.name, score:c.score, basis:c.basis, type: wsRecTypeFilter==="전체"?null:wsRecTypeFilter}).replace(/'/g,"&apos;")})'>
-      ${c.name} · ${c.score}점 <span style="color:var(--text-tertiary); font-size:10px;">(${BASIS_LABEL[c.basis]} · 평균 ${Math.round(c.avgDurationMin)}분)</span>
+      ${c.name}${c.repPlayers ? ` · <span style="color:var(--text-tertiary);">${c.repPlayers}</span>` : ''} · ${c.score}점 <span style="color:var(--text-tertiary); font-size:10px;">(${BASIS_LABEL[c.basis]} · 평균 ${Math.round(c.avgDurationMin)}분)</span>
     </button>`;
 
   let html = '';
@@ -2653,8 +2653,15 @@ async function loadCellRecommendations(day, startIdx, endIdx){
   if (wsRecTypeFilter !== '전체') {
     html += `<div style="font-size:12px; font-weight:700; margin-bottom:6px; color:var(--text-tertiary);">🔍 ${wsRecTypeFilter} 이력은 없지만, 다른 이력으로 추정한 후보</div>`;
     html += topWithoutType.length
-      ? `<div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; opacity:0.85;">${topWithoutType.map(renderChip).join('')}</div>`
-      : `<div style="color:var(--text-tertiary); font-size:12px; margin-bottom:16px;">추정 후보도 없어요.</div>`;
+      ? `<div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px; opacity:0.85;">${topWithoutType.map(renderChip).join('')}</div>`
+      : `<div style="color:var(--text-tertiary); font-size:12px; margin-bottom:8px;">추정 후보도 없어요.</div>`;
+    html += `<div style="font-size:10px; color:var(--text-tertiary); line-height:1.6; margin-bottom:16px; padding:8px 10px; background:#f5f5f7; border-radius:8px;">
+      ※ 추정 근거는 4단계로 나뉘어요 — 표본이 부족할수록 범위를 넓혀가며 그나마 나은 추정치를 찾습니다.<br>
+      1순위: 유사 장르 + 동일 대국자로 추정 (같은 대회유형이면서 대표 대국자도 겹치는 다른 프로그램들의 성과)<br>
+      2순위: 동일 대국자(장르 무관)로 추정 (대회유형 상관없이, 이 대국자가 나온 다른 프로그램들의 성과)<br>
+      3순위: 유사 장르로 추정 (대국자는 안 보고, 같은 대회유형인 다른 프로그램들의 성과)<br>
+      4순위: 비슷한 시청률 수준 프로그램으로 추정 (장르·대국자 무관, 역대 최고 시청률이 비슷한 프로그램들의 성과)
+    </div>`;
   }
 
   if (playerStats.length > 0) {
