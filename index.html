@@ -2392,6 +2392,9 @@ function addFixedProgram(){
     fixedPrograms.push({ id: fixedSeq++, day, startIdx, endIdx, name });
   });
   document.getElementById('ws-fixed-name').value = '';
+  document.querySelectorAll('#ws-day-multi .chip-btn[data-ws-day]').forEach(b=>b.classList.remove('active'));
+  document.getElementById('ws-start').value = 36;
+  document.getElementById('ws-end').value = 38;
   renderWeeklyGrid();
 }
 function clearAllFixed(){
