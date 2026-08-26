@@ -797,6 +797,11 @@
               <button class="chip-btn" data-ws-day="토요일">토</button>
               <button class="chip-btn" data-ws-day="일요일">일</button>
             </div>
+            <div style="display:flex; gap:4px;" id="ws-fixed-type">
+              <button class="chip-btn active" data-ws-fixed-type="생방">생방</button>
+              <button class="chip-btn" data-ws-fixed-type="본방">본방</button>
+              <button class="chip-btn" data-ws-fixed-type="재방">재방</button>
+            </div>
             <select class="mini-filter" id="ws-start"></select>
             <span style="align-self:center; color:var(--text-tertiary);">~</span>
             <select class="mini-filter" id="ws-end"></select>
@@ -806,7 +811,7 @@
           <div class="bento-grid">
             <div class="bento-card col-12">
               <div class="card-label">주간 편성표 (초안) · 30분 단위</div>
-              <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:10px;">진한 칸 = 고정 편성 (마우스 올리면 전체 내용 확인) · 빈 칸을 클릭하면 그 슬롯에 어울리는 프로그램을 추천해드려요.</div>
+              <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:10px;">고정 편성: <b style="color:#C6EFCE; text-shadow:0 0 1px #999;">■</b> 생방 · <b style="color:#FFFF00; text-shadow:0 0 1px #999;">■</b> 본방 · <b style="color:#e5e5ea; text-shadow:0 0 1px #999;">■</b> 재방 (마우스 올리면 전체 내용 확인) · 빈 칸을 클릭하면 그 슬롯에 어울리는 프로그램을 추천해드려요.</div>
               <div style="overflow-x:auto; max-height:720px; overflow-y:auto;">
                 <div id="ws-grid" style="display:grid; grid-template-columns:52px repeat(7,1fr); gap:3px; font-size:11px; min-width:700px;"></div>
               </div>
@@ -2371,6 +2376,13 @@ function renderWeekly(){
   document.querySelectorAll('#ws-day-multi .chip-btn[data-ws-day]').forEach(btn=>{
     btn.onclick = () => btn.classList.toggle('active');
   });
+  // 생방/본방/재방은 단일선택
+  document.querySelectorAll('#ws-fixed-type .chip-btn[data-ws-fixed-type]').forEach(btn=>{
+    btn.onclick = () => {
+      document.querySelectorAll('#ws-fixed-type .chip-btn[data-ws-fixed-type]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+    };
+  });
 
   refreshTemplateList();
   renderWeeklyGrid();
@@ -2382,6 +2394,7 @@ function getSelectedDays(){
 
 function addFixedProgram(){
   const days = getSelectedDays();
+  const type = document.querySelector('#ws-fixed-type .chip-btn.active')?.dataset.wsFixedType || '생방';
   const startIdx = Number(document.getElementById('ws-start').value);
   const endIdx = Number(document.getElementById('ws-end').value);
   const name = document.getElementById('ws-fixed-name').value.trim();
@@ -2389,10 +2402,11 @@ function addFixedProgram(){
   if (!name) { alert('편성 내용을 입력해주세요.'); return; }
   if (endIdx <= startIdx) { alert('종료 시간이 시작 시간보다 늦어야 해요.'); return; }
   days.forEach(day => {
-    fixedPrograms.push({ id: fixedSeq++, day, startIdx, endIdx, name });
+    fixedPrograms.push({ id: fixedSeq++, day, type, startIdx, endIdx, name });
   });
   document.getElementById('ws-fixed-name').value = '';
   document.querySelectorAll('#ws-day-multi .chip-btn[data-ws-day]').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('#ws-fixed-type .chip-btn[data-ws-fixed-type]').forEach(b=>b.classList.toggle('active', b.dataset.wsFixedType==='생방'));
   document.getElementById('ws-start').value = 36;
   document.getElementById('ws-end').value = 38;
   renderWeeklyGrid();
@@ -2460,8 +2474,9 @@ function renderWeeklyGrid(){
 
       if (fixed) {
         const isStart = fixed.startIdx === slot.idx;
-        html += `<div style="height:18px; background:#1d1d1f; color:#fff; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; position:relative; overflow:hidden; padding:0 3px; border-radius:${isStart?'6px 6px 0 0':'0'};" title="${escaped}">
-          ${isStart ? `<span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${fixed.name.split('\n')[0]}</span><span onclick="removeFixedProgram(${fixed.id})" style="position:absolute; top:0; right:2px; cursor:pointer; opacity:0.6; font-size:9px;">✕</span>` : ''}
+        const bg = fixed.type==='재방' ? '#e5e5ea' : fixed.type==='본방' ? '#FFFF00' : '#C6EFCE'; // 생방=연두, 본방=노랑 (원본 편성표 색상코드), 재방=회색
+        html += `<div style="height:18px; background:${bg}; color:#1d1d1f; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; position:relative; overflow:hidden; padding:0 3px; border-radius:${isStart?'6px 6px 0 0':'0'};" title="[${fixed.type}] ${escaped}">
+          ${isStart ? `<span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${fixed.name.split('\n')[0]}</span><span onclick="removeFixedProgram(${fixed.id})" style="position:absolute; top:0; right:2px; cursor:pointer; opacity:0.5; font-size:9px;">✕</span>` : ''}
         </div>`;
       } else if (chosen) {
         html += `<div onclick="loadCellRecommendations('${day}', ${slot.idx})" style="height:18px; border-radius:5px; background:var(--accent-light); color:var(--accent); display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; cursor:pointer; padding:0 3px; overflow:hidden;" title="${chosen.name} (추천 · ${chosen.score}점)">
