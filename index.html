@@ -781,21 +781,27 @@
         </div>
 
         <div class="subscreen" data-parent="schedule" id="schedule-weekly" style="display:none;">
-          <div class="filter-row" style="flex-wrap:wrap;">
+          <div class="filter-row" style="flex-wrap:wrap; align-items:flex-start;">
             <select class="mini-filter" id="ws-day">
               <option>월요일</option><option>화요일</option><option>수요일</option><option>목요일</option><option>금요일</option><option>토요일</option><option>일요일</option>
             </select>
-            <select class="mini-filter" id="ws-time"></select>
-            <button class="chip-btn active" data-ws-type="유동">유동 슬롯 (추천 받기)</button>
-            <button class="chip-btn" data-ws-type="고정">고정 슬롯 (생방/본방 직접입력)</button>
-            <input class="mini-filter" id="ws-fixed-name" placeholder="고정 편성 프로그램명 입력" style="display:none; flex:1; min-width:180px;">
-            <button class="chip-btn" style="background:#1d1d1f; color:#fff;" onclick="addWeeklySlot()">+ 슬롯 추가</button>
+            <select class="mini-filter" id="ws-start"></select>
+            <span style="align-self:center; color:var(--text-tertiary);">~</span>
+            <select class="mini-filter" id="ws-end"></select>
+            <textarea id="ws-fixed-name" placeholder="고정 편성 내용 입력 (프로그램명, 대국자, 부, 해설/진행 등 원하는 형식으로 자유롭게)" style="flex:1; min-width:220px; min-height:38px; max-height:100px; padding:8px 12px; border:1px solid var(--border); border-radius:12px; font-family:inherit; font-size:13px; resize:vertical;"></textarea>
+            <button class="chip-btn" style="background:#1d1d1f; color:#fff; align-self:flex-start;" onclick="addFixedProgram()">+ 고정 편성 추가</button>
           </div>
           <div class="bento-grid">
             <div class="bento-card col-12">
-              <div class="card-label">주간 편성안 (초안 · 최종 확정 전 검토용)</div>
-              <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:10px;">유동 슬롯은 궁합분석과 같은 엔진으로 상위 5개 후보를 추천합니다. 실제 확정은 사람이 직접 검토 후 결정해주세요.</div>
-              <table class="data-table" id="ws-table" style="width:100%; border-collapse:collapse;"></table>
+              <div class="card-label">주간 편성표 (초안) · 30분 단위</div>
+              <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:10px;">진한 칸 = 고정 편성 (마우스 올리면 전체 내용 확인) · 빈 칸을 클릭하면 그 슬롯에 어울리는 프로그램을 추천해드려요.</div>
+              <div style="overflow-x:auto; max-height:720px; overflow-y:auto;">
+                <div id="ws-grid" style="display:grid; grid-template-columns:52px repeat(7,1fr); gap:3px; font-size:11px; min-width:700px;"></div>
+              </div>
+            </div>
+            <div class="bento-card col-12" id="ws-recommend-panel" style="display:none;">
+              <div class="card-label" id="ws-recommend-title">추천 후보</div>
+              <div id="ws-recommend-list"></div>
             </div>
           </div>
         </div>
@@ -2320,112 +2326,135 @@ function renderAdjacency(){
 
 /* ============ SCHEDULE: COUNTERFACTUAL ============ */
 /* ============ SCHEDULE: WEEKLY (주간 편성안 추천) ============ */
-let weeklySlots = [];
-let weeklySlotSeq = 0;
-let wsTypeFilter = '유동';
+/* ============ SCHEDULE: WEEKLY (주간 편성안 추천 - 달력 그리드 방식) ============ */
+/* ============ SCHEDULE: WEEKLY (주간 편성안 추천 - 달력 그리드, 30분 단위) ============ */
+const WS_DAY_ORDER = ['월요일','화요일','수요일','목요일','금요일','토요일','일요일'];
+// 30분 단위 슬롯: 2:00부터 25:30까지(방송일 기준) — 총 48개
+const WS_SLOTS = [];
+for (let h = 2; h <= 25; h++) {
+  [0, 30].forEach(m => {
+    const realHour = h % 24;
+    WS_SLOTS.push({
+      idx: WS_SLOTS.length,
+      label: `${h}:${m===0?'00':'30'}`,
+      hour: realHour, // 실제 시(hour) — 추천 계산엔 분 단위까지는 안 쓰고 시간만 사용
+      timeStr: `${String(realHour).padStart(2,'0')}:${m===0?'00':'30'}`,
+    });
+  });
+}
+
+let fixedPrograms = []; // {id, day, startIdx, endIdx, name} — idx는 WS_SLOTS의 인덱스(0~47), endIdx는 배타적 경계
+let recommendedChoices = {}; // key: `${day}_${slotIdx}` -> {name, score, basis}
+let fixedSeq = 0;
+let wsSelectedCell = null;
 
 function renderWeekly(){
-  // 시간 셀렉트 채우기 (2시~25시, 궁합분석과 동일한 방송일 기준)
-  const timeSel = document.getElementById('ws-time');
-  if (!timeSel.__filled) {
-    timeSel.innerHTML = Array.from({length:24}, (_,i)=>{
-      const h = i + 2, real = h % 24;
-      return `<option value="${String(real).padStart(2,'0')}:00" ${h===20?'selected':''}>${h}시</option>`;
-    }).join('');
-    timeSel.__filled = true;
-  }
-  document.querySelectorAll('#schedule-weekly .chip-btn[data-ws-type]').forEach(btn=>{
-    btn.onclick = () => {
-      document.querySelectorAll('#schedule-weekly .chip-btn[data-ws-type]').forEach(b=>b.classList.remove('active'));
-      btn.classList.add('active');
-      wsTypeFilter = btn.dataset.wsType;
-      document.getElementById('ws-fixed-name').style.display = wsTypeFilter==='고정' ? 'block' : 'none';
-    };
-  });
-  renderWeeklyTable();
+  const fillSlotSelect = (sel, defaultIdx) => {
+    sel.innerHTML = WS_SLOTS.map(s => `<option value="${s.idx}" ${s.idx===defaultIdx?'selected':''}>${s.label}</option>`).join('');
+  };
+  fillSlotSelect(document.getElementById('ws-start'), 36); // 20:00 근처 기본값
+  fillSlotSelect(document.getElementById('ws-end'), 38);   // 21:00 근처 기본값
+  renderWeeklyGrid();
 }
 
-function addWeeklySlot(){
+function addFixedProgram(){
   const day = document.getElementById('ws-day').value;
-  const time = document.getElementById('ws-time').value;
-  const fixedName = document.getElementById('ws-fixed-name').value.trim();
-  if (wsTypeFilter === '고정' && !fixedName) { alert('고정 편성 프로그램명을 입력해주세요.'); return; }
-  weeklySlots.push({
-    id: weeklySlotSeq++, day, time, type: wsTypeFilter,
-    fixedName: wsTypeFilter==='고정' ? fixedName : null,
-    candidates: null, chosen: null,
-  });
+  const startIdx = Number(document.getElementById('ws-start').value);
+  const endIdx = Number(document.getElementById('ws-end').value);
+  const name = document.getElementById('ws-fixed-name').value.trim();
+  if (!name) { alert('편성 내용을 입력해주세요.'); return; }
+  if (endIdx <= startIdx) { alert('종료 시간이 시작 시간보다 늦어야 해요.'); return; }
+  fixedPrograms.push({ id: fixedSeq++, day, startIdx, endIdx, name });
   document.getElementById('ws-fixed-name').value = '';
-  renderWeeklyTable();
+  renderWeeklyGrid();
 }
-function removeWeeklySlot(id){
-  weeklySlots = weeklySlots.filter(s=>s.id!==id);
-  renderWeeklyTable();
+function removeFixedProgram(id){
+  fixedPrograms = fixedPrograms.filter(p=>p.id!==id);
+  renderWeeklyGrid();
 }
-async function loadCandidatesForSlot(id){
-  const slot = weeklySlots.find(s=>s.id===id);
-  if (!slot) return;
-  slot.candidates = 'loading';
-  renderWeeklyTable();
+function findFixedAt(day, slotIdx){
+  return fixedPrograms.find(p => p.day===day && slotIdx >= p.startIdx && slotIdx < p.endIdx);
+}
 
+function renderWeeklyGrid(){
+  const grid = document.getElementById('ws-grid');
+  let html = '<div></div>' + WS_DAY_ORDER.map(d=>`<div style="text-align:center; font-weight:700; color:var(--text-secondary); padding-bottom:4px; position:sticky; top:0; background:#fff;">${d}</div>`).join('');
+
+  WS_SLOTS.forEach(slot=>{
+    const isHourMark = slot.label.endsWith(':00');
+    html += `<div style="color:var(--text-secondary); font-weight:${isHourMark?700:400}; display:flex; align-items:center; font-size:${isHourMark?10:9}px; opacity:${isHourMark?1:0.6};">${isHourMark ? slot.label.split(':')[0]+'시' : ''}</div>`;
+    WS_DAY_ORDER.forEach(day=>{
+      const fixed = findFixedAt(day, slot.idx);
+      const key = `${day}_${slot.idx}`;
+      const chosen = recommendedChoices[key];
+      const escaped = fixed ? fixed.name.replace(/"/g,'&quot;').replace(/\n/g,' ') : '';
+
+      if (fixed) {
+        const isStart = fixed.startIdx === slot.idx;
+        html += `<div style="height:18px; background:#1d1d1f; color:#fff; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; position:relative; overflow:hidden; padding:0 3px; border-radius:${isStart?'6px 6px 0 0':'0'};" title="${escaped}">
+          ${isStart ? `<span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${fixed.name.split('\n')[0]}</span><span onclick="removeFixedProgram(${fixed.id})" style="position:absolute; top:0; right:2px; cursor:pointer; opacity:0.6; font-size:9px;">✕</span>` : ''}
+        </div>`;
+      } else if (chosen) {
+        html += `<div onclick="loadCellRecommendations('${day}', ${slot.idx})" style="height:18px; border-radius:5px; background:var(--accent-light); color:var(--accent); display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; cursor:pointer; padding:0 3px; overflow:hidden;" title="${chosen.name} (추천 · ${chosen.score}점)">
+          <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${chosen.name}</span>
+        </div>`;
+      } else {
+        html += `<div onclick="loadCellRecommendations('${day}', ${slot.idx})" style="height:18px; border-radius:5px; background:#f5f5f7; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--text-tertiary); font-size:11px;" title="빈 슬롯 — 클릭해서 추천 받기">+</div>`;
+      }
+    });
+  });
+  grid.innerHTML = html;
+}
+
+async function loadCellRecommendations(day, slotIdx){
+  wsSelectedCell = { day, slotIdx };
+  const slot = WS_SLOTS[slotIdx];
+  const panel = document.getElementById('ws-recommend-panel');
+  const title = document.getElementById('ws-recommend-title');
+  const list = document.getElementById('ws-recommend-list');
+  panel.style.display = 'block';
+  title.textContent = `${day} ${slot.label} — 추천 후보 계산 중...`;
+  list.innerHTML = '';
+
+  // 30분 단위 슬롯이지만, 추천 계산 자체는 시간(hour) 단위 이력을 기준으로 함 (분 단위까지는 표본이 너무 쪼개져서)
   const all = await loadFullHistory();
   const byProgram = {};
   all.forEach(p=>{ (byProgram[p.program_id] = byProgram[p.program_id] || {name:p.name, items:[]}).items.push(p); });
   const results = Object.entries(byProgram).map(([pid, g])=>{
-    const r = computeMatchScore(g.items, slot.day, slot.time, all);
+    const r = computeMatchScore(g.items, day, slot.timeStr, all);
     return { program_id: Number(pid), name: g.name, ...r };
-  }).filter(r=>r.n >= 2) // 표본 너무 적은 건 후보에서 제외
+  }).filter(r=>r.n >= 2)
     .sort((a,b)=>b.score-a.score).slice(0, 5);
 
-  slot.candidates = results;
-  renderWeeklyTable();
-}
-function chooseCandidate(slotId, programId){
-  const slot = weeklySlots.find(s=>s.id===slotId);
-  if (!slot) return;
-  slot.chosen = slot.candidates.find(c=>c.program_id===programId);
-  renderWeeklyTable();
-}
-
-const WS_DAY_ORDER = ['월요일','화요일','수요일','목요일','금요일','토요일','일요일'];
-function renderWeeklyTable(){
-  const table = document.getElementById('ws-table');
-  if (weeklySlots.length === 0) {
-    table.innerHTML = `<tr><td style="padding:16px; color:var(--text-tertiary); text-align:center;">아직 추가된 슬롯이 없어요. 위에서 요일/시간을 골라 "+ 슬롯 추가"를 눌러주세요.</td></tr>`;
+  title.textContent = `${day} ${slot.label} — 추천 후보`;
+  if (results.length === 0) {
+    list.innerHTML = `<div style="color:var(--text-tertiary); font-size:13px;">추천 가능한 후보가 없어요 (표본 부족)</div>`;
     return;
   }
-  const sorted = [...weeklySlots].sort((a,b)=>{
-    const d = WS_DAY_ORDER.indexOf(a.day) - WS_DAY_ORDER.indexOf(b.day);
-    return d !== 0 ? d : a.time.localeCompare(b.time);
-  });
-  table.innerHTML = `
-    <tr><th style="text-align:left; padding:8px;">요일</th><th style="padding:8px;">시간</th><th style="padding:8px;">구분</th><th style="text-align:left; padding:8px;">편성 내용</th><th style="padding:8px;"></th></tr>
-    ${sorted.map(slot=>{
-      let contentHtml;
-      if (slot.type === '고정') {
-        contentHtml = `<b>${slot.fixedName}</b> <span style="font-size:10px; color:var(--text-tertiary);">(고정)</span>`;
-      } else if (!slot.candidates) {
-        contentHtml = `<button class="chip-btn" onclick="loadCandidatesForSlot(${slot.id})">추천 보기</button>`;
-      } else if (slot.candidates === 'loading') {
-        contentHtml = `계산 중...`;
-      } else if (slot.chosen) {
-        contentHtml = `<b style="color:var(--accent);">${slot.chosen.name}</b> <span style="font-size:11px; color:var(--text-tertiary);">(${slot.chosen.score}점 · ${BASIS_LABEL[slot.chosen.basis]})</span> <button class="chip-btn" style="font-size:10px; padding:4px 8px;" onclick="loadCandidatesForSlot(${slot.id})">다시 추천</button>`;
-      } else {
-        contentHtml = slot.candidates.length === 0
-          ? `추천 가능한 후보가 없어요 (표본 부족)`
-          : `<div style="display:flex; flex-wrap:wrap; gap:6px;">${slot.candidates.map(c=>
-              `<button class="chip-btn" style="font-size:11px;" onclick="chooseCandidate(${slot.id}, ${c.program_id})">${c.name} · ${c.score}점</button>`
-            ).join('')}</div>`;
-      }
-      return `<tr style="border-bottom:1px solid var(--border);">
-        <td style="padding:8px;">${slot.day}</td>
-        <td style="padding:8px; text-align:center;">${slot.time}</td>
-        <td style="padding:8px; text-align:center;">${slot.type==='고정' ? '<span class="badge live">고정</span>' : '<span class="badge rerun">유동</span>'}</td>
-        <td style="padding:8px;">${contentHtml}</td>
-        <td style="padding:8px; text-align:center;"><button onclick="removeWeeklySlot(${slot.id})" style="border:none; background:#ffebeb; color:#ff3b30; border-radius:6px; width:24px; height:24px; cursor:pointer;">✕</button></td>
-      </tr>`;
-    }).join('')}
+  list.innerHTML = `
+    <div style="display:flex; flex-wrap:wrap; gap:8px;">
+      ${results.map(c=>`
+        <button class="chip-btn" onclick='chooseRecommendation(${JSON.stringify({name:c.name, score:c.score, basis:c.basis}).replace(/'/g,"&apos;")})'>
+          ${c.name} · ${c.score}점 <span style="color:var(--text-tertiary); font-size:10px;">(${BASIS_LABEL[c.basis]})</span>
+        </button>
+      `).join('')}
+      <button class="chip-btn" style="background:#ffebeb; color:#ff3b30;" onclick="clearCellChoice()">이 칸 비우기</button>
+    </div>
   `;
+}
+function chooseRecommendation(choice){
+  if (!wsSelectedCell) return;
+  const key = `${wsSelectedCell.day}_${wsSelectedCell.slotIdx}`;
+  recommendedChoices[key] = choice;
+  document.getElementById('ws-recommend-panel').style.display = 'none';
+  renderWeeklyGrid();
+}
+function clearCellChoice(){
+  if (!wsSelectedCell) return;
+  const key = `${wsSelectedCell.day}_${wsSelectedCell.slotIdx}`;
+  delete recommendedChoices[key];
+  document.getElementById('ws-recommend-panel').style.display = 'none';
+  renderWeeklyGrid();
 }
 
 function renderCounterfactual(){
