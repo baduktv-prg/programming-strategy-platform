@@ -2479,16 +2479,50 @@ function renderWeeklyGrid(){
           ${isStart ? `<span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${fixed.name.split('\n')[0]}</span><span onclick="removeFixedProgram(${fixed.id})" style="position:absolute; top:0; right:2px; cursor:pointer; opacity:0.5; font-size:9px;">✕</span>` : ''}
         </div>`;
       } else if (chosen) {
-        html += `<div onclick="loadCellRecommendations('${day}', ${slot.idx})" ondragover="event.preventDefault()" ondrop="onCellDrop(event,'${day}', ${slot.idx})" style="height:18px; border-radius:5px; background:var(--accent-light); color:var(--accent); display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; cursor:pointer; padding:0 3px; overflow:hidden;" title="${chosen.name} (추천 · ${chosen.score}점)">
+        const inPreview = isInDragPreview(day, slot.idx);
+        html += `<div onmousedown="onCellMouseDown('${day}', ${slot.idx})" onmouseover="onCellMouseOver('${day}', ${slot.idx})" ondragover="event.preventDefault()" ondrop="onCellDrop(event,'${day}', ${slot.idx})" style="height:18px; border-radius:5px; background:${inPreview?'#b8ddfc':'var(--accent-light)'}; color:var(--accent); display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; cursor:pointer; padding:0 3px; overflow:hidden;" title="${chosen.name} (추천 · ${chosen.score}점) — 드래그해서 범위 다시 선택 가능">
           <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${chosen.name}</span>
         </div>`;
       } else {
-        html += `<div onclick="loadCellRecommendations('${day}', ${slot.idx})" ondragover="event.preventDefault()" ondrop="onCellDrop(event,'${day}', ${slot.idx})" style="height:18px; border-radius:5px; background:#f5f5f7; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--text-tertiary); font-size:11px;" title="빈 슬롯 — 클릭해서 추천 받기">+</div>`;
+        const inPreview = isInDragPreview(day, slot.idx);
+        html += `<div onmousedown="onCellMouseDown('${day}', ${slot.idx})" onmouseover="onCellMouseOver('${day}', ${slot.idx})" ondragover="event.preventDefault()" ondrop="onCellDrop(event,'${day}', ${slot.idx})" style="height:18px; border-radius:5px; background:${inPreview?'#b8ddfc':'#f5f5f7'}; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--text-tertiary); font-size:11px;" title="빈 슬롯 — 클릭 또는 드래그해서 여러 칸 선택 후 추천 받기">${inPreview?'':'+'}</div>`;
       }
     });
   });
   grid.innerHTML = html;
 }
+
+function isInDragPreview(day, slotIdx){
+  if (!isDragSelecting || !dragSelectStart || dragSelectStart.day !== day) return false;
+  const lo = Math.min(dragSelectStart.slotIdx, dragSelectEnd);
+  const hi = Math.max(dragSelectStart.slotIdx, dragSelectEnd);
+  return slotIdx >= lo && slotIdx <= hi;
+}
+
+let isDragSelecting = false;
+let dragSelectStart = null;
+let dragSelectEnd = null;
+function onCellMouseDown(day, slotIdx){
+  if (draggingFixedId != null) return; // 고정편성 옮기는 중이면 무시
+  isDragSelecting = true;
+  dragSelectStart = { day, slotIdx };
+  dragSelectEnd = slotIdx;
+  renderWeeklyGrid();
+}
+function onCellMouseOver(day, slotIdx){
+  if (!isDragSelecting || !dragSelectStart || dragSelectStart.day !== day) return;
+  dragSelectEnd = slotIdx;
+  renderWeeklyGrid();
+}
+document.addEventListener('mouseup', () => {
+  if (!isDragSelecting || !dragSelectStart) { isDragSelecting = false; return; }
+  isDragSelecting = false;
+  const day = dragSelectStart.day;
+  const lo = Math.min(dragSelectStart.slotIdx, dragSelectEnd);
+  const hi = Math.max(dragSelectStart.slotIdx, dragSelectEnd);
+  dragSelectStart = null; dragSelectEnd = null;
+  loadCellRecommendations(day, lo, hi);
+});
 
 let draggingFixedId = null;
 function onFixedDragStart(id){
@@ -2514,27 +2548,38 @@ function onCellDrop(e, day, slotIdx){
   renderWeeklyGrid();
 }
 
-async function loadCellRecommendations(day, slotIdx){
-  wsSelectedCell = { day, slotIdx };
-  const slot = WS_SLOTS[slotIdx];
+async function loadCellRecommendations(day, startIdx, endIdx){
+  if (endIdx === undefined) endIdx = startIdx;
+  wsSelectedCell = { day, startIdx, endIdx };
+  const slot = WS_SLOTS[startIdx];
+  const targetDurationMin = (endIdx - startIdx + 1) * 30;
+  const rangeLabel = startIdx === endIdx ? slot.label : `${slot.label}~${WS_SLOTS[endIdx].label}(+30분)`;
   const panel = document.getElementById('ws-recommend-panel');
   const title = document.getElementById('ws-recommend-title');
   const list = document.getElementById('ws-recommend-list');
   panel.style.display = 'block';
-  title.textContent = `${day} ${slot.label} — 추천 후보 계산 중...`;
+  title.textContent = `${day} ${rangeLabel} (${targetDurationMin}분) — 추천 후보 계산 중...`;
   list.innerHTML = '';
 
-  // 30분 단위 슬롯이지만, 추천 계산 자체는 시간(hour) 단위 이력을 기준으로 함 (분 단위까지는 표본이 너무 쪼개져서)
+  // 30분 단위 슬롯이지만, 추천 점수 계산 자체는 시간(hour) 단위 이력을 기준으로 함 (분 단위까지는 표본이 너무 쪼개져서)
   const all = await loadFullHistory();
   const byProgram = {};
   all.forEach(p=>{ (byProgram[p.program_id] = byProgram[p.program_id] || {name:p.name, items:[]}).items.push(p); });
-  const results = Object.entries(byProgram).map(([pid, g])=>{
+  let results = Object.entries(byProgram).map(([pid, g])=>{
     const r = computeMatchScore(g.items, day, slot.timeStr, all);
-    return { program_id: Number(pid), name: g.name, ...r };
-  }).filter(r=>r.n >= 2)
-    .sort((a,b)=>b.score-a.score).slice(0, 5);
+    const avgDurationMin = g.items.reduce((a,x)=>a + (x._absEnd - x._absStart), 0) / g.items.length;
+    return { program_id: Number(pid), name: g.name, avgDurationMin, ...r };
+  }).filter(r=>r.n >= 2);
 
-  title.textContent = `${day} ${slot.label} — 추천 후보`;
+  // 2칸 이상(30분 초과) 선택했으면, 방송 길이(RT)가 비슷한 프로그램 위주로 좁힘
+  if (targetDurationMin > 30) {
+    const tolerance = Math.max(30, targetDurationMin * 0.3);
+    const filtered = results.filter(r => Math.abs(r.avgDurationMin - targetDurationMin) <= tolerance);
+    if (filtered.length > 0) results = filtered;
+  }
+  results = results.sort((a,b)=>b.score-a.score).slice(0, 5);
+
+  title.textContent = `${day} ${rangeLabel} (${targetDurationMin}분) — 추천 후보`;
   if (results.length === 0) {
     list.innerHTML = `<div style="color:var(--text-tertiary); font-size:13px;">추천 가능한 후보가 없어요 (표본 부족)</div>`;
     return;
@@ -2543,7 +2588,7 @@ async function loadCellRecommendations(day, slotIdx){
     <div style="display:flex; flex-wrap:wrap; gap:8px;">
       ${results.map(c=>`
         <button class="chip-btn" onclick='chooseRecommendation(${JSON.stringify({name:c.name, score:c.score, basis:c.basis}).replace(/'/g,"&apos;")})'>
-          ${c.name} · ${c.score}점 <span style="color:var(--text-tertiary); font-size:10px;">(${BASIS_LABEL[c.basis]})</span>
+          ${c.name} · ${c.score}점 <span style="color:var(--text-tertiary); font-size:10px;">(${BASIS_LABEL[c.basis]} · 평균 ${Math.round(c.avgDurationMin)}분)</span>
         </button>
       `).join('')}
       <button class="chip-btn" style="background:#ffebeb; color:#ff3b30;" onclick="clearCellChoice()">이 칸 비우기</button>
@@ -2552,15 +2597,17 @@ async function loadCellRecommendations(day, slotIdx){
 }
 function chooseRecommendation(choice){
   if (!wsSelectedCell) return;
-  const key = `${wsSelectedCell.day}_${wsSelectedCell.slotIdx}`;
-  recommendedChoices[key] = choice;
+  for (let i = wsSelectedCell.startIdx; i <= wsSelectedCell.endIdx; i++) {
+    recommendedChoices[`${wsSelectedCell.day}_${i}`] = choice;
+  }
   document.getElementById('ws-recommend-panel').style.display = 'none';
   renderWeeklyGrid();
 }
 function clearCellChoice(){
   if (!wsSelectedCell) return;
-  const key = `${wsSelectedCell.day}_${wsSelectedCell.slotIdx}`;
-  delete recommendedChoices[key];
+  for (let i = wsSelectedCell.startIdx; i <= wsSelectedCell.endIdx; i++) {
+    delete recommendedChoices[`${wsSelectedCell.day}_${i}`];
+  }
   document.getElementById('ws-recommend-panel').style.display = 'none';
   renderWeeklyGrid();
 }
