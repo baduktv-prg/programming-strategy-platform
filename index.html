@@ -2475,19 +2475,43 @@ function renderWeeklyGrid(){
       if (fixed) {
         const isStart = fixed.startIdx === slot.idx;
         const bg = fixed.type==='재방' ? '#e5e5ea' : fixed.type==='본방' ? '#FFFF00' : '#C6EFCE'; // 생방=연두, 본방=노랑 (원본 편성표 색상코드), 재방=회색
-        html += `<div style="height:18px; background:${bg}; color:#1d1d1f; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; position:relative; overflow:hidden; padding:0 3px; border-radius:${isStart?'6px 6px 0 0':'0'};" title="[${fixed.type}] ${escaped}">
+        html += `<div draggable="true" ondragstart="onFixedDragStart(${fixed.id})" ondragover="event.preventDefault()" ondrop="onCellDrop(event,'${day}', ${slot.idx})" style="height:18px; background:${bg}; color:#1d1d1f; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; position:relative; overflow:hidden; padding:0 3px; border-radius:${isStart?'6px 6px 0 0':'0'}; cursor:grab;" title="[${fixed.type}] ${escaped} (드래그해서 옮기기 가능)">
           ${isStart ? `<span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${fixed.name.split('\n')[0]}</span><span onclick="removeFixedProgram(${fixed.id})" style="position:absolute; top:0; right:2px; cursor:pointer; opacity:0.5; font-size:9px;">✕</span>` : ''}
         </div>`;
       } else if (chosen) {
-        html += `<div onclick="loadCellRecommendations('${day}', ${slot.idx})" style="height:18px; border-radius:5px; background:var(--accent-light); color:var(--accent); display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; cursor:pointer; padding:0 3px; overflow:hidden;" title="${chosen.name} (추천 · ${chosen.score}점)">
+        html += `<div onclick="loadCellRecommendations('${day}', ${slot.idx})" ondragover="event.preventDefault()" ondrop="onCellDrop(event,'${day}', ${slot.idx})" style="height:18px; border-radius:5px; background:var(--accent-light); color:var(--accent); display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; cursor:pointer; padding:0 3px; overflow:hidden;" title="${chosen.name} (추천 · ${chosen.score}점)">
           <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${chosen.name}</span>
         </div>`;
       } else {
-        html += `<div onclick="loadCellRecommendations('${day}', ${slot.idx})" style="height:18px; border-radius:5px; background:#f5f5f7; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--text-tertiary); font-size:11px;" title="빈 슬롯 — 클릭해서 추천 받기">+</div>`;
+        html += `<div onclick="loadCellRecommendations('${day}', ${slot.idx})" ondragover="event.preventDefault()" ondrop="onCellDrop(event,'${day}', ${slot.idx})" style="height:18px; border-radius:5px; background:#f5f5f7; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--text-tertiary); font-size:11px;" title="빈 슬롯 — 클릭해서 추천 받기">+</div>`;
       }
     });
   });
   grid.innerHTML = html;
+}
+
+let draggingFixedId = null;
+function onFixedDragStart(id){
+  draggingFixedId = id;
+}
+function onCellDrop(e, day, slotIdx){
+  e.preventDefault();
+  if (draggingFixedId == null) return;
+  const fixed = fixedPrograms.find(p=>p.id===draggingFixedId);
+  draggingFixedId = null;
+  if (!fixed) return;
+
+  const duration = fixed.endIdx - fixed.startIdx;
+  const newStart = slotIdx;
+  const newEnd = slotIdx + duration;
+  if (newEnd > WS_SLOTS.length) { alert('그 위치에 놓으면 하루 범위(25:30)를 벗어나요.'); return; }
+  const overlap = fixedPrograms.some(p => p.id !== fixed.id && p.day === day && !(newEnd <= p.startIdx || newStart >= p.endIdx));
+  if (overlap) { alert('그 자리엔 이미 다른 고정 편성이 있어요.'); return; }
+
+  fixed.day = day;
+  fixed.startIdx = newStart;
+  fixed.endIdx = newEnd;
+  renderWeeklyGrid();
 }
 
 async function loadCellRecommendations(day, slotIdx){
