@@ -2522,7 +2522,7 @@ function renderWeeklyGrid(){
         const chosenColor = chosen.type ? '#1d1d1f' : 'var(--accent)';
         const chosenTitle = `${chosen.name}${chosen.repPlayers ? ' · '+chosen.repPlayers : ''} (추천 · ${chosen.score}점)${chosen.type?' · '+chosen.type:''}`;
         html += `<div onmousedown="onCellMouseDown(event,'${day}', ${slot.idx})" onmouseover="onCellMouseOver('${day}', ${slot.idx})" ondragover="event.preventDefault()" ondrop="onCellDrop(event,'${day}', ${slot.idx})" style="height:18px; border-radius:${isStart?'6px 6px 0 0':'0'}; background:${inPreview?'#b8ddfc':chosenBg}; color:${chosenColor}; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; cursor:pointer; position:relative; padding:0 3px; overflow:hidden;" title="${chosenTitle} — 드래그해서 범위 다시 선택 가능">
-          ${isStart ? `<span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${chosen.name}</span><span onclick="event.stopPropagation(); removeRecommendedBlock(${chosen.id})" style="position:absolute; top:0; right:2px; cursor:pointer; opacity:0.5; font-size:9px;">✕</span>` : ''}
+          ${isStart ? `<span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${chosen.name}${chosen.repPlayers ? ' · '+chosen.repPlayers : ''}</span><span onclick="event.stopPropagation(); removeRecommendedBlock(${chosen.id})" style="position:absolute; top:0; right:2px; cursor:pointer; opacity:0.5; font-size:9px;">✕</span>` : ''}
         </div>`;
       } else {
         const inPreview = isInDragPreview(day, slot.idx);
