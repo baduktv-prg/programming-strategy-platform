@@ -2194,7 +2194,7 @@ async function loadFullHistory(){
   if (FULL_HISTORY_CACHE) return FULL_HISTORY_CACHE;
   const { data: rows, error } = await sb.from('fact_schedule')
     .select(`
-      schedule_id, program_id, date_key, start_time, end_time, is_rerun, broadcast_type, players,
+      schedule_id, program_id, date_key, start_time, end_time, is_rerun, broadcast_type, players, round_stage,
       dim_program!fact_schedule_program_id_fkey ( program_id, program_name, tournament_type ),
       fact_rating ( rating_pct )
     `)
@@ -2212,6 +2212,7 @@ async function loadFullHistory(){
     return {
       program_id: r.program_id, name: prog.program_name, tournament_type: prog.tournament_type || null,
       players: (r.players && r.players !== '-') ? r.players : null,
+      round_stage: r.round_stage || null,
       date: r.date_key, start, end, rating, duration: 1,
       dow: new Date(r.date_key + 'T00:00:00').getDay(), hour: Number(start.split(':')[0]),
       type: r.broadcast_type==='재' ? '재방' : r.broadcast_type==='본' ? '본방' : r.broadcast_type==='생' ? '생방' : (r.is_rerun ? '재방' : '생방'),
@@ -2673,8 +2674,9 @@ async function loadCellRecommendations(day, startIdx, endIdx){
   const byEpisode = {};
   all.forEach(p=>{
     const playersKey = (p.players && p.players !== '-') ? p.players : '(대국자 정보없음)';
-    const key = p.program_id + '::' + playersKey;
-    (byEpisode[key] = byEpisode[key] || { program_id: p.program_id, name: p.name, players: playersKey, items: [] }).items.push(p);
+    const roundKey = p.round_stage || '';
+    const key = p.program_id + '::' + playersKey + '::' + roundKey; // 대국자가 같아도 라운드(1국/2국/최종국 등)가 다르면 별개 회차
+    (byEpisode[key] = byEpisode[key] || { program_id: p.program_id, name: p.name, players: playersKey, round: roundKey, items: [] }).items.push(p);
   });
 
   // 지금 이 주간 편성표 안에서 이미 다른 슬롯에 쓰인 program_id (완전히 제외하진 않고, 순위만 맨 아래로 내림)
@@ -2697,13 +2699,13 @@ async function loadCellRecommendations(day, startIdx, endIdx){
       const r = computeMatchScore(typeItems, day, slot.timeStr, all);
       const score = scoreVsEpisodeAvg(r.avgRating, typeItems);
       const avgDurationMin = typeItems.reduce((a,x)=>a+(x._absEnd-x._absStart),0)/typeItems.length;
-      const item = { program_id: g.program_id, name: g.name, repPlayers: g.players, avgDurationMin, ...r, score };
+      const item = { program_id: g.program_id, name: g.name, repPlayers: g.players + (g.round ? ' · '+g.round : ''), avgDurationMin, ...r, score };
       if (r.basis === 'actual') withType.push(item); else withoutType.push(item);
     } else if (g.items.length >= 2) {
       const r = computeMatchScore(g.items, day, slot.timeStr, all);
       const score = scoreVsEpisodeAvg(r.avgRating, g.items);
       const avgDurationMin = g.items.reduce((a,x)=>a+(x._absEnd-x._absStart),0)/g.items.length;
-      withoutType.push({ program_id: g.program_id, name: g.name, repPlayers: g.players, avgDurationMin, ...r, score });
+      withoutType.push({ program_id: g.program_id, name: g.name, repPlayers: g.players + (g.round ? ' · '+g.round : ''), avgDurationMin, ...r, score });
     }
   });
 
