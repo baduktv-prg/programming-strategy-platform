@@ -391,6 +391,22 @@
   body.print-mode #report-print-container { display:block !important; }
   .report-print-item { page-break-inside: avoid; margin-bottom: 28px; }
   .report-cover { page-break-after: always; }
+  /* 주간편성표/자동편성 격자 칸은 화면용으로 높이 18px에 말줄임 처리돼있는데, 인쇄할 땐 잘리지 않게 강제로 풀어줌 */
+  #report-print-container div[style*="height:18px"] {
+    white-space: normal !important;
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 18px !important;
+    text-overflow: clip !important;
+    word-break: break-word !important;
+    align-items: flex-start !important;
+    padding: 3px !important;
+  }
+  #report-print-container div[style*="height:18px"] span {
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+  }
 }
 .report-print-item .bento-card { box-shadow:none; border:1px solid #eee; }
 </style>
