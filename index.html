@@ -823,6 +823,7 @@
             </div>
             <button onclick="document.getElementById('ws-recommend-panel').style.display='none';" style="border:none; background:#f0f0f0; border-radius:8px; width:26px; height:26px; cursor:pointer;">✕</button>
           </div>
+          <div id="ws-duration-rule-label" style="padding:8px 18px 0; font-size:10px; color:var(--text-tertiary);"></div>
           <div id="ws-recommend-list" style="padding:16px 18px; overflow-y:auto;"></div>
           <div style="display:flex; justify-content:flex-end; padding:10px 18px; border-top:1px solid var(--border);">
             <button onclick="clearCellChoice()" style="border:none; background:none; color:#ff3b30; font-size:12px; font-weight:600; cursor:pointer; padding:4px 8px;">이 칸 비우기</button>
@@ -2575,6 +2576,33 @@ function onCellDrop(e, day, slotIdx){
 const WS_REC_TYPE = '재방'; // 고정 슬롯 외엔 전부 재방으로 채운다는 전제로 고정 (나중에 본방 시간까지 다루게 되면 다시 선택 가능하게 확장)
 const WS_PANEL_WIDTH = 420;
 
+// 표준 편성 RT(30/60/90/120/150/180/210/240/300)별 실제로 편성 가능한 프로그램 길이 범위
+// (딱 그 시간대로 맞는 프로그램이 거의 없어서, RT마다 실무에서 통용되는 허용범위가 따로 있음)
+const WS_DURATION_RULES = [
+  { slot: 30,  min: 0,   minIncl: true,  max: 30,  maxIncl: true  },
+  { slot: 60,  min: 30,  minIncl: false, max: 60,  maxIncl: false },
+  { slot: 90,  min: 60,  minIncl: false, max: 90,  maxIncl: false },
+  { slot: 120, min: 90,  minIncl: false, max: 110, maxIncl: true  },
+  { slot: 150, min: 120, minIncl: false, max: 130, maxIncl: true  },
+  { slot: 180, min: 150, minIncl: false, max: 160, maxIncl: true  },
+  { slot: 210, min: 180, minIncl: false, max: 190, maxIncl: true  },
+  { slot: 240, min: 200, minIncl: false, max: 220, maxIncl: true  },
+  { slot: 300, min: 240, minIncl: false, max: 270, maxIncl: true  },
+];
+function getDurationRuleFor(targetMin){
+  let best = WS_DURATION_RULES[0], bestDiff = Math.abs(targetMin - best.slot);
+  WS_DURATION_RULES.forEach(rule=>{
+    const diff = Math.abs(targetMin - rule.slot);
+    if (diff < bestDiff) { best = rule; bestDiff = diff; }
+  });
+  return best;
+}
+function durationFits(avgDurationMin, rule){
+  const minOk = rule.minIncl ? avgDurationMin >= rule.min : avgDurationMin > rule.min;
+  const maxOk = rule.maxIncl ? avgDurationMin <= rule.max : avgDurationMin < rule.max;
+  return minOk && maxOk;
+}
+
 function hideRecommendPanel(){
   const panel = document.getElementById('ws-recommend-panel');
   if (panel) panel.style.display = 'none';
@@ -2648,7 +2676,8 @@ async function loadCellRecommendations(day, startIdx, endIdx){
   });
 
   // 방송 길이 필터 — 선택한 슬롯 길이를 초과하는 프로그램은 절대 추천하지 않음 (짧은 건 괜찮음)
-  const applyDurationFilter = (arr) => arr.filter(r => r.avgDurationMin <= targetDurationMin);
+  const durationRule = getDurationRuleFor(targetDurationMin);
+  const applyDurationFilter = (arr) => arr.filter(r => durationFits(r.avgDurationMin, durationRule));
   // 이미 다른 슬롯에 쓰인 program_id는 제외하지 않고 맨 뒤로 (다른 후보가 없을 때 대비)
   const sortWithUsedLast = (arr) => arr.sort((a,b) => {
     const usedDiff = (usedProgramIds.has(a.program_id)?1:0) - (usedProgramIds.has(b.program_id)?1:0);
@@ -2697,6 +2726,10 @@ async function loadCellRecommendations(day, startIdx, endIdx){
     .sort((a,b)=>b.avgRating-a.avgRating);
 
   title.textContent = `${day} ${rangeLabel} (${targetDurationMin}분)`;
+  const durationRuleLabel = document.getElementById('ws-duration-rule-label');
+  if (durationRuleLabel) {
+    durationRuleLabel.textContent = `적용 기준: RT ${durationRule.slot}분대 → 방영길이 ${durationRule.min}분${durationRule.minIncl?'이상':'초과'} ~ ${durationRule.max}분${durationRule.maxIncl?'이하':'미만'}인 프로그램만 추천`;
+  }
 
   // 카드형 렌더링 — 줄바꿈이 안전하게 되도록 chip-btn 대신 블록 레이아웃 사용 (텍스트 넘침 버그 수정)
   const renderCandidateCard = (c) => {
