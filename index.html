@@ -3415,10 +3415,81 @@ window.__pinnedItems = [];
 
 // 지금 활성화된 서브화면(bento-grid)을 캡처해서 핀 목록에 추가
 // 캔버스(Chart.js)는 이미지로 굽고, 나머지(비교분석 막대, 텍스트 등)는 HTML 그대로 보존
+// 주간편성표/자동편성 결과를 인쇄용으로 rowspan 있는 진짜 HTML 표(<table>)로 만듦
+// (화면용 CSS grid는 칸 높이가 고정이라 인쇄 시 긴 글자가 잘리는 문제가 있어서, 인쇄만은 별도로 생성)
+function buildPrintFriendlySchedule(fixedList, blockList){
+  const cellAt = (day, slotIdx) => {
+    const fixed = fixedList.find(p => p.day===day && slotIdx >= p.startIdx && slotIdx < p.endIdx);
+    if (fixed) return { kind:'fixed', data: fixed };
+    const block = blockList.find(b => b.day===day && slotIdx >= b.startIdx && slotIdx < b.endIdx);
+    if (block) return { kind:'block', data: block };
+    return null;
+  };
+  let html = '<table style="width:100%; border-collapse:collapse; font-size:11px; table-layout:fixed;">';
+  html += '<tr><th style="border:1px solid #ddd; padding:4px; width:44px;"></th>' +
+    WS_DAY_ORDER.map(d=>`<th style="border:1px solid #ddd; padding:6px; background:#f5f5f7;">${d}</th>`).join('') + '</tr>';
+
+  WS_SLOTS.forEach(slot=>{
+    let row = `<tr><td style="border:1px solid #ddd; padding:4px; font-weight:700; font-size:10px; white-space:nowrap;">${slot.label}</td>`;
+    WS_DAY_ORDER.forEach(day=>{
+      const cell = cellAt(day, slot.idx);
+      if (!cell) { row += `<td style="border:1px solid #ddd; background:#fafafa;"></td>`; return; }
+      const isStart = cell.data.startIdx === slot.idx;
+      if (!isStart) return; // rowspan으로 이미 병합된 칸이라 별도 <td> 생략 (표준 표 문법)
+      const span = cell.data.endIdx - cell.data.startIdx;
+      let bg, label;
+      if (cell.kind === 'fixed') {
+        bg = cell.data.type==='재방' ? '#e5e5ea' : cell.data.type==='본방' ? '#FFFF00' : '#C6EFCE';
+        label = cell.data.name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\n/g, '<br>');
+      } else {
+        bg = '#b8ddfc';
+        const nameEsc = cell.data.name.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+        label = nameEsc + (cell.data.repPlayers ? '<br><span style="font-weight:400; font-size:9px;">'+cell.data.repPlayers+'</span>' : '');
+      }
+      row += `<td rowspan="${span}" style="border:1px solid #ddd; background:${bg}; padding:6px; vertical-align:top; font-size:10px; line-height:1.45; word-break:break-word;">${label}</td>`;
+    });
+    row += '</tr>';
+    html += row;
+  });
+  html += '</table>';
+  return html;
+}
+
 function captureCurrentPanel(){
   const activeScreen = document.querySelector('.screen.active');
   const activeSub = activeScreen ? Array.from(activeScreen.querySelectorAll('.subscreen')).find(el => getComputedStyle(el).display !== 'none') : null;
   if (!activeScreen || !activeSub) { alert('캡처할 화면을 못 찾았어요. 화면을 한 번 클릭해서 열어주신 다음 다시 시도해주세요.'); return; }
+
+  // 주간편성표/자동편성 화면은 CSS grid 대신 인쇄용 table을 따로 만들어서 캡처 (칸 잘림 방지)
+  if (activeSub.id === 'schedule-weekly') {
+    const html = buildPrintFriendlySchedule(fixedPrograms, recommendedBlocks);
+    const subtabActiveForTitle = activeScreen.querySelector('.subtab.active[data-parent]');
+    const topbarTitleForCapture = document.getElementById('topbar-title')?.textContent || '';
+    window.__pinnedItems.push({
+      id: Date.now() + '_' + Math.floor(Math.random()*1000),
+      title: (topbarTitleForCapture ? topbarTitleForCapture + ' — ' : '') + (subtabActiveForTitle ? subtabActiveForTitle.textContent.trim() : '주간 편성안'),
+      html, comment: '',
+    });
+    updatePinBadge();
+    const btn = document.getElementById('pin-add-btn');
+    const orig = btn.style.background; btn.style.background = '#34c759'; setTimeout(()=>{ btn.style.background = orig; }, 350);
+    return;
+  }
+  if (activeSub.id === 'schedule-autofill') {
+    const html = buildPrintFriendlySchedule(autoFillFixed, autoFillResults);
+    const subtabActiveForTitle = activeScreen.querySelector('.subtab.active[data-parent]');
+    const topbarTitleForCapture = document.getElementById('topbar-title')?.textContent || '';
+    window.__pinnedItems.push({
+      id: Date.now() + '_' + Math.floor(Math.random()*1000),
+      title: (topbarTitleForCapture ? topbarTitleForCapture + ' — ' : '') + (subtabActiveForTitle ? subtabActiveForTitle.textContent.trim() : '자동 편성 테스트'),
+      html, comment: '',
+    });
+    updatePinBadge();
+    const btn = document.getElementById('pin-add-btn');
+    const orig = btn.style.background; btn.style.background = '#34c759'; setTimeout(()=>{ btn.style.background = orig; }, 350);
+    return;
+  }
+
   const grid = activeSub.querySelector('.bento-grid') || activeSub;
   if (!grid || !grid.innerHTML.trim()) { alert('캡처할 내용이 비어있어요.'); return; }
 
