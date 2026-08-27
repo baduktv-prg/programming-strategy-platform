@@ -815,12 +815,18 @@
           </div>
         </div>
 
-        <div id="ws-recommend-panel" style="display:none; position:fixed; bottom:90px; right:24px; width:420px; max-height:60vh; overflow-y:auto; background:#fff; border-radius:16px; box-shadow:0 12px 40px rgba(0,0,0,0.18); padding:18px; z-index:140;">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-            <div class="card-label" id="ws-recommend-title" style="margin-bottom:0;">추천 후보</div>
+        <div id="ws-recommend-panel" style="display:none; position:fixed; bottom:90px; right:24px; width:420px; max-height:60vh; display:flex; flex-direction:column; background:#fff; border-radius:16px; box-shadow:0 12px 40px rgba(0,0,0,0.18); z-index:140;">
+          <div id="ws-recommend-header" style="display:flex; justify-content:space-between; align-items:center; padding:14px 18px; border-bottom:1px solid var(--border); cursor:move; user-select:none;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="color:var(--text-tertiary); font-size:14px;">⠿</span>
+              <div class="card-label" id="ws-recommend-title" style="margin-bottom:0;">추천 후보</div>
+            </div>
             <button onclick="document.getElementById('ws-recommend-panel').style.display='none';" style="border:none; background:#f0f0f0; border-radius:8px; width:26px; height:26px; cursor:pointer;">✕</button>
           </div>
-          <div id="ws-recommend-list"></div>
+          <div id="ws-recommend-list" style="padding:16px 18px; overflow-y:auto;"></div>
+          <div style="display:flex; justify-content:flex-end; padding:10px 18px; border-top:1px solid var(--border);">
+            <button onclick="clearCellChoice()" style="border:none; background:none; color:#ff3b30; font-size:12px; font-weight:600; cursor:pointer; padding:4px 8px;">이 칸 비우기</button>
+          </div>
         </div>
       </div>
 
@@ -2366,6 +2372,7 @@ let fixedSeq = 0;
 let wsSelectedCell = null;
 
 function renderWeekly(){
+  initRecommendPanelDrag();
   const fillSlotSelect = (sel, defaultIdx) => {
     sel.innerHTML = WS_SLOTS.map(s => `<option value="${s.idx}" ${s.idx===defaultIdx?'selected':''}>${s.label}</option>`).join('');
   };
@@ -2553,6 +2560,26 @@ function onCellDrop(e, day, slotIdx){
 
 const WS_REC_TYPE = '재방'; // 고정 슬롯 외엔 전부 재방으로 채운다는 전제로 고정 (나중에 본방 시간까지 다루게 되면 다시 선택 가능하게 확장)
 
+let panelDragOffset = null;
+function initRecommendPanelDrag(){
+  const panel = document.getElementById('ws-recommend-panel');
+  const header = document.getElementById('ws-recommend-header');
+  header.onmousedown = (e) => {
+    const rect = panel.getBoundingClientRect();
+    panelDragOffset = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    panel.style.left = rect.left + 'px';
+    panel.style.top = rect.top + 'px';
+    panel.style.right = 'auto';
+    panel.style.bottom = 'auto';
+  };
+  document.addEventListener('mousemove', (e) => {
+    if (!panelDragOffset) return;
+    panel.style.left = (e.clientX - panelDragOffset.x) + 'px';
+    panel.style.top = (e.clientY - panelDragOffset.y) + 'px';
+  });
+  document.addEventListener('mouseup', () => { panelDragOffset = null; });
+}
+
 async function loadCellRecommendations(day, startIdx, endIdx){
   if (endIdx === undefined) endIdx = startIdx;
   wsSelectedCell = { day, startIdx, endIdx };
@@ -2643,39 +2670,44 @@ async function loadCellRecommendations(day, startIdx, endIdx){
       ${c.name}${c.repPlayers ? ` · <span style="color:var(--text-tertiary);">${c.repPlayers}</span>` : ''} · ${c.score}점 <span style="color:var(--text-tertiary); font-size:10px;">(${BASIS_LABEL[c.basis]} · 평균 ${Math.round(c.avgDurationMin)}분)</span>
     </button>`;
 
-  let html = '';
-  html += `<div style="font-size:12px; font-weight:700; margin-bottom:6px;">✅ 재방 실측 데이터 기반 후보</div>`;
-  html += topWithType.length
-    ? `<div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px;">${topWithType.map(renderChip).join('')}</div>`
-    : `<div style="color:var(--text-tertiary); font-size:12px; margin-bottom:16px;">실측 데이터 기반 후보가 없습니다.</div>`;
+  const sectionDivider = `<div style="border-top:1px solid var(--border); margin:14px 0;"></div>`;
 
-  html += `<div style="font-size:12px; font-weight:700; margin-bottom:8px; color:var(--text-tertiary);">🔍 추정 기반 후보 (재방 실측 데이터 없음)</div>`;
+  let html = '';
+  html += `<div style="font-size:13px; font-weight:700; margin-bottom:8px;">실측 데이터 후보</div>`;
+  html += topWithType.length
+    ? `<div style="display:flex; flex-wrap:wrap; gap:8px;">${topWithType.map(renderChip).join('')}</div>`
+    : `<div style="color:var(--text-tertiary); font-size:12px;">실측 데이터 기반 후보가 없습니다.</div>`;
+
+  html += sectionDivider;
+  html += `<div style="font-size:13px; font-weight:700; margin-bottom:2px;">추정 후보</div>`;
+  html += `<div style="font-size:11px; color:var(--text-tertiary); margin-bottom:8px;">재방 실측 데이터가 없어, 유사 조건으로 추정한 결과입니다.</div>`;
   if (basisGroups.length === 0) {
-    html += `<div style="color:var(--text-tertiary); font-size:12px; margin-bottom:16px;">추정 기반 후보도 없습니다.</div>`;
+    html += `<div style="color:var(--text-tertiary); font-size:12px;">추정 후보가 없습니다.</div>`;
   } else {
     basisGroups.forEach((g, i) => {
-      html += `<div style="font-size:11px; font-weight:700; color:var(--text-tertiary); margin-bottom:4px;">${i+1}순위 — ${BASIS_LABEL[g.basis]}</div>`;
+      html += `<div style="font-size:11px; font-weight:700; color:var(--text-tertiary); margin-bottom:4px;">${i+1}순위 · ${BASIS_LABEL[g.basis]}</div>`;
       html += `<div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; opacity:0.85;">${g.items.map(renderChip).join('')}</div>`;
     });
   }
 
   if (playerStats.length > 0) {
-    html += `<div style="font-size:12px; font-weight:700; margin-bottom:6px;">🎯 해당 요일·시간대 강세 대국자</div>`;
-    html += `<div style="font-size:11px; color:var(--text-tertiary); margin-bottom:6px;">참고 지표입니다. 해당 대국자가 출연한 다른 프로그램·대진을 편성에 고려해보세요.</div>`;
-    html += `<div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px;">
+    html += sectionDivider;
+    html += `<div style="font-size:13px; font-weight:700; margin-bottom:2px;">강세 대국자</div>`;
+    html += `<div style="font-size:11px; color:var(--text-tertiary); margin-bottom:8px;">해당 대국자가 출연한 다른 프로그램·대진도 편성 후보로 고려해보세요.</div>`;
+    html += `<div style="display:flex; flex-wrap:wrap; gap:8px;">
       ${playerStats.map(p=>`<span class="chip-btn" style="cursor:default; background:#fff7e6; border-color:#ffd580;">${p.name} · 평균 ${p.avgRating.toFixed(3)}% (${p.n}건)</span>`).join('')}
     </div>`;
   }
 
   if (compStats.length > 0) {
-    html += `<div style="font-size:12px; font-weight:700; margin-bottom:6px;">📡 동시간대 경쟁채널 시청률</div>`;
-    html += `<div style="font-size:11px; color:var(--text-tertiary); margin-bottom:6px;">경쟁채널 시청률이 낮은 시간대는 부담이 적고, 높은 시간대는 경쟁력 있는 콘텐츠 배치가 필요합니다.</div>`;
-    html += `<div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px;">
+    html += sectionDivider;
+    html += `<div style="font-size:13px; font-weight:700; margin-bottom:2px;">동시간대 경쟁채널 시청률</div>`;
+    html += `<div style="font-size:11px; color:var(--text-tertiary); margin-bottom:8px;">시청률이 낮은 시간대는 부담이 적고, 높은 시간대는 경쟁력 있는 콘텐츠 배치가 필요합니다.</div>`;
+    html += `<div style="display:flex; flex-wrap:wrap; gap:8px;">
       ${compStats.map(c=>`<span class="chip-btn" style="cursor:default; background:#e8f6ff; border-color:#8ecfff;">${c.name} · 평균 ${c.avgRating.toFixed(3)}%</span>`).join('')}
     </div>`;
   }
 
-  html += `<button class="chip-btn" style="background:#ffebeb; color:#ff3b30;" onclick="clearCellChoice()">이 칸 비우기</button>`;
   list.innerHTML = html;
 }
 function chooseRecommendation(choice){
