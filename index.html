@@ -2745,7 +2745,7 @@ async function loadCellRecommendations(day, startIdx, endIdx){
   const { data: compRows } = await sb.from('fact_competitor_minute_rating')
     .select('date_key, channel_id, rating_pct, dim_channel(channel_name)')
     .gte('clock_time', `${targetHourStr}:00:00`).lte('clock_time', `${targetHourStr}:59:59`)
-    .limit(20000);
+    .limit(100000);
   const byCompChannel = {};
   (compRows||[]).forEach(r=>{
     const dow = new Date(r.date_key+'T00:00:00').getDay();
