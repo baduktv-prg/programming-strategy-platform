@@ -382,6 +382,7 @@
   ::-webkit-scrollbar-thumb { background: #d1d1d6; border-radius: 10px; }
   ::-webkit-scrollbar-track { background: transparent; }
 @media print {
+  @page { size: landscape; margin: 10mm; }
   * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
   body.print-mode .sidebar, body.print-mode .topbar, body.print-mode .btn-report,
   body.print-mode .subtabs, body.print-mode .filter-row, body.print-mode #pin-add-btn { display:none !important; }
@@ -3494,7 +3495,7 @@ function buildPrintFriendlySchedule(fixedList, blockList){
         const nameEsc = String(cell.data.name||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
         label = nameEsc + (cell.data.repPlayers ? '<br><span style="font-weight:400; font-size:9px;">'+cell.data.repPlayers+'</span>' : '');
       }
-      row += `<td rowspan="${cell.span}" style="border:1px solid #ddd; background:${bg}; padding:6px; vertical-align:top; font-size:10px; line-height:1.45; word-break:break-word;">${label}</td>`;
+      row += `<td rowspan="${cell.span}" style="border:1px solid #ddd; background:${bg}; padding:6px; vertical-align:top; font-size:10px; line-height:1.4; word-break:break-word;">${label}</td>`;
     });
     row += '</tr>';
     html += row;
