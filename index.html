@@ -855,6 +855,7 @@
             <select class="mini-filter" id="af-template-select"><option value="">템플릿 불러오기...</option></select>
             <button class="chip-btn" onclick="loadAutoFillTemplate()">불러오기</button>
             <button class="chip-btn" style="background:#1d1d1f; color:#fff;" onclick="runAutoFill()">자동으로 빈 슬롯 채우기</button>
+            <button class="chip-btn" onclick="saveAutoFillAsTemplate()">현재 편성안을 템플릿으로 저장</button>
             <button class="chip-btn" style="color:#ff3b30;" onclick="clearAutoFill()">초기화</button>
           </div>
           <div class="bento-grid">
@@ -2502,11 +2503,26 @@ async function saveWeeklyTemplate(){
   const name = prompt('템플릿 이름을 입력해주세요 (예: 8월 기본 편성)');
   if (!name) return;
   const templateData = fixedPrograms.map(({id, ...rest}) => rest); // id는 저장 안 함(불러올 때 새로 부여)
-  const { error } = await sb.from('weekly_schedule_templates')
-    .upsert({ template_name: name, template_data: templateData, updated_at: new Date().toISOString() }, { onConflict: 'template_name' });
-  if (error) { alert('저장 실패: ' + error.message); return; }
+  await upsertTemplateByName(name, templateData);
   await refreshTemplateList();
   alert(`"${name}" 템플릿으로 저장했어요. (같은 이름이 있으면 덮어써집니다)`);
+}
+
+// upsert()의 onConflict가 기대대로 안 먹어서 같은 이름인데도 새 행이 계속 생기던 버그 수정 —
+// 존재 여부를 직접 확인해서 있으면 update, 없으면 insert로 명시적으로 나눔
+async function upsertTemplateByName(name, templateData){
+  const { data: existing } = await sb.from('weekly_schedule_templates')
+    .select('template_id').eq('template_name', name).maybeSingle();
+  if (existing) {
+    const { error } = await sb.from('weekly_schedule_templates')
+      .update({ template_data: templateData, updated_at: new Date().toISOString() })
+      .eq('template_id', existing.template_id);
+    if (error) alert('저장 실패: ' + error.message);
+  } else {
+    const { error } = await sb.from('weekly_schedule_templates')
+      .insert({ template_name: name, template_data: templateData });
+    if (error) alert('저장 실패: ' + error.message);
+  }
 }
 async function loadWeeklyTemplate(){
   const sel = document.getElementById('ws-template-select');
@@ -2923,6 +2939,25 @@ function clearAutoFill(){
   autoFillFixed = [];
   autoFillResults = [];
   renderAutoFillGrid();
+}
+
+// 현재 화면(고정 슬롯 + 자동채움 결과)을 하나로 합쳐서 "고정 슬롯" 형태로 템플릿 저장
+// (다시 불러오면 전부 고정 슬롯으로 취급되어, 그대로 편집하거나 재실행할 수 있음)
+async function saveAutoFillAsTemplate(){
+  if (autoFillFixed.length === 0 && autoFillResults.length === 0) { alert('저장할 편성안이 없어요.'); return; }
+  const name = prompt('템플릿 이름을 입력해주세요 (예: 8월 4주차 자동편성안)');
+  if (!name) return;
+  const combined = [
+    ...autoFillFixed.map(({id, ...rest}) => rest),
+    ...autoFillResults.map(b => ({
+      day: b.day, startIdx: b.startIdx, endIdx: b.endIdx,
+      name: b.name + (b.repPlayers ? ' · '+b.repPlayers : ''), type: '재방',
+    })),
+  ];
+  await upsertTemplateByName(name, combined);
+  await refreshTemplateList();
+  await refreshAutoFillTemplateList();
+  alert(`"${name}" 템플릿으로 저장했어요. (같은 이름이 있으면 덮어써집니다)`);
 }
 
 async function runAutoFill(){
@@ -3418,39 +3453,52 @@ window.__pinnedItems = [];
 // 주간편성표/자동편성 결과를 인쇄용으로 rowspan 있는 진짜 HTML 표(<table>)로 만듦
 // (화면용 CSS grid는 칸 높이가 고정이라 인쇄 시 긴 글자가 잘리는 문제가 있어서, 인쇄만은 별도로 생성)
 function buildPrintFriendlySchedule(fixedList, blockList){
-  const cellAt = (day, slotIdx) => {
-    const fixed = fixedList.find(p => p.day===day && slotIdx >= p.startIdx && slotIdx < p.endIdx);
-    if (fixed) return { kind:'fixed', data: fixed };
-    const block = blockList.find(b => b.day===day && slotIdx >= b.startIdx && slotIdx < b.endIdx);
-    if (block) return { kind:'block', data: block };
-    return null;
-  };
+  const numSlots = WS_SLOTS.length;
+  // 요일별로 "이 슬롯은 무엇으로 덮여있는지"를 미리 다 계산해둠 (겹침/이상값이 있어도 안전하게 처리)
+  const dayGrids = {};
+  WS_DAY_ORDER.forEach(day => {
+    const arr = new Array(numSlots).fill(null);
+    const items = [
+      ...fixedList.filter(p=>p.day===day).map(p=>({kind:'fixed', data:p})),
+      ...blockList.filter(b=>b.day===day).map(b=>({kind:'block', data:b})),
+    ];
+    items.forEach(item=>{
+      const rawStart = Number(item.data.startIdx);
+      const rawEnd = Number(item.data.endIdx);
+      const s = Math.max(0, Math.min(numSlots - 1, Number.isFinite(rawStart) ? rawStart : 0));
+      const e = Math.max(s + 1, Math.min(numSlots, Number.isFinite(rawEnd) ? rawEnd : s + 1));
+      for (let i = s; i < e; i++) {
+        if (arr[i]) continue; // 이미 다른 항목이 이 칸을 차지했으면 덮어쓰지 않음(안전장치, 겹침 방지)
+        arr[i] = { kind: item.kind, data: item.data, isStart: i === s, span: e - s };
+      }
+    });
+    dayGrids[day] = arr;
+  });
+
   let html = '<table style="width:100%; border-collapse:collapse; font-size:11px; table-layout:fixed;">';
   html += '<tr><th style="border:1px solid #ddd; padding:4px; width:44px;"></th>' +
     WS_DAY_ORDER.map(d=>`<th style="border:1px solid #ddd; padding:6px; background:#f5f5f7;">${d}</th>`).join('') + '</tr>';
 
-  WS_SLOTS.forEach(slot=>{
-    let row = `<tr><td style="border:1px solid #ddd; padding:4px; font-weight:700; font-size:10px; white-space:nowrap;">${slot.label}</td>`;
+  for (let i = 0; i < numSlots; i++) {
+    let row = `<tr><td style="border:1px solid #ddd; padding:4px; font-weight:700; font-size:10px; white-space:nowrap;">${WS_SLOTS[i].label}</td>`;
     WS_DAY_ORDER.forEach(day=>{
-      const cell = cellAt(day, slot.idx);
+      const cell = dayGrids[day][i];
       if (!cell) { row += `<td style="border:1px solid #ddd; background:#fafafa;"></td>`; return; }
-      const isStart = cell.data.startIdx === slot.idx;
-      if (!isStart) return; // rowspan으로 이미 병합된 칸이라 별도 <td> 생략 (표준 표 문법)
-      const span = cell.data.endIdx - cell.data.startIdx;
+      if (!cell.isStart) return; // rowspan으로 이미 병합된 칸이라 별도 <td> 생략 (표준 표 문법)
       let bg, label;
       if (cell.kind === 'fixed') {
         bg = cell.data.type==='재방' ? '#e5e5ea' : cell.data.type==='본방' ? '#FFFF00' : '#C6EFCE';
-        label = cell.data.name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\n/g, '<br>');
+        label = String(cell.data.name||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\n/g, '<br>');
       } else {
         bg = '#b8ddfc';
-        const nameEsc = cell.data.name.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+        const nameEsc = String(cell.data.name||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
         label = nameEsc + (cell.data.repPlayers ? '<br><span style="font-weight:400; font-size:9px;">'+cell.data.repPlayers+'</span>' : '');
       }
-      row += `<td rowspan="${span}" style="border:1px solid #ddd; background:${bg}; padding:6px; vertical-align:top; font-size:10px; line-height:1.45; word-break:break-word;">${label}</td>`;
+      row += `<td rowspan="${cell.span}" style="border:1px solid #ddd; background:${bg}; padding:6px; vertical-align:top; font-size:10px; line-height:1.45; word-break:break-word;">${label}</td>`;
     });
     row += '</tr>';
     html += row;
-  });
+  }
   html += '</table>';
   return html;
 }
