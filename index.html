@@ -3653,7 +3653,7 @@ function generateReport(){
     ${window.__pinnedItems.map(item => `
       <div class="report-print-item">
         <div style="font-size:16px; font-weight:700; margin-bottom:10px;">${item.title}</div>
-        <div class="bento-grid">${item.html}</div>
+        <div${item.html.trim().startsWith('<table') ? '' : ' class="bento-grid"'}>${item.html}</div>
         ${item.comment ? `<div style="margin-top:10px; padding:12px; background:#f5f5f7; border-radius:10px; font-size:13px; line-height:1.6; white-space:pre-wrap;"><b>코멘트</b><br>${item.comment.replace(/</g,'&lt;')}</div>` : ''}
       </div>
     `).join('')}
