@@ -547,25 +547,9 @@
 
         <!-- Bento Grid: Main Charts -->
         <div class="bento-grid">
-          <div class="bento-card col-8">
+          <div class="bento-card col-12">
             <div class="card-label">일별 시청률 추이 (최근 14일)</div>
             <div class="chart-wrap tall"><canvas id="chart-trend"></canvas></div>
-          </div>
-          <div class="bento-card col-4" style="justify-content: space-between;">
-            <div>
-              <div class="card-label">편성 전략 유형 진단 <span style="font-weight:400; color:var(--text-muted);">(규칙 기반)</span></div>
-              <div style="margin-top:12px;">
-                <span class="tag">이벤트 집중형</span>
-                <span class="tag">안정 유지형</span>
-              </div>
-              <ul class="factor-list">
-                <li>당일 재방송 비중 70% (10개 중 7개)</li>
-                <li>대형 기전(난양배·응씨배·농심배) 편성 비중 높음</li>
-                <li>정기 편성(지지옥션배·STICCUP) 안정적 유지</li>
-                <li>4050 신규 시청층 확보 콘텐츠 확대 필요</li>
-              </ul>
-            </div>
-            <div style="font-size:12.5px; color:var(--text-tertiary); font-weight:700;">상세 진단 리포트 보기 <span style="font-size:10px; background:#f0f0f0; padding:2px 6px; border-radius:8px;">준비중</span></div>
           </div>
         </div>
 
@@ -866,6 +850,7 @@
                 <b style="color:#C6EFCE; text-shadow:0 0 1px #999;">■</b> 생방 · <b style="color:#FFFF00; text-shadow:0 0 1px #999;">■</b> 본방 · <b style="color:#e5e5ea; text-shadow:0 0 1px #999;">■</b> 재방(고정) · <b style="color:#b8ddfc;">■</b> 자동 추천으로 채워짐.
                 템플릿을 먼저 불러온 다음, "자동으로 빈 슬롯 채우기"를 누르면 고정 슬롯을 제외한 나머지 구간을 큰 프로그램 위주로 채우고, 남는 자리만 작게 쪼개서 채웁니다. 주간 편성안 추천 탭과는 별개로 동작하는 실험용 화면입니다.
               </div>
+              <div id="af-stats" style="font-size:12px; font-weight:700; margin-bottom:10px; padding:8px 12px; background:#f5f5f7; border-radius:8px;"></div>
               <div style="overflow-x:auto; max-height:720px; overflow-y:auto;">
                 <div id="af-grid" style="display:grid; grid-template-columns:52px repeat(7,1fr); gap:3px; font-size:11px; min-width:700px;"></div>
               </div>
@@ -946,7 +931,7 @@
             </div>
             <div class="bento-card col-5">
               <div class="card-label">프로그램별 피로도 역치 순위</div>
-              <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:6px;">몇 번째 방영부터 그 시간대 평균 이하로 떨어지는지 (낮을수록 피로도를 빨리 느낌)</div>
+              <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:6px;">몇 번째 방영부터 그 시간대 평균 이하로 떨어지는지 (성과 저하 시점 — 재방이 갈수록 안 좋은 시간대로 밀려나는 편성 패턴 때문일 수도 있어, "피로도"로 단정하기보단 참고 지표로 봐주세요)</div>
               <div style="overflow-y:auto; max-height:360px;">
                 <table class="data-table" id="fatigue-rank-table" style="width:100%; font-size:12px; border-collapse:collapse;"></table>
               </div>
@@ -1166,7 +1151,7 @@ async function loadPrograms(startDate, endDate) {
   const { data: rows, error: progErr } = await sb
     .from('fact_schedule')
     .select(`
-      schedule_id, date_key, start_time, end_time, is_rerun, broadcast_type, players,
+      schedule_id, date_key, start_time, end_time, is_rerun, broadcast_type, players, round_stage,
       dim_program!fact_schedule_program_id_fkey ( program_id, program_name ),
       fact_rating ( rating_pct, share_pct, viewers, reach_pct, avg_view_minutes, target_rating_pct, achievement_pct, prev_rating_pct )
     `)
@@ -1205,6 +1190,7 @@ async function loadPrograms(startDate, endDate) {
             : r.broadcast_type === '생' ? '생방'
             : (r.is_rerun ? '재방' : '생방'), // broadcast_type이 아직 없는 옛 데이터 대비 (재적재 전까지 임시)
       players: r.players || '-',
+      round_stage: r.round_stage || null,
       target: rating.target_rating_pct || 0,
       achievement: rating.achievement_pct || 0,
     };
@@ -1214,6 +1200,9 @@ async function loadPrograms(startDate, endDate) {
   PROGRAMS.forEach(p=>{
     p._absStart = trueAbsoluteMinutes(p.date, p.start);
     p._absEnd = trueAbsoluteMinutes(p.date, p.end);
+    // 버그 보정: 시작시간이 00~01시라 다음날로 밀렸는데 종료시간(예: 05시)은 안 밀려서
+    // 같은 방송인데 종료가 시작보다 이전으로 계산되는 경우 → 종료도 하루 밀어서 맞춤
+    if (p._absEnd < p._absStart) p._absEnd += 1440;
   });
   PROGRAMS.sort((a,b)=> a._absStart - b._absStart);
   // 부 나뉨(1부/2부)을 여기서 전역으로 통합 — 이후 모든 화면(DNA/비교/분단위/이탈분석 등)이
@@ -1653,7 +1642,7 @@ async function drawDNA(g){
     <div id="dna-tags">불러오는 중...</div>
     <ul class="factor-list">
       <li><b>대진:</b> ${playersTxt}</li>
-      <li><b>평균 방송 시간:</b> ${g.duration.toFixed(0)}분</li>
+      <li><b>평균 시청지속시간:</b> ${g.avgView.toFixed(1)}분</li>
       <li><b>${targetLabel} 대비 실적:</b> ${hasTarget ? achieveValue.toFixed(0)+'%' : '목표 미설정'}</li>
       ${liveCompareLine}
     </ul>
@@ -2250,6 +2239,11 @@ async function loadFullHistory(){
     const rating = ratingObj?.rating_pct;
     if (rating == null || !prog) return null;
     const start = r.start_time.slice(0,5), end = r.end_time.slice(0,5);
+    let absStart = trueAbsoluteMinutes(r.date_key, start);
+    let absEnd = trueAbsoluteMinutes(r.date_key, end);
+    // 버그 보정: 시작시간이 00~01시라 다음날로 밀렸는데 종료시간(예: 05시)은 안 밀려서
+    // 같은 방송인데 종료가 시작보다 이전으로 계산되는 경우 → 종료도 하루 밀어서 맞춤
+    if (absEnd < absStart) absEnd += 1440;
     return {
       program_id: r.program_id, name: prog.program_name, tournament_type: prog.tournament_type || null,
       players: (r.players && r.players !== '-') ? r.players : null,
@@ -2258,7 +2252,7 @@ async function loadFullHistory(){
       dow: new Date(r.date_key + 'T00:00:00').getDay(), hour: Number(start.split(':')[0]),
       type: r.broadcast_type==='재' ? '재방' : r.broadcast_type==='본' ? '본방' : r.broadcast_type==='생' ? '생방' : (r.is_rerun ? '재방' : '생방'),
       isRerun: r.is_rerun,
-      _absStart: trueAbsoluteMinutes(r.date_key, start), _absEnd: trueAbsoluteMinutes(r.date_key, end),
+      _absStart: absStart, _absEnd: absEnd,
     };
   }).filter(Boolean);
   list.sort((a,b)=>a._absStart-b._absStart);
@@ -3068,6 +3062,12 @@ function onAutoFillCellDrop(e, day, slotIdx){
 }
 
 function renderAutoFillGrid(){
+  const statsEl = document.getElementById('af-stats');
+  if (statsEl) {
+    const uniquePrograms = new Set([...autoFillFixed.map(p=>p.name), ...autoFillResults.map(b=>b.name)]);
+    const uniqueEpisodes = new Set(autoFillResults.map(b=>b.episodeKey).filter(Boolean));
+    statsEl.textContent = `총 편성 항목 ${autoFillFixed.length + autoFillResults.length}개 (고정 ${autoFillFixed.length}개 · 자동추천 ${autoFillResults.length}개) · 고유 프로그램명 ${uniquePrograms.size}개 · 자동추천 중 고유 회차 ${uniqueEpisodes.size}개`;
+  }
   const grid = document.getElementById('af-grid');
   if (!grid) return;
   let html = '<div></div>' + WS_DAY_ORDER.map(d=>`<div style="text-align:center; font-weight:700; color:var(--text-secondary); padding-bottom:4px; position:sticky; top:0; background:#fff;">${d}</div>`).join('');
@@ -3277,14 +3277,14 @@ function renderRegression(){
     // 시작 경계: 직전 프로그램의 마지막 WINDOW_MIN분 + 이 프로그램의 첫 WINDOW_MIN분
     const prevTail = prevMinutes.filter(m => m.minute_offset >= (prevMinutes.length ? prevMinutes[prevMinutes.length-1].minute_offset - WINDOW_MIN : 0));
     const ownHead = ownHeadSrc.filter(m => m.minute_offset <= WINDOW_MIN);
-    const startLabels = [...prevTail.map(m=>`이전 -${prevTail[prevTail.length-1].minute_offset - m.minute_offset}분`), ...ownHead.map(m=>`+${m.minute_offset}분`)];
+    const startLabels = [...prevTail.map(m=>`[이전] -${prevTail[prevTail.length-1].minute_offset - m.minute_offset}분`), ...ownHead.map(m=>`[현재] +${m.minute_offset}분`)];
     const startData = [...prevTail.map(m=>m.rating_pct), ...ownHead.map(m=>m.rating_pct)];
     const startBoundaryIdx = prevTail.length; // 이 지점이 "시작(0분)"
 
     // 종료 경계: 이 프로그램(마지막 부)의 마지막 WINDOW_MIN분 + 다음 프로그램의 첫 WINDOW_MIN분
     const ownTail = ownTailSrc.filter(m => m.minute_offset >= (ownTailSrc.length ? ownTailSrc[ownTailSrc.length-1].minute_offset - WINDOW_MIN : 0));
     const nextHead = nextMinutes.filter(m => m.minute_offset <= WINDOW_MIN);
-    const endLabels = [...ownTail.map((m,i)=>`종료 -${ownTail.length-1-i}분`), ...nextHead.map(m=>`다음 +${m.minute_offset}분`)];
+    const endLabels = [...ownTail.map((m,i)=>`[현재] -${ownTail.length-1-i}분`), ...nextHead.map(m=>`[다음] +${m.minute_offset}분`)];
     const endData = [...ownTail.map(m=>m.rating_pct), ...nextHead.map(m=>m.rating_pct)];
     const endBoundaryIdx = ownTail.length;
 
@@ -3364,8 +3364,9 @@ function buildFatigueCandidates(){
   const map = {};
   PROGRAMS.forEach(p=>{
     if (!p.players || p.players === '-') return; // 대국자 정보 없으면 "같은 콘텐츠" 식별이 안 되니 제외
-    const key = p.program_id + '_' + p.players;
-    if (!map[key]) map[key] = { program_id: p.program_id, name: p.name, players: p.players, instances: [] };
+    const roundKey = p.round_stage || '';
+    const key = p.program_id + '_' + p.players + '_' + roundKey; // 대국자가 같아도 라운드가 다르면 별개 콘텐츠로 취급
+    if (!map[key]) map[key] = { program_id: p.program_id, name: p.name, players: p.players, round: roundKey, instances: [] };
     map[key].instances.push(p);
   });
   Object.values(map).forEach(g => g.instances.sort((a,b)=>a._absStart-b._absStart));
@@ -3401,12 +3402,12 @@ async function renderFatigue(){
     if (fatigueChart) { fatigueChart.destroy(); fatigueChart = null; }
     return;
   }
-  fillSelect(sel, candidates, null, c=>`${c.name} · ${c.players} (${c.instances.length}회 방영)`);
+  fillSelect(sel, candidates, null, c=>`${c.name} · ${c.players}${c.round?' · '+c.round:''} (${c.instances.length}회 방영)`);
   sel.value = 0;
 
   // ---- 우측: 전체 후보의 역치 순위표 ----
   const ranked = candidates.map(c => ({
-    name: c.name, players: c.players, count: c.instances.length,
+    name: c.name, players: c.players, round: c.round, count: c.instances.length,
     threshold: computeThreshold(c.instances)
   })).sort((a,b)=>{
     if (a.threshold == null && b.threshold == null) return b.count - a.count;
@@ -3419,7 +3420,7 @@ async function renderFatigue(){
     <tbody>${ranked.map(r=>`
       <tr style="border-bottom:1px solid var(--border);">
         <td style="padding:6px;">${r.name}</td>
-        <td style="padding:6px; color:var(--text-tertiary);">${r.players}</td>
+        <td style="padding:6px; color:var(--text-tertiary);">${r.players}${r.round?' · '+r.round:''}</td>
         <td style="padding:6px; text-align:center;">${r.count}회</td>
         <td style="padding:6px; text-align:center; font-weight:700; color:${r.threshold ? (r.threshold<=2?'#ff3b30':'var(--text-primary)') : 'var(--text-tertiary)'};">${r.threshold ? r.threshold+'회차' : '안 꺾임'}</td>
       </tr>`).join('')}</tbody>
@@ -3428,12 +3429,12 @@ async function renderFatigue(){
   // ---- 좌측: 선택한 프로그램의 누적 방영 순번별 곡선 ----
   async function update(){
     const c = candidates[sel.value];
-    document.getElementById('fatigue-title').textContent = `${c.name} · ${c.players} — 누적 방영 순번별 시간대 대비 비율`;
+    document.getElementById('fatigue-title').textContent = `${c.name} · ${c.players}${c.round?' · '+c.round:''} — 누적 방영 순번별 시간대 대비 비율`;
 
     const threshold = computeThreshold(c.instances);
     document.getElementById('fatigue-insight').textContent = threshold
       ? `${threshold}번째 방영부터 그 시간대 평균 이하로 떨어짐 (총 ${c.instances.length}회 방영)`
-      : `${c.instances.length}회 방영되는 동안 한 번도 시간대 평균 밑으로 안 떨어짐 — 피로도 영향이 낮은 콘텐츠`;
+      : `${c.instances.length}회 방영되는 동안 한 번도 시간대 평균 밑으로 안 떨어짐 — 반복 편성에 성과가 꾸준히 안정적인 콘텐츠`;
 
     const labels = c.instances.map((p,i)=>`${i+1}회차\n${p.date} · ${p.type}`);
     const data = c.instances.map(fatigueRatio);
