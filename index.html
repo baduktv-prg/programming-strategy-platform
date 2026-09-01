@@ -1151,7 +1151,7 @@ async function loadPrograms(startDate, endDate) {
   const { data: rows, error: progErr } = await sb
     .from('fact_schedule')
     .select(`
-      schedule_id, date_key, start_time, end_time, is_rerun, broadcast_type, players, round_stage,
+      schedule_id, date_key, start_time, end_time, is_rerun, broadcast_type, players, round_stage, segment_topic,
       dim_program!fact_schedule_program_id_fkey ( program_id, program_name ),
       fact_rating ( rating_pct, share_pct, viewers, reach_pct, avg_view_minutes, target_rating_pct, achievement_pct, prev_rating_pct )
     `)
@@ -1191,6 +1191,7 @@ async function loadPrograms(startDate, endDate) {
             : (r.is_rerun ? '재방' : '생방'), // broadcast_type이 아직 없는 옛 데이터 대비 (재적재 전까지 임시)
       players: r.players || '-',
       round_stage: r.round_stage || null,
+      segment_topic: r.segment_topic || null,
       target: rating.target_rating_pct || 0,
       achievement: rating.achievement_pct || 0,
     };
@@ -2265,7 +2266,7 @@ async function loadFullHistory(){
   if (FULL_HISTORY_CACHE) return FULL_HISTORY_CACHE;
   const { data: rows, error } = await sb.from('fact_schedule')
     .select(`
-      schedule_id, program_id, date_key, start_time, end_time, is_rerun, broadcast_type, players, round_stage,
+      schedule_id, program_id, date_key, start_time, end_time, is_rerun, broadcast_type, players, round_stage, segment_topic,
       dim_program!fact_schedule_program_id_fkey ( program_id, program_name, tournament_type ),
       fact_rating ( rating_pct )
     `)
@@ -2289,7 +2290,7 @@ async function loadFullHistory(){
       program_id: r.program_id, name: prog.program_name, tournament_type: prog.tournament_type || null,
       players: (r.players && r.players !== '-') ? r.players : null,
       round_stage: r.round_stage || null,
-      date: r.date_key, start, end, rating, duration: 1,
+      segment_topic: r.segment_topic || null,
       dow: new Date(r.date_key + 'T00:00:00').getDay(), hour: Number(start.split(':')[0]),
       type: r.broadcast_type==='재' ? '재방' : r.broadcast_type==='본' ? '본방' : r.broadcast_type==='생' ? '생방' : (r.is_rerun ? '재방' : '생방'),
       isRerun: r.is_rerun,
@@ -2774,9 +2775,10 @@ function computeRecommendationCandidates(day, startIdx, endIdx, all, usedSet, op
   all.forEach(p=>{
     const playersKey = (p.players && p.players !== '-') ? p.players : '(대국자 정보없음)';
     const yearKey = p.date.slice(0,4);
-    if (!p.round_stage) { noRoundItems.push({ ...p, playersKey, yearKey }); return; }
-    const key = p.program_id + '::' + playersKey + '::' + p.round_stage + '::' + yearKey;
-    (byEpisode[key] = byEpisode[key] || { program_id: p.program_id, name: p.name, players: playersKey, round: p.round_stage, year: yearKey, items: [] }).items.push(p);
+    const roundOrTopic = p.round_stage || p.segment_topic; // 일반 대회는 라운드, 코너쇼는 다룬 대회명 — 둘 중 하나만 채워짐
+    if (!roundOrTopic) { noRoundItems.push({ ...p, playersKey, yearKey }); return; }
+    const key = p.program_id + '::' + playersKey + '::' + roundOrTopic + '::' + yearKey;
+    (byEpisode[key] = byEpisode[key] || { program_id: p.program_id, name: p.name, players: playersKey, round: roundOrTopic, year: yearKey, items: [] }).items.push(p);
   });
   // 2단계: 라운드가 비어있는 회차는, 같은 프로그램+대국자+연도로 이미 라운드가 채워진 그룹이 "딱 하나"만 있으면 거기 병합
   // (예: 신진서vs양카이원 16강이 최근 회차엔 라운드값이 안 채워진 경우, 예전에 채워진 같은 대진 그룹으로 합쳐줌)
@@ -3428,7 +3430,7 @@ function buildFatigueCandidates(){
   const map = {};
   PROGRAMS.forEach(p=>{
     if (!p.players || p.players === '-') return; // 대국자 정보 없으면 "같은 콘텐츠" 식별이 안 되니 제외
-    const roundKey = p.round_stage || '';
+    const roundKey = p.round_stage || p.segment_topic || '';
     const key = p.program_id + '_' + p.players + '_' + roundKey; // 대국자가 같아도 라운드가 다르면 별개 콘텐츠로 취급
     if (!map[key]) map[key] = { program_id: p.program_id, name: p.name, players: p.players, round: roundKey, instances: [] };
     map[key].instances.push(p);
