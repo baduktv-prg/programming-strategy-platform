@@ -2222,26 +2222,56 @@ function renderHeatmap(history, fullHistory){
       cells.push({ d, t: t.label, s, basis });
     });
   });
-  const top3 = [...cells].sort((a,b)=>b.s-a.s).slice(0,3).map(c=>`${c.d}_${c.t}`);
+  // "근거없음"(basis:none, 항상 50점 기본값)은 순위 경쟁에서 제외 — 진짜 근거 있는 것들만 TOP으로 뽑음
+  const meaningfulCells = cells.filter(c => c.basis && c.basis !== 'none');
+  const top3 = [...meaningfulCells].sort((a,b)=>b.s-a.s).slice(0,3).map(c=>`${c.d}_${c.t}`);
+  const top10 = [...meaningfulCells].sort((a,b)=>b.s-a.s).slice(0,10);
 
-  let html = '<div style="max-height:640px; overflow-y:auto;"><div style="display:grid; grid-template-columns:52px repeat(7,1fr); gap:6px; font-size:12px;">';
+  let topListHtml = '';
+  if (top10.length > 0) {
+    topListHtml = `
+      <div style="margin-bottom:16px; padding:14px 16px; background:#f5f5f7; border-radius:12px;">
+        <div style="font-size:13px; font-weight:700; margin-bottom:10px;">이 프로그램에 가장 잘 맞는 시간대 TOP ${top10.length}</div>
+        <div style="display:flex; flex-direction:column; gap:6px;">
+          ${top10.map((c,i)=>`
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span style="width:20px; font-size:11px; font-weight:700; color:var(--text-tertiary);">${i+1}</span>
+              <span style="width:80px; font-size:12px; font-weight:600;">${c.d}요일 ${c.t}</span>
+              <div style="flex:1; background:#e5e5ea; border-radius:6px; height:16px; overflow:hidden;">
+                <div style="width:${c.s}%; height:100%; background:${heatColor(c.s)};"></div>
+              </div>
+              <span style="width:36px; text-align:right; font-size:12px; font-weight:700;">${c.s}점</span>
+              <span style="width:130px; font-size:10px; color:var(--text-tertiary);">${BASIS_LABEL[c.basis]}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>`;
+  } else {
+    topListHtml = `<div style="margin-bottom:16px; padding:14px 16px; background:#f5f5f7; border-radius:12px; font-size:12px; color:var(--text-tertiary);">이 프로그램은 실측·추정 근거를 가진 시간대가 아직 없어요 (데이터가 더 쌓이면 표시됩니다).</div>`;
+  }
+
+  let html = topListHtml;
+  html += '<div style="max-height:640px; overflow-y:auto;"><div style="display:grid; grid-template-columns:52px repeat(7,1fr); gap:6px; font-size:12px;">';
   html += '<div></div>' + days.map(d=>`<div style="text-align:center; color:var(--text-secondary); font-weight:700; padding-bottom:4px; position:sticky; top:0; background:#fff;">${d}</div>`).join('');
   times.forEach(t=>{
     html += `<div style="color:var(--text-secondary); font-weight:700; display:flex; align-items:center; font-size:11px;">${t.label}</div>`;
     days.forEach(d=>{
       const cell = cells.find(c=>c.d===d && c.t===t.label);
       const s = cell.s;
-      const bg = heatColor(s);
+      const hasEvidence = cell.basis && cell.basis !== 'none';
+      const bg = hasEvidence ? heatColor(s) : '#f5f5f7'; // 근거 없으면 색 빼고 옅은 회색 — 노랑(보통)이랑 안 섞이게
+      const textColor = hasEvidence ? '#fff' : 'var(--text-tertiary)';
+      const textShadow = hasEvidence ? 'text-shadow:0 1px 3px rgba(0,0,0,0.35);' : '';
       const rank = top3.indexOf(`${d}_${t.label}`);
       const badge = rank>=0 ? `<span style="position:absolute; top:2px; right:3px; font-size:8px; background:#ff3b30; color:#fff; border-radius:5px; padding:0px 4px; font-weight:800; z-index:1;">TOP${rank+1}</span>` : '';
       // 테두리는 오직 실측/추정 여부만 표시 (TOP3라고 덮어쓰지 않음 — 둘은 서로 다른 정보라 같이 보여야 함)
       let border = 'border:2px solid transparent;';
       if (cell.basis === 'actual') border = 'border:2px solid rgba(0,0,0,0.35);';
-      else if (cell.basis && cell.basis !== 'none') border = 'border:2px dashed rgba(0,0,0,0.4);';
+      else if (hasEvidence) border = 'border:2px dashed rgba(0,0,0,0.4);';
       // TOP3는 테두리 대신 노란 글로우(box-shadow)로 별도 표시 — 실측/추정 테두리와 겹치지 않게
       const glow = rank>=0 ? 'box-shadow: 0 0 0 2px #ffd60a, 0 0 8px rgba(255,214,10,0.6);' : '';
-      const title = `${BASIS_LABEL[cell.basis]||''}`;
-      html += `<div title="${title}" style="position:relative; height:34px; border-radius:8px; background:${bg}; ${border} ${glow} display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:13px; text-shadow:0 1px 3px rgba(0,0,0,0.35);">${badge}${s}</div>`;
+      const title = hasEvidence ? `${BASIS_LABEL[cell.basis]}` : '실측·추정 근거 없음 (기본값)';
+      html += `<div title="${title}" style="position:relative; height:34px; border-radius:8px; background:${bg}; ${border} ${glow} display:flex; align-items:center; justify-content:center; color:${textColor}; font-weight:800; font-size:13px; ${textShadow}">${badge}${hasEvidence ? s : '-'}</div>`;
     });
   });
   html += '</div></div>';
