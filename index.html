@@ -582,8 +582,7 @@
             <span style="font-size:12px; color:var(--text-secondary); align-self:center; margin-right:4px;">시간대:</span>
             <button class="chip-btn active" data-hour-range="0,24">전체</button>
             <button class="chip-btn" data-hour-range="6,12">오전 (06-12시)</button>
-            <button class="chip-btn" data-hour-range="12,18">오후 (12-18시)</button>
-            <button class="chip-btn" data-hour-range="18,24">프라임 (18-24시)</button>
+            <button class="chip-btn" data-hour-range="12,24">프라임 (12-24시)</button>
             <button class="chip-btn" data-hour-range="0,6">심야·새벽 (00-06시)</button>
           </div>
           <div class="bento-grid">
@@ -784,6 +783,7 @@
             <select class="mini-filter" id="ws-template-select" style="max-width:160px;"><option value="">템플릿 불러오기...</option></select>
             <button class="chip-btn" onclick="loadWeeklyTemplate()">불러오기</button>
             <button class="chip-btn" onclick="saveWeeklyTemplate()">현재 편성을 템플릿으로 저장</button>
+            <button class="chip-btn" style="background:#1d1d1f; color:#fff;" onclick="runWeeklyAutoFill()">자동으로 빈 슬롯 채우기</button>
             <button class="chip-btn" style="color:#ff3b30;" onclick="clearAllFixed()">전체 초기화</button>
           </div>
           <div class="filter-row" style="flex-wrap:wrap; align-items:flex-start;">
@@ -1251,8 +1251,22 @@ async function loadTrend(startDate, endDate) {
     .not('rating_pct', 'is', null)
     .order('date_key', { ascending: true });
 
-  if (error) { console.error('트렌드 조회 실패', error); TREND = []; return; }
+  if (error) { console.error('트렌드 조회 실패', error); TREND = []; window.__prevPeriodAvgRating = null; return; }
   TREND = rows.map(r => [r.date_key.slice(5), r.rating_pct]); // "MM-DD" 형태로 축약
+
+  // 비교용: 선택 기간과 같은 길이의 "직전 기간" 평균 시청률 (채널순위 비교와 동일한 방식으로 통일)
+  const days = Math.round((new Date(endDate) - new Date(startDate)) / 86400000) + 1;
+  const prevEnd = subtractDays(startDate, 2);
+  const prevStart = subtractDays(prevEnd, days);
+  const { data: prevRows } = await sb
+    .from('fact_channel_rank')
+    .select('rating_pct')
+    .eq('channel_id', window.__channelId)
+    .eq('category', '종합')
+    .gte('date_key', prevStart)
+    .lte('date_key', prevEnd)
+    .not('rating_pct', 'is', null);
+  window.__prevPeriodAvgRating = (prevRows && prevRows.length) ? prevRows.reduce((a,r)=>a+r.rating_pct,0)/prevRows.length : null;
 }
 
 function fillSelect(el, items, valueFn, labelFn){
@@ -1349,12 +1363,15 @@ function renderTrendKpiAndChart(){
   const hasTrend = TREND.length > 0;
   const avg = hasTrend ? TREND.reduce((a,b)=>a+b[1],0)/TREND.length : 0;
   document.getElementById('kpi-avg-rating').textContent = hasTrend ? avg.toFixed(3) + '%' : '데이터 없음';
-  const first = hasTrend ? TREND[0][1] : 0;
-  const last = hasTrend ? TREND[TREND.length-1][1] : 0;
-  const delta = last - first;
   const dEl = document.getElementById('kpi-avg-rating-delta');
-  dEl.textContent = hasTrend ? ((delta>=0?'▲ ':'▼ ') + Math.abs(delta).toFixed(3) + ` (선택 기간 첫날 대비)`) : '';
-  dEl.className = 'kpi-delta ' + (delta>=0?'up':'down');
+  if (hasTrend && window.__prevPeriodAvgRating != null) {
+    const delta = avg - window.__prevPeriodAvgRating;
+    dEl.textContent = (delta>=0?'▲ ':'▼ ') + Math.abs(delta).toFixed(3) + ` (직전 동기간 대비)`;
+    dEl.className = 'kpi-delta ' + (delta>=0?'up':'down');
+  } else {
+    dEl.textContent = '';
+    dEl.className = 'kpi-delta';
+  }
 
   if (trendChart) trendChart.destroy();
   trendChart = new Chart(document.getElementById('chart-trend'), {
@@ -1499,9 +1516,17 @@ const VM_COLUMNS = [
 ];
 
 function renderValueMap(){
+  // 자정 넘김(예: 23시 시작~다음날 1시 종료)까지 고려해서 겹침 판정
+  const toMin = (timeStr) => { const [h,m] = timeStr.split(':').map(Number); return h*60+m; };
+  const rangeStartMin = valueMapHourRange[0] * 60;
+  const rangeEndMin = valueMapHourRange[1] * 60;
   let filtered = PROGRAMS.filter(p=>{
-    const hour = Number(p.start.split(':')[0]);
-    return hour >= valueMapHourRange[0] && hour < valueMapHourRange[1];
+    const startMin = toMin(p.start);
+    let endMin = toMin(p.end);
+    if (endMin <= startMin) endMin += 1440; // 자정을 넘겨 끝나는 방송 보정
+    const overlapsAsIs = startMin < rangeEndMin && endMin > rangeStartMin;
+    const overlapsShifted = (startMin - 1440) < rangeEndMin && (endMin - 1440) > rangeStartMin; // 전날에서 자정 넘겨 들어온 경우까지 커버
+    return overlapsAsIs || overlapsShifted;
   });
   if (valueMapTypeFilter !== '전체') filtered = filtered.filter(p=>p.type===valueMapTypeFilter);
 
@@ -2201,18 +2226,34 @@ function renderHeatmap(history, fullHistory){
       const s = cell.s;
       const bg = heatColor(s);
       const rank = top3.indexOf(`${d}_${t.label}`);
-      const badge = rank>=0 ? `<span style="position:absolute; top:2px; right:3px; font-size:8px; background:#ff3b30; color:#fff; border-radius:5px; padding:0px 4px; font-weight:800;">TOP${rank+1}</span>` : '';
-      // 실측이면 실선 테두리, 추정이면 점선(불확실함을 시각적으로 표시)
+      const badge = rank>=0 ? `<span style="position:absolute; top:2px; right:3px; font-size:8px; background:#ff3b30; color:#fff; border-radius:5px; padding:0px 4px; font-weight:800; z-index:1;">TOP${rank+1}</span>` : '';
+      // 테두리는 오직 실측/추정 여부만 표시 (TOP3라고 덮어쓰지 않음 — 둘은 서로 다른 정보라 같이 보여야 함)
       let border = 'border:2px solid transparent;';
-      if (rank>=0) border = 'border:2px solid #1d1d1f;';
-      else if (cell.basis === 'actual') border = 'border:2px solid rgba(0,0,0,0.25);';
-      else if (cell.basis && cell.basis !== 'none') border = 'border:2px dashed rgba(0,0,0,0.35);';
+      if (cell.basis === 'actual') border = 'border:2px solid rgba(0,0,0,0.35);';
+      else if (cell.basis && cell.basis !== 'none') border = 'border:2px dashed rgba(0,0,0,0.4);';
+      // TOP3는 테두리 대신 노란 글로우(box-shadow)로 별도 표시 — 실측/추정 테두리와 겹치지 않게
+      const glow = rank>=0 ? 'box-shadow: 0 0 0 2px #ffd60a, 0 0 8px rgba(255,214,10,0.6);' : '';
       const title = `${BASIS_LABEL[cell.basis]||''}`;
-      html += `<div title="${title}" style="position:relative; height:34px; border-radius:8px; background:${bg}; ${border} display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:13px; text-shadow:0 1px 3px rgba(0,0,0,0.35);">${badge}${s}</div>`;
+      html += `<div title="${title}" style="position:relative; height:34px; border-radius:8px; background:${bg}; ${border} ${glow} display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:13px; text-shadow:0 1px 3px rgba(0,0,0,0.35);">${badge}${s}</div>`;
     });
   });
   html += '</div></div>';
-  html += `<div style="margin-top:10px; font-size:11px; color:var(--text-tertiary);">🔴 낮음 → 🟡 보통 → 🟢 높음 · 실선 테두리 = 실제 방영 이력 기준 · 점선 테두리 = 유사 프로그램으로 추정 · 검정 테두리 = TOP3 · 칸에 마우스 올리면 근거 확인</div>`;
+  html += `
+    <div style="margin-top:12px; padding:10px 12px; background:#f5f5f7; border-radius:10px; font-size:11px; color:var(--text-secondary);">
+      <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:8px;">
+        <div style="display:flex; align-items:center; gap:6px;"><span style="width:16px; height:16px; border-radius:4px; background:${heatColor(20)};"></span>낮음</div>
+        <span style="color:var(--text-tertiary);">→</span>
+        <div style="display:flex; align-items:center; gap:6px;"><span style="width:16px; height:16px; border-radius:4px; background:${heatColor(50)};"></span>보통</div>
+        <span style="color:var(--text-tertiary);">→</span>
+        <div style="display:flex; align-items:center; gap:6px;"><span style="width:16px; height:16px; border-radius:4px; background:${heatColor(85)};"></span>높음</div>
+      </div>
+      <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+        <div style="display:flex; align-items:center; gap:6px;"><span style="width:16px; height:16px; border-radius:4px; background:#ccc; border:2px solid rgba(0,0,0,0.35);"></span>실제 방영 이력 기준</div>
+        <div style="display:flex; align-items:center; gap:6px;"><span style="width:16px; height:16px; border-radius:4px; background:#ccc; border:2px dashed rgba(0,0,0,0.4);"></span>유사 프로그램으로 추정</div>
+        <div style="display:flex; align-items:center; gap:6px;"><span style="width:16px; height:16px; border-radius:4px; background:#ccc; box-shadow: 0 0 0 2px #ffd60a, 0 0 6px rgba(255,214,10,0.6);"></span>TOP3</div>
+      </div>
+      <div style="margin-top:6px; color:var(--text-tertiary);">칸에 마우스를 올리면 근거를 확인할 수 있어요.</div>
+    </div>`;
   document.getElementById('heatmap').innerHTML = html;
 }
 
@@ -2485,6 +2526,21 @@ function clearAllFixed(){
   renderWeeklyGrid();
 }
 
+async function runWeeklyAutoFill(){
+  if (fixedPrograms.length === 0) { alert('먼저 고정 편성을 추가해주세요.'); return; }
+  const btn = event.target;
+  const origText = btn.textContent;
+  btn.textContent = '채우는 중...'; btn.disabled = true;
+  try {
+    const preExcluded = recommendedBlocks.map(b=>b.episodeKey).filter(Boolean);
+    const results = await computeAutoFillBlocks(fixedPrograms, preExcluded, recommendedBlocks);
+    recommendedBlocks = [...recommendedBlocks, ...results.map(r => ({ id: recSeq++, ...r }))];
+    renderWeeklyGrid();
+  } finally {
+    btn.textContent = origText; btn.disabled = false;
+  }
+}
+
 // ---- 템플릿 저장/불러오기 (Supabase에 저장 — 팀 전체가 어느 기기에서든 공유해서 씀) ----
 async function refreshTemplateList(){
   const sel = document.getElementById('ws-template-select');
@@ -2749,13 +2805,13 @@ function computeRecommendationCandidates(day, startIdx, endIdx, all, usedSet, op
       const r = computeMatchScore(typeItems, day, slot.timeStr, all);
       const score = scoreVsEpisodeAvg(r.avgRating, typeItems);
       const avgDurationMin = typeItems.reduce((a,x)=>a+(x._absEnd-x._absStart),0)/typeItems.length;
-      const item = { program_id: g.program_id, name: g.name, repPlayers, episodeKey: key, avgDurationMin, ...r, score };
+      const item = { program_id: g.program_id, name: g.name, episodeKey: key, avgDurationMin, ...r, score, repPlayers };
       if (r.basis === 'actual') withType.push(item); else withoutType.push(item);
     } else if (g.items.length >= 2) {
       const r = computeMatchScore(g.items, day, slot.timeStr, all);
       const score = scoreVsEpisodeAvg(r.avgRating, g.items);
       const avgDurationMin = g.items.reduce((a,x)=>a+(x._absEnd-x._absStart),0)/g.items.length;
-      withoutType.push({ program_id: g.program_id, name: g.name, repPlayers, episodeKey: key, avgDurationMin, ...r, score });
+      withoutType.push({ program_id: g.program_id, name: g.name, episodeKey: key, avgDurationMin, ...r, score, repPlayers });
     }
   });
 
@@ -2974,15 +3030,17 @@ async function saveAutoFillAsTemplate(){
   alert(`"${name}" 템플릿으로 저장했어요. (같은 이름이 있으면 덮어써집니다)`);
 }
 
-async function runAutoFill(){
-  if (autoFillFixed.length === 0) { alert('먼저 템플릿을 불러와서 고정 슬롯을 채워주세요.'); return; }
-  autoFillResults = [];
+// 공용 자동채우기 엔진 — 주간편성안 추천/자동편성 테스트 둘 다 사용
+// fixedList: 고정 슬롯 배열, preExcludedEpisodeKeys: 이미 다른 곳에 쓰인 회차(중복 방지용)
+// id는 할당하지 않고 반환하니, 호출부에서 원하는 시퀀스로 붙여서 쓰면 됨
+async function computeAutoFillBlocks(fixedList, preExcludedEpisodeKeys, alreadyOccupiedList){
+  const results = [];
   const all = await loadFullHistory();
-  const usedInThisRun = new Set(); // 이번 자동채우기에서 이미 배치한 program_id (순위만 낮추는 용도 — 완전 제외 아님)
+  const usedInThisRun = new Set(preExcludedEpisodeKeys || []);
+  const occupied = [...fixedList, ...(alreadyOccupiedList || [])]; // 고정 슬롯 + 이미 채워진 추천 블록 둘 다 "찬 자리"로 취급
 
   for (const day of WS_DAY_ORDER) {
-    const dayFixed = autoFillFixed.filter(f=>f.day===day).sort((a,b)=>a.startIdx-b.startIdx);
-    // 이 요일의 빈 구간(고정 슬롯 사이사이) 찾기
+    const dayFixed = occupied.filter(f=>f.day===day).sort((a,b)=>a.startIdx-b.startIdx);
     let cursor = 0;
     const gaps = [];
     dayFixed.forEach(f=>{
@@ -2991,7 +3049,6 @@ async function runAutoFill(){
     });
     if (cursor < WS_SLOTS.length) gaps.push({ start: cursor, end: WS_SLOTS.length });
 
-    // 각 빈 구간을, 큰 RT부터 시도하며 채움 (큰 단위 우선 → 남는 자투리만 작게 쪼갬)
     for (const gap of gaps) {
       let pos = gap.start;
       while (pos < gap.end) {
@@ -3005,21 +3062,28 @@ async function runAutoFill(){
           let best = topWithType[0] || null;
           if (!best) { for (const g of basisGroups) { if (g.items.length > 0) { best = g.items[0]; break; } } }
           if (best) {
-            autoFillResults.push({
-              id: autoFillSeq++, day, startIdx, endIdx: endIdx + 1,
+            results.push({
+              day, startIdx, endIdx: endIdx + 1,
               name: best.name, score: best.score, basis: best.basis, type: WS_REC_TYPE,
               program_id: best.program_id, repPlayers: best.repPlayers, avgRating: best.avgRating, episodeKey: best.episodeKey,
             });
-            usedInThisRun.add(best.episodeKey); // 프로그램 전체가 아니라 "이 회차"만 이번 주 재사용 금지
+            usedInThisRun.add(best.episodeKey);
             pos += slotsNeeded;
             placed = true;
             break;
           }
         }
-        if (!placed) pos += 1; // 아무 RT로도 후보를 못 찾으면 30분만 비워두고 다음으로
+        if (!placed) pos += 1;
       }
     }
   }
+  return results;
+}
+
+async function runAutoFill(){
+  if (autoFillFixed.length === 0) { alert('먼저 템플릿을 불러와서 고정 슬롯을 채워주세요.'); return; }
+  const results = await computeAutoFillBlocks(autoFillFixed);
+  autoFillResults = results.map(r => ({ id: autoFillSeq++, ...r }));
   renderAutoFillGrid();
 }
 
