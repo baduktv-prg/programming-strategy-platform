@@ -2222,29 +2222,34 @@ function renderHeatmap(history, fullHistory){
       cells.push({ d, t: t.label, s, basis });
     });
   });
-  // "근거없음"(basis:none, 항상 50점 기본값)은 순위 경쟁에서 제외 — 진짜 근거 있는 것들만 TOP으로 뽑음
+  // "근거없음"(basis:none, 항상 50점 기본값)은 요약/순위 경쟁에서 제외 — 진짜 근거 있는 것들만 씀
   const meaningfulCells = cells.filter(c => c.basis && c.basis !== 'none');
   const top3 = [...meaningfulCells].sort((a,b)=>b.s-a.s).slice(0,3).map(c=>`${c.d}_${c.t}`);
-  const top10 = [...meaningfulCells].sort((a,b)=>b.s-a.s).slice(0,10);
 
   let topListHtml = '';
-  if (top10.length > 0) {
+  if (meaningfulCells.length > 0) {
+    // 1) 최고의 슬롯 (단일 요일+시간)
+    const peak = [...meaningfulCells].sort((a,b)=>b.s-a.s)[0];
+    // 2) 최고의 요일 (그 요일의 근거 있는 칸들 평균이 가장 높은 요일)
+    const byDay = {};
+    meaningfulCells.forEach(c=>{ (byDay[c.d] = byDay[c.d] || []).push(c.s); });
+    const dayAvgs = Object.entries(byDay).map(([d, scores])=>({ d, avg: scores.reduce((a,b)=>a+b,0)/scores.length }));
+    const bestDay = dayAvgs.sort((a,b)=>b.avg-a.avg)[0];
+    // 3) 피해야 할 슬롯 (근거 있는 것들 중 가장 낮은 점수 — "근거없음" 회색칸은 제외하고, 진짜 안 좋은 것만)
+    const avoid = [...meaningfulCells].sort((a,b)=>a.s-b.s)[0];
+
+    const summaryCard = (label, main, sub, color) => `
+      <div style="flex:1; min-width:150px; padding:14px 16px; background:#f5f5f7; border-radius:12px; border-left:4px solid ${color};">
+        <div style="font-size:11px; color:var(--text-tertiary); font-weight:700; margin-bottom:6px;">${label}</div>
+        <div style="font-size:18px; font-weight:800; margin-bottom:2px;">${main}</div>
+        <div style="font-size:11px; color:var(--text-secondary);">${sub}</div>
+      </div>`;
+
     topListHtml = `
-      <div style="margin-bottom:16px; padding:14px 16px; background:#f5f5f7; border-radius:12px;">
-        <div style="font-size:13px; font-weight:700; margin-bottom:10px;">이 프로그램에 가장 잘 맞는 시간대 TOP ${top10.length}</div>
-        <div style="display:flex; flex-direction:column; gap:6px;">
-          ${top10.map((c,i)=>`
-            <div style="display:flex; align-items:center; gap:10px;">
-              <span style="width:20px; font-size:11px; font-weight:700; color:var(--text-tertiary);">${i+1}</span>
-              <span style="width:80px; font-size:12px; font-weight:600;">${c.d}요일 ${c.t}</span>
-              <div style="flex:1; background:#e5e5ea; border-radius:6px; height:16px; overflow:hidden;">
-                <div style="width:${c.s}%; height:100%; background:${heatColor(c.s)};"></div>
-              </div>
-              <span style="width:36px; text-align:right; font-size:12px; font-weight:700;">${c.s}점</span>
-              <span style="width:130px; font-size:10px; color:var(--text-tertiary);">${BASIS_LABEL[c.basis]}</span>
-            </div>
-          `).join('')}
-        </div>
+      <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px;">
+        ${summaryCard('🎯 최고의 시간대', `${peak.d}요일 ${peak.t}`, `${peak.s}점 · ${BASIS_LABEL[peak.basis]}`, '#34c759')}
+        ${summaryCard('📅 최고의 요일', `${bestDay.d}요일`, `평균 ${Math.round(bestDay.avg)}점`, '#0071e5')}
+        ${summaryCard('⚠️ 피해야 할 시간대', `${avoid.d}요일 ${avoid.t}`, `${avoid.s}점 · ${BASIS_LABEL[avoid.basis]}`, '#ff3b30')}
       </div>`;
   } else {
     topListHtml = `<div style="margin-bottom:16px; padding:14px 16px; background:#f5f5f7; border-radius:12px; font-size:12px; color:var(--text-tertiary);">이 프로그램은 실측·추정 근거를 가진 시간대가 아직 없어요 (데이터가 더 쌓이면 표시됩니다).</div>`;
