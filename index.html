@@ -1160,7 +1160,7 @@ async function loadPrograms(startDate, endDate) {
     .lte('date_key', endDate)
     .order('date_key', { ascending: true })
     .order('start_time', { ascending: true })
-    .limit(20000);
+    .limit(50000);
   if (progErr) { console.error('프로그램 조회 실패', progErr); PROGRAMS = []; return; }
 
   PROGRAMS = rows.map(r => {
@@ -2271,7 +2271,7 @@ async function loadFullHistory(){
     `)
     .eq('channel_id', window.__channelId)
     .order('date_key', { ascending: true }).order('start_time', { ascending: true })
-    .limit(20000);
+    .limit(100000);
   if (error) { console.error('전체 이력 조회 실패', error); FULL_HISTORY_CACHE = []; return []; }
 
   let list = rows.map(r=>{
