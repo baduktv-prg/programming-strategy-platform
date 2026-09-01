@@ -468,7 +468,9 @@
           <div class="nav-sub" data-screen="schedule" data-sub="adjacency">리드인/리드아웃 분석</div>
           <div class="nav-sub" data-screen="schedule" data-sub="counterfactual">가상 편성 시나리오</div>
           <div class="nav-sub" data-screen="schedule" data-sub="weekly">주간 편성안 추천</div>
+          <!-- 자동편성 테스트: 주간편성안 추천에 통합되어 일단 숨김 처리
           <div class="nav-sub" data-screen="schedule" data-sub="autofill">자동 편성 테스트</div>
+          -->
         </div>
       </div>
 
@@ -685,7 +687,9 @@
           <div class="subtab" data-parent="schedule" data-tab="adjacency">리드인/리드아웃 분석</div>
           <div class="subtab" data-parent="schedule" data-tab="counterfactual">가상 편성 시나리오</div>
           <div class="subtab" data-parent="schedule" data-tab="weekly">주간 편성안 추천</div>
+          <!-- 자동편성 테스트: 주간편성안 추천에 통합되어 일단 숨김 처리
           <div class="subtab" data-parent="schedule" data-tab="autofill">자동 편성 테스트</div>
+          -->
         </div>
 
         <div class="subscreen active" data-parent="schedule" id="schedule-matching">
@@ -835,6 +839,7 @@
           </div>
         </div>
 
+        <!-- 자동편성 테스트: 주간편성안 추천에 "자동으로 빈 슬롯 채우기" 버튼으로 통합되어 일단 숨김 처리
         <div class="subscreen" data-parent="schedule" id="schedule-autofill" style="display:none;">
           <div class="filter-row" style="flex-wrap:wrap;">
             <select class="mini-filter" id="af-template-select"><option value="">템플릿 불러오기...</option></select>
@@ -857,6 +862,7 @@
             </div>
           </div>
         </div>
+        -->
 
         <div id="ws-recommend-panel" style="display:none; position:fixed; bottom:90px; right:24px; width:420px; max-height:60vh; display:flex; flex-direction:column; background:#fff; border-radius:16px; box-shadow:0 12px 40px rgba(0,0,0,0.18); z-index:140;">
           <div id="ws-recommend-header" style="display:flex; justify-content:space-between; align-items:center; padding:14px 18px; border-bottom:1px solid var(--border); cursor:move; user-select:none;">
@@ -3777,7 +3783,7 @@ window.addEventListener('afterprint', ()=>{
   renderAdjacency();
   renderCounterfactual();
   renderWeekly();
-  renderAutoFillTab();
+  // renderAutoFillTab(); // 자동편성 테스트 탭 숨김 처리로 비활성화
   renderRegression();
   // renderSankey(); // 공사중: 시청자 이동 지도 임시 비활성화 (관련 마크업도 함께 주석처리됨)
   renderFatigue();
