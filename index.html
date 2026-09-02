@@ -2933,6 +2933,20 @@ async function loadCellRecommendations(day, startIdx, endIdx){
 
   const all = await loadFullHistory();
   const usedProgramIds = new Set(recommendedBlocks.map(b => b.program_id).filter(id => id != null));
+
+  // 바로 앞/뒤에 DB 연결된 고정 슬롯이 있으면, 그 프로그램 기준 리드인/리드아웃 통계를 참고 인사이트로 계산
+  // (앞에 고정 프로그램이 있으면 → 그 프로그램 "뒤"에 뭐가 잘 맞는지 = 리드아웃 통계 / 뒤에 있으면 → 그 프로그램 "앞"에 뭐가 잘 맞는지 = 리드인 통계)
+  const fixedBefore = fixedPrograms.find(f => f.day===day && f.endIdx === startIdx && f.program_id);
+  const fixedAfter = fixedPrograms.find(f => f.day===day && f.startIdx === endIdx+1 && f.program_id);
+  const adjInsights = [];
+  if (fixedBefore) {
+    const stats = await computeAdjacencyStats(fixedBefore.program_id, WS_REC_TYPE);
+    if (stats.results.length > 0) adjInsights.push({ label: `"${fixedBefore.name.split('\n')[0]}" 바로 뒤 슬롯이에요`, results: stats.results.slice(0,3) });
+  }
+  if (fixedAfter) {
+    const stats = await computeLeadInStats(fixedAfter.program_id, WS_REC_TYPE);
+    if (stats.results.length > 0) adjInsights.push({ label: `"${fixedAfter.name.split('\n')[0]}" 바로 앞 슬롯이에요`, results: stats.results.slice(0,3) });
+  }
   const { durationRule, topWithType: topWithTypeAll, basisGroups: basisGroupsAll } = computeRecommendationCandidates(day, startIdx, endIdx, all, usedProgramIds);
   const topWithType = topWithTypeAll.slice(0, 5);
   const basisGroups = basisGroupsAll.map(g => ({ basis: g.basis, items: g.items.slice(0, 3) }));
@@ -3022,6 +3036,20 @@ async function loadCellRecommendations(day, startIdx, endIdx){
     html += `<div style="display:flex; flex-wrap:wrap; gap:8px;">
       ${playerStats.map(p=>`<span style="display:inline-block; padding:6px 10px; border-radius:8px; font-size:11px; background:#fff7e6; border:1px solid #ffd580;">${p.name} · 평균 ${p.avgRating.toFixed(3)}% (${p.n}건)</span>`).join('')}
     </div>`;
+  }
+
+  if (adjInsights.length > 0) {
+    adjInsights.forEach(insight => {
+      html += sectionDivider;
+      html += `<div style="font-size:13px; font-weight:700; margin-bottom:2px;">🔗 ${insight.label}</div>`;
+      html += `<div style="font-size:11px; color:var(--text-tertiary); margin-bottom:8px;">연결된 고정 프로그램 실측 이력 기준, 이 자리에 어떤 대회유형이 잘 맞았는지입니다.</div>`;
+      html += `<div style="display:flex; flex-wrap:wrap; gap:8px;">
+        ${insight.results.map(r=>{
+          const liftTxt = r.lift==null ? '' : ` (${r.lift>=0?'▲+':'▼'}${Math.abs(r.lift).toFixed(0)}%)`;
+          return `<span style="display:inline-block; padding:6px 10px; border-radius:8px; font-size:11px; background:#f3e8ff; border:1px solid #d4b8ff;">${r.type} · 평균 ${r.followAvg.toFixed(3)}%${liftTxt}</span>`;
+        }).join('')}
+      </div>`;
+    });
   }
 
   if (compStats.length > 0) {
