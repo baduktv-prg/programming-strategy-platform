@@ -1423,7 +1423,7 @@ async function reloadAllForPeriod(){
 }
 
 function setActiveChip(days){
-  document.querySelectorAll('.chip-btn').forEach(b=>{
+  document.querySelectorAll('.chip-btn[data-days]').forEach(b=>{
     b.classList.toggle('active', Number(b.dataset.days) === days);
   });
 }
@@ -1431,7 +1431,7 @@ function setActiveChip(days){
 document.getElementById('date-from').addEventListener('change', reloadAllForPeriod);
 document.getElementById('date-to').addEventListener('change', reloadAllForPeriod);
 
-document.querySelectorAll('.chip-btn').forEach(btn=>{
+document.querySelectorAll('.chip-btn[data-days]').forEach(btn=>{
   btn.addEventListener('click', async ()=>{
     const days = Number(btn.dataset.days);
     const to = window.__latestDate;
@@ -2227,8 +2227,8 @@ function renderHeatmap(history, fullHistory){
       cells.push({ d, t: t.label, s, basis });
     });
   });
-  // "근거없음"(basis:none, 항상 50점 기본값)은 요약/순위 경쟁에서 제외 — 진짜 근거 있는 것들만 씀
-  const meaningfulCells = cells.filter(c => c.basis && c.basis !== 'none');
+  // "근거없음"(basis:none, 항상 50점 기본값)과 점수가 NaN인 칸은 요약/순위 계산에서 제외
+  const meaningfulCells = cells.filter(c => c.basis && c.basis !== 'none' && !isNaN(c.s));
   const top3 = [...meaningfulCells].sort((a,b)=>b.s-a.s).slice(0,3).map(c=>`${c.d}_${c.t}`);
 
   let topListHtml = '';
@@ -2337,6 +2337,7 @@ async function loadFullHistory(){
       players: (r.players && r.players !== '-') ? r.players : null,
       round_stage: r.round_stage || null,
       segment_topic: r.segment_topic || null,
+      date: r.date_key, start, end, rating, duration: 1,
       dow: new Date(r.date_key + 'T00:00:00').getDay(), hour: Number(start.split(':')[0]),
       type: r.broadcast_type==='재' ? '재방' : r.broadcast_type==='본' ? '본방' : r.broadcast_type==='생' ? '생방' : (r.is_rerun ? '재방' : '생방'),
       isRerun: r.is_rerun,
