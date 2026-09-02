@@ -683,6 +683,12 @@
 
         <div class="subscreen" data-parent="program" id="program-player" style="display:none;">
           <div class="filter-row">
+            <button class="chip-btn active" data-player-type="전체">전체</button>
+            <button class="chip-btn" data-player-type="생방">생방</button>
+            <button class="chip-btn" data-player-type="본방">본방</button>
+            <button class="chip-btn" data-player-type="재방">재방</button>
+          </div>
+          <div class="filter-row">
             <div class="searchable-wrap" style="min-width:220px;">
               <input class="mini-filter" id="player-search" placeholder="대국자 이름 검색 또는 클릭" autocomplete="off">
               <div class="searchable-dropdown-list" id="player-search-dropdown"></div>
@@ -1755,10 +1761,20 @@ function buildPlayerIndex(){
 let selectedPlayerName = null;
 let selectedPlayerNameB = null;
 let playerIndexCache = {};
+let playerTypeFilter = '전체';
 
 function renderPlayerTab(){
   playerIndexCache = buildPlayerIndex();
   const names = Object.keys(playerIndexCache).sort((a,b)=>playerIndexCache[b].length-playerIndexCache[a].length);
+
+  document.querySelectorAll('#program-player .chip-btn[data-player-type]').forEach(btn=>{
+    btn.onclick = () => {
+      document.querySelectorAll('#program-player .chip-btn[data-player-type]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      playerTypeFilter = btn.dataset.playerType;
+      drawPlayerDetail();
+    };
+  });
 
   const inputA = document.getElementById('player-search');
   const dropdownA = document.getElementById('player-search-dropdown');
@@ -1838,23 +1854,26 @@ function buildPlayerBlockHtml(name, instances, colClass){
 
 function drawPlayerDetail(){
   const wrap = document.getElementById('player-detail-wrap');
-  const a = selectedPlayerName ? { name: selectedPlayerName, instances: playerIndexCache[selectedPlayerName] } : null;
-  const b = selectedPlayerNameB ? { name: selectedPlayerNameB, instances: playerIndexCache[selectedPlayerNameB] } : null;
+  const filterFn = (instances) => playerTypeFilter === '전체' ? instances : instances.filter(p=>p.type===playerTypeFilter);
+  const a = selectedPlayerName ? { name: selectedPlayerName, instances: filterFn(playerIndexCache[selectedPlayerName]) } : null;
+  const b = selectedPlayerNameB ? { name: selectedPlayerNameB, instances: filterFn(playerIndexCache[selectedPlayerNameB]) } : null;
 
   if (!a && !b) {
     wrap.innerHTML = `<div style="color:var(--text-tertiary); font-size:13px; padding:20px 0;">대국자를 검색해서 선택해주세요.</div>`;
     return;
   }
+  const emptyNotice = (name) => `<div class="bento-card col-6" style="display:flex; align-items:center; justify-content:center; color:var(--text-tertiary); font-size:13px; text-align:center; padding:20px;">"${name}"은(는) 이 필터(${playerTypeFilter}) 기준 이력이 없어요.</div>`;
+
   if (a && !b) {
-    wrap.innerHTML = `<div class="bento-grid" style="margin-top:16px;">${buildPlayerBlockHtml(a.name, a.instances, 'col-12')}</div>`;
+    wrap.innerHTML = `<div class="bento-grid" style="margin-top:16px;">${a.instances.length > 0 ? buildPlayerBlockHtml(a.name, a.instances, 'col-12') : `<div class="bento-card col-12" style="text-align:center; color:var(--text-tertiary); padding:20px;">"${a.name}"은(는) 이 필터(${playerTypeFilter}) 기준 이력이 없어요.</div>`}</div>`;
     return;
   }
   // 둘 다 있으면 나란히 비교
   wrap.innerHTML = `
     <div style="font-size:11px; color:var(--text-tertiary); margin:16px 0 -4px;">칸에 마우스를 올리면 정확한 평균 시청률·출연 건수를 확인할 수 있어요.</div>
     <div class="bento-grid" style="margin-top:16px;">
-      ${a ? buildPlayerBlockHtml(a.name, a.instances, 'col-6') : `<div class="bento-card col-6" style="display:flex; align-items:center; justify-content:center; color:var(--text-tertiary); font-size:13px;">왼쪽 검색창에서 첫 번째 대국자를 선택해주세요.</div>`}
-      ${buildPlayerBlockHtml(b.name, b.instances, 'col-6')}
+      ${a ? (a.instances.length > 0 ? buildPlayerBlockHtml(a.name, a.instances, 'col-6') : emptyNotice(a.name)) : `<div class="bento-card col-6" style="display:flex; align-items:center; justify-content:center; color:var(--text-tertiary); font-size:13px;">왼쪽 검색창에서 첫 번째 대국자를 선택해주세요.</div>`}
+      ${b.instances.length > 0 ? buildPlayerBlockHtml(b.name, b.instances, 'col-6') : emptyNotice(b.name)}
     </div>`;
 }
 
