@@ -808,9 +808,14 @@
             <select class="mini-filter" id="ws-start"></select>
             <span style="align-self:center; color:var(--text-tertiary);">~</span>
             <select class="mini-filter" id="ws-end"></select>
+            <div class="searchable-wrap" style="min-width:180px;">
+              <input class="mini-filter" id="ws-fixed-program-search" placeholder="🔗 DB 프로그램 검색(선택)" autocomplete="off">
+              <div class="searchable-dropdown-list" id="ws-fixed-program-dropdown"></div>
+            </div>
             <textarea id="ws-fixed-name" placeholder="고정 편성 내용 입력 (프로그램명, 대국자, 부, 해설/진행 등 원하는 형식으로 자유롭게)" style="flex:1; min-width:220px; min-height:38px; max-height:100px; padding:8px 12px; border:1px solid var(--border); border-radius:12px; font-family:inherit; font-size:13px; resize:vertical;"></textarea>
             <button class="chip-btn" style="background:#1d1d1f; color:#fff; align-self:flex-start;" onclick="addFixedProgram()">+ 선택한 요일에 고정 편성 추가</button>
           </div>
+          <div style="font-size:10px; color:var(--text-tertiary); margin:-4px 0 10px 2px;">🔗 DB 프로그램을 검색해서 연결하면, 이 고정 슬롯이 실제 방영 이력이 있는 프로그램으로 인식돼요 (나중에 리드인/리드아웃 분석 등에 활용 예정). 연결 안 해도 그냥 자유 텍스트로 입력만 하셔도 됩니다.</div>
           <div class="bento-grid">
             <div class="bento-card col-12">
               <div class="card-label">주간 편성표 (초안) · 30분 단위</div>
@@ -2516,6 +2521,7 @@ let wsSelectedCell = null;
 
 function renderWeekly(){
   initRecommendPanelDrag();
+  initWeeklyFixedProgramSearch();
   const fillSlotSelect = (sel, defaultIdx) => {
     sel.innerHTML = WS_SLOTS.map(s => `<option value="${s.idx}" ${s.idx===defaultIdx?'selected':''}>${s.label}</option>`).join('');
   };
@@ -2542,6 +2548,28 @@ function getSelectedDays(){
   return Array.from(document.querySelectorAll('#ws-day-multi .chip-btn.active')).map(b=>b.dataset.wsDay);
 }
 
+let wsLinkedProgramId = null; // DB 프로그램 검색에서 선택된 program_id (선택 안 하면 null, 자유텍스트만 사용)
+async function initWeeklyFixedProgramSearch(){
+  const input = document.getElementById('ws-fixed-program-search');
+  if (!input || input.__searchInit) return; // 여러 번 렌더링돼도 중복 초기화 방지
+  input.__searchInit = true;
+  const dropdown = document.getElementById('ws-fixed-program-dropdown');
+  const all = await loadFullHistory();
+  const uniquePrograms = Object.values(
+    all.reduce((acc, p) => { acc[p.program_id] = { program_id: p.program_id, name: p.name }; return acc; }, {})
+  ).sort((a,b)=>a.name.localeCompare(b.name));
+
+  attachSearchableDropdown(input, dropdown, uniquePrograms, p=>p.name, (picked)=>{
+    wsLinkedProgramId = picked.program_id;
+    input.value = picked.name;
+    const nameField = document.getElementById('ws-fixed-name');
+    if (!nameField.value.trim()) nameField.value = picked.name; // 비어있으면 이름 자동 채움(수정 가능)
+  });
+  input.addEventListener('input', () => {
+    if (input.value.trim() === '') wsLinkedProgramId = null; // 검색창을 지우면 연결도 해제
+  });
+}
+
 function addFixedProgram(){
   const days = getSelectedDays();
   const type = document.querySelector('#ws-fixed-type .chip-btn.active')?.dataset.wsFixedType || '생방';
@@ -2552,9 +2580,11 @@ function addFixedProgram(){
   if (!name) { alert('편성 내용을 입력해주세요.'); return; }
   if (endIdx <= startIdx) { alert('종료 시간이 시작 시간보다 늦어야 해요.'); return; }
   days.forEach(day => {
-    fixedPrograms.push({ id: fixedSeq++, day, type, startIdx, endIdx, name });
+    fixedPrograms.push({ id: fixedSeq++, day, type, startIdx, endIdx, name, program_id: wsLinkedProgramId });
   });
   document.getElementById('ws-fixed-name').value = '';
+  document.getElementById('ws-fixed-program-search').value = '';
+  wsLinkedProgramId = null;
   document.querySelectorAll('#ws-day-multi .chip-btn[data-ws-day]').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('#ws-fixed-type .chip-btn[data-ws-fixed-type]').forEach(b=>b.classList.toggle('active', b.dataset.wsFixedType==='생방'));
   document.getElementById('ws-start').value = 36;
@@ -2661,8 +2691,10 @@ function renderWeeklyGrid(){
       if (fixed) {
         const isStart = fixed.startIdx === slot.idx;
         const bg = fixed.type==='재방' ? '#e5e5ea' : fixed.type==='본방' ? '#FFFF00' : '#C6EFCE'; // 생방=연두, 본방=노랑 (원본 편성표 색상코드), 재방=회색
-        html += `<div draggable="true" ondragstart="onFixedDragStart(${fixed.id})" ondragover="event.preventDefault()" ondrop="onCellDrop(event,'${day}', ${slot.idx})" style="height:18px; background:${bg}; color:#1d1d1f; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; position:relative; overflow:hidden; padding:0 3px; border-radius:${isStart?'6px 6px 0 0':'0'}; cursor:grab;" title="[${fixed.type}] ${escaped} (드래그해서 옮기기 가능)">
-          ${isStart ? `<span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${fixed.name.split('\n')[0]}</span><span onclick="removeFixedProgram(${fixed.id})" style="position:absolute; top:0; right:2px; cursor:pointer; opacity:0.5; font-size:9px;">✕</span>` : ''}
+        const linkBadge = fixed.program_id ? '🔗' : '';
+        const linkTitle = fixed.program_id ? ' [DB 연결됨]' : '';
+        html += `<div draggable="true" ondragstart="onFixedDragStart(${fixed.id})" ondragover="event.preventDefault()" ondrop="onCellDrop(event,'${day}', ${slot.idx})" style="height:18px; background:${bg}; color:#1d1d1f; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; position:relative; overflow:hidden; padding:0 3px; border-radius:${isStart?'6px 6px 0 0':'0'}; cursor:grab;" title="[${fixed.type}]${linkTitle} ${escaped} (드래그해서 옮기기 가능)">
+          ${isStart ? `<span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${linkBadge}${fixed.name.split('\n')[0]}</span><span onclick="removeFixedProgram(${fixed.id})" style="position:absolute; top:0; right:2px; cursor:pointer; opacity:0.5; font-size:9px;">✕</span>` : ''}
         </div>`;
       } else if (chosen) {
         const isStart = chosen.startIdx === slot.idx;
@@ -2815,7 +2847,10 @@ function computeRecommendationCandidates(day, startIdx, endIdx, all, usedSet, op
   const noRoundItems = [];
   all.forEach(p=>{
     const playersKey = (p.players && p.players !== '-') ? p.players : '(대국자 정보없음)';
-    const yearKey = p.date.slice(0,4);
+    // 프로그램명에 연도가 박혀있으면(예: "2024삼성화재배...") 그게 실제 대회 연도라 더 정확함 — 방영일자보다 우선 사용
+    // 이름에 연도가 없으면(예: "응씨배세계바둑선수권대회") 어쩔 수 없이 방영일자로 추정 (오래된 콘텐츠를 나중에 재방하면 틀릴 수 있는 한계 있음)
+    const nameYearMatch = p.name.match(/^(19|20)\d{2}/);
+    const yearKey = nameYearMatch ? nameYearMatch[0] : p.date.slice(0,4);
     const roundOrTopic = p.round_stage || p.segment_topic; // 일반 대회는 라운드, 코너쇼는 다룬 대회명 — 둘 중 하나만 채워짐
     if (!roundOrTopic) { noRoundItems.push({ ...p, playersKey, yearKey }); return; }
     const key = p.program_id + '::' + playersKey + '::' + roundOrTopic + '::' + yearKey;
@@ -3472,8 +3507,10 @@ function buildFatigueCandidates(){
   PROGRAMS.forEach(p=>{
     if (!p.players || p.players === '-') return; // 대국자 정보 없으면 "같은 콘텐츠" 식별이 안 되니 제외
     const roundKey = p.round_stage || p.segment_topic || '';
-    const key = p.program_id + '_' + p.players + '_' + roundKey; // 대국자가 같아도 라운드가 다르면 별개 콘텐츠로 취급
-    if (!map[key]) map[key] = { program_id: p.program_id, name: p.name, players: p.players, round: roundKey, instances: [] };
+    const nameYearMatch = p.name.match(/^(19|20)\d{2}/);
+    const yearKey = nameYearMatch ? nameYearMatch[0] : p.date.slice(0,4);
+    const key = p.program_id + '_' + p.players + '_' + roundKey + '_' + yearKey; // 대국자·라운드 같아도 연도 다르면 별개 콘텐츠로 취급
+    if (!map[key]) map[key] = { program_id: p.program_id, name: p.name, players: p.players, round: roundKey, year: yearKey, instances: [] };
     map[key].instances.push(p);
   });
   Object.values(map).forEach(g => g.instances.sort((a,b)=>a._absStart-b._absStart));
