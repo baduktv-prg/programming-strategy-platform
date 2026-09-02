@@ -834,7 +834,8 @@
                   &nbsp;&nbsp;&nbsp;&nbsp;4순위 — 장르·대국자 모두 상관없이, 역대 최고 시청률이 비슷한 <u>다른 프로그램들</u>이 이 요일·시간대에 냈던 성과<br>
                   4. 이렇게 나온 예상 시청률을, <b>이 회차 자신의 평균 시청률과 비교</b>해서 점수를 매깁니다. 100점 = 평소 평균과 같은 수준, 100점을 넘으면 평소보다 잘 나올 것으로 예상되는 슬롯이라는 뜻입니다.<br>
                   5. <b>참고로 삼은 "다른 프로그램들"은 점수 계산에만 쓰일 뿐, 화면에 표시되거나 추천되지 않습니다.</b> 지금 보고 있는 후보 회차 자체만 추천 목록에 오릅니다.<br>
-                  6. 이미 이번 주 편성표의 다른 슬롯에 쓰인 프로그램은 제외되지 않고, 순위만 맨 아래로 내려갑니다.
+                  6. 이미 이번 주 편성표의 다른 슬롯에 쓰인 프로그램은 제외되지 않고, 순위만 맨 아래로 내려갑니다.<br>
+                  7. <b>"자동으로 빈 슬롯 채우기"는 후보의 실제 평균 방영길이에 토막광고 등 전환 여유시간 30분을 더한 만큼만 자리를 차지하게 합니다</b> (방송법 시행령상 프로그램 간 토막광고는 매시간 2회·매회 90초 이내로 규정돼 있어, 여유 있게 30분으로 설정).
                 </div>
               </details>
               <div style="overflow-x:auto; max-height:720px; overflow-y:auto;">
@@ -2838,7 +2839,7 @@ function initRecommendPanelDrag(){
 
 // 공용 후보 계산 함수 — 주간편성안 추천(수동 클릭)과 자동편성 테스트(자동채우기)가 같이 씀
 function computeRecommendationCandidates(day, startIdx, endIdx, all, usedSet, opts = {}){
-  const { usedCheckField = 'program_id', hardExclude = false } = opts;
+  const { usedCheckField = 'program_id', hardExclude = false, durationBufferMin = 0 } = opts;
   const slot = WS_SLOTS[startIdx];
   const targetDurationMin = (endIdx - startIdx + 1) * 30;
 
@@ -2894,8 +2895,9 @@ function computeRecommendationCandidates(day, startIdx, endIdx, all, usedSet, op
     }
   });
 
-  const durationRule = getDurationRuleFor(targetDurationMin);
-  const applyDurationFilter = (arr) => arr.filter(r => durationFits(r.avgDurationMin, durationRule));
+  // 버킷 표 대신 단순 공식: (실제 평균 방영길이 + 여유시간) <= 목표 슬롯 길이
+  // 수동 선택(사람이 정확히 그 길이를 원해서 고름)은 durationBufferMin=0(여유 없이 엄격), 자동채우기는 30(전환 여유 포함)
+  const applyDurationFilter = (arr) => arr.filter(r => (r.avgDurationMin + durationBufferMin) <= targetDurationMin);
   const isUsed = (r) => usedSet.has(r[usedCheckField]);
   const sortWithUsedLast = (arr) => {
     const base = hardExclude ? arr.filter(r => !isUsed(r)) : arr;
@@ -2914,7 +2916,7 @@ function computeRecommendationCandidates(day, startIdx, endIdx, all, usedSet, op
     .map(basis => ({ basis, items: sortWithUsedLast(byBasisGroup[basis]||[]) }))
     .filter(g => g.items.length > 0);
 
-  return { durationRule, topWithType, basisGroups };
+  return { targetDurationMin, topWithType, basisGroups };
 }
 
 async function loadCellRecommendations(day, startIdx, endIdx){
@@ -2947,7 +2949,7 @@ async function loadCellRecommendations(day, startIdx, endIdx){
     const stats = await computeLeadInStats(fixedAfter.program_id, WS_REC_TYPE);
     if (stats.results.length > 0) adjInsights.push({ label: `"${fixedAfter.name.split('\n')[0]}" 바로 앞 슬롯이에요`, results: stats.results.slice(0,3) });
   }
-  const { durationRule, topWithType: topWithTypeAll, basisGroups: basisGroupsAll } = computeRecommendationCandidates(day, startIdx, endIdx, all, usedProgramIds);
+  const { targetDurationMin: targetDurMin, topWithType: topWithTypeAll, basisGroups: basisGroupsAll } = computeRecommendationCandidates(day, startIdx, endIdx, all, usedProgramIds);
   const topWithType = topWithTypeAll.slice(0, 5);
   const basisGroups = basisGroupsAll.map(g => ({ basis: g.basis, items: g.items.slice(0, 3) }));
 
@@ -2985,7 +2987,7 @@ async function loadCellRecommendations(day, startIdx, endIdx){
   title.textContent = `${day} ${rangeLabel} (${targetDurationMin}분)`;
   const durationRuleLabel = document.getElementById('ws-duration-rule-label');
   if (durationRuleLabel) {
-    durationRuleLabel.textContent = `적용 기준: RT ${durationRule.slot}분대 → 방영길이 ${durationRule.min}분${durationRule.minIncl?'이상':'초과'} ~ ${durationRule.max}분${durationRule.maxIncl?'이하':'미만'}인 프로그램만 추천`;
+    durationRuleLabel.textContent = `적용 기준: 선택한 슬롯 길이(${targetDurMin}분) 이하인 프로그램만 추천 (여유시간 없이 엄격 적용)`;
   }
 
   // 카드형 렌더링 — 줄바꿈이 안전하게 되도록 chip-btn 대신 블록 레이아웃 사용 (텍스트 넘침 버그 수정)
@@ -3165,12 +3167,14 @@ async function computeAutoFillBlocks(fixedList, preExcludedEpisodeKeys, alreadyO
         for (const rt of tryRTs) {
           const slotsNeeded = rt / 30;
           const startIdx = pos, endIdx = pos + slotsNeeded - 1;
-          const { topWithType, basisGroups } = computeRecommendationCandidates(day, startIdx, endIdx, all, usedInThisRun, { usedCheckField: 'episodeKey', hardExclude: true });
+          const { topWithType, basisGroups } = computeRecommendationCandidates(day, startIdx, endIdx, all, usedInThisRun, { usedCheckField: 'episodeKey', hardExclude: true, durationBufferMin: 30 });
           let best = topWithType[0] || null;
           if (!best) { for (const g of basisGroups) { if (g.items.length > 0) { best = g.items[0]; break; } } }
           if (best) {
+            // durationBufferMin:30으로 이미 "실제길이+30분 <= 이 RT버킷" 검증을 통과한 후보이므로,
+            // RT버킷 크기 그대로 자리를 차지시킴 (버킷 자체가 길이별 여유폭을 담고 있어 이게 더 안정적)
             results.push({
-              day, startIdx, endIdx: endIdx + 1,
+              day, startIdx: pos, endIdx: endIdx + 1,
               name: best.name, score: best.score, basis: best.basis, type: WS_REC_TYPE,
               program_id: best.program_id, repPlayers: best.repPlayers, avgRating: best.avgRating, episodeKey: best.episodeKey,
             });
