@@ -458,6 +458,7 @@
           <div class="nav-sub" data-screen="program" data-sub="dna">프로그램 DNA 분석</div>
           <div class="nav-sub" data-screen="program" data-sub="compare">프로그램 비교 분석</div>
           <div class="nav-sub" data-screen="program" data-sub="minute">프로그램별 분단위 시청률</div>
+          <div class="nav-sub" data-screen="program" data-sub="player">기사별 분석</div>
         </div>
       </div>
 
@@ -571,6 +572,7 @@
           <div class="subtab" data-parent="program" data-tab="dna">DNA 분석</div>
           <div class="subtab" data-parent="program" data-tab="compare">비교 분석</div>
           <div class="subtab" data-parent="program" data-tab="minute">분단위 시청률</div>
+          <div class="subtab" data-parent="program" data-tab="player">기사별 분석</div>
         </div>
 
         <div class="subscreen active" data-parent="program" id="program-value-map">
@@ -677,6 +679,16 @@
               </div>
             </div>
           </div>
+        </div>
+
+        <div class="subscreen" data-parent="program" id="program-player" style="display:none;">
+          <div class="filter-row">
+            <div class="searchable-wrap" style="min-width:220px;">
+              <input class="mini-filter" id="player-search" placeholder="대국자 이름 검색 또는 클릭" autocomplete="off">
+              <div class="searchable-dropdown-list" id="player-search-dropdown"></div>
+            </div>
+          </div>
+          <div id="player-detail-wrap"></div>
         </div>
       </div>
 
@@ -1721,6 +1733,79 @@ async function drawDNA(g){
 /* ============ PROGRAM: MINUTE-BY-MINUTE ============ */
 let minuteChart;
 let minuteTypeFilter = '전체';
+/* ============ PROGRAM: PLAYER (기사별 분석) ============ */
+function buildPlayerIndex(){
+  const map = {};
+  PROGRAMS.forEach(p=>{
+    if (!p.players || p.players === '-') return;
+    extractPlayerNames(p.players).forEach(name=>{
+      (map[name] = map[name] || []).push(p);
+    });
+  });
+  return map;
+}
+
+function renderPlayerTab(){
+  const playerIndex = buildPlayerIndex();
+  const names = Object.keys(playerIndex).sort((a,b)=>playerIndex[b].length-playerIndex[a].length);
+  const input = document.getElementById('player-search');
+  const dropdown = document.getElementById('player-search-dropdown');
+  attachSearchableDropdown(input, dropdown, names, n=>n, (name)=>{
+    input.value = name;
+    drawPlayerDetail(name, playerIndex[name]);
+  });
+  document.getElementById('player-detail-wrap').innerHTML = `<div style="color:var(--text-tertiary); font-size:13px; padding:20px 0;">대국자를 검색해서 선택해주세요.</div>`;
+}
+
+function drawPlayerDetail(name, instances){
+  const wrap = document.getElementById('player-detail-wrap');
+  const n = instances.length;
+  const avgRating = instances.reduce((a,p)=>a+p.rating,0) / n;
+  const peak = Math.max(...instances.map(p=>p.rating));
+
+  // 요일×시간대 히트맵 — 이 기사 출연분들의 시간대별 평균 시청률을, 이 기사 개인 최고기록 대비 %로 환산
+  const days = ['월','화','수','목','금','토','일'];
+  const times = []; for (let h=2; h<=25; h++) times.push(h);
+  const byCell = {};
+  instances.forEach(p=>{
+    const d = new Date(p.date+'T00:00:00').getDay();
+    const dLabel = days[(d+6)%7]; // getDay()는 일=0 기준이라 월요일 시작으로 재배열
+    const h = Number(p.start.split(':')[0]);
+    const realH = h < 2 ? h + 24 : h;
+    const key = `${dLabel}_${realH}`;
+    (byCell[key] = byCell[key] || []).push(p.rating);
+  });
+
+  let heatmapHtml = '<div style="overflow-x:auto;"><div style="display:grid; grid-template-columns:48px repeat(7,1fr); gap:4px; font-size:11px; min-width:600px;">';
+  heatmapHtml += '<div></div>' + days.map(d=>`<div style="text-align:center; font-weight:700; color:var(--text-secondary);">${d}</div>`).join('');
+  times.forEach(h=>{
+    heatmapHtml += `<div style="color:var(--text-secondary); font-weight:700; display:flex; align-items:center; font-size:10px;">${h}시</div>`;
+    days.forEach(d=>{
+      const cellRatings = byCell[`${d}_${h}`];
+      if (!cellRatings || cellRatings.length === 0) {
+        heatmapHtml += `<div style="height:28px; border-radius:6px; background:#f5f5f7;"></div>`;
+        return;
+      }
+      const cellAvg = cellRatings.reduce((a,b)=>a+b,0) / cellRatings.length;
+      const score = peak > 0 ? Math.min(100, Math.round(100 * cellAvg / peak)) : 50;
+      heatmapHtml += `<div title="${d}요일 ${h}시 · 평균 ${cellAvg.toFixed(3)}% (${cellRatings.length}건)" style="height:28px; border-radius:6px; background:${heatColor(score)}; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:11px; text-shadow:0 1px 2px rgba(0,0,0,0.3);">${cellRatings.length}</div>`;
+    });
+  });
+  heatmapHtml += '</div></div>';
+
+  wrap.innerHTML = `
+    <div class="bento-grid" style="margin-top:16px;">
+      <div class="bento-card col-4"><div class="card-label">출연 횟수</div><div style="font-size:28px; font-weight:800;">${n}회</div></div>
+      <div class="bento-card col-4"><div class="card-label">평균 시청률</div><div style="font-size:28px; font-weight:800;">${avgRating.toFixed(3)}%</div></div>
+      <div class="bento-card col-4"><div class="card-label">최고 기록</div><div style="font-size:28px; font-weight:800; color:var(--accent);">${peak.toFixed(3)}%</div></div>
+      <div class="bento-card col-12">
+        <div class="card-label">요일 × 시간대 출연 이력 (칸 안 숫자 = 출연 건수, 색은 이 기사 개인 최고기록 대비 시청률)</div>
+        <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:10px;">칸에 마우스를 올리면 정확한 평균 시청률을 확인할 수 있어요.</div>
+        ${heatmapHtml}
+      </div>
+    </div>`;
+}
+
 function renderMinuteTab(){
   const progSel = document.getElementById('minute-program-select');
   const epSel = document.getElementById('minute-episode-select');
@@ -3884,6 +3969,7 @@ window.addEventListener('afterprint', ()=>{
   renderDNA();
   renderCompare();
   renderMinuteTab();
+  renderPlayerTab();
   renderMatching();
   renderAdjacency();
   renderCounterfactual();
