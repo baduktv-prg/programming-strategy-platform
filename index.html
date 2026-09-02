@@ -2317,7 +2317,7 @@ async function loadFullHistory(){
       fact_rating ( rating_pct )
     `)
     .eq('channel_id', window.__channelId)
-    .order('date_key', { ascending: true }).order('start_time', { ascending: true })
+    .order('date_key', { ascending: false }).order('start_time', { ascending: false })
     .limit(100000);
   if (error) { console.error('전체 이력 조회 실패', error); FULL_HISTORY_CACHE = []; return []; }
 
