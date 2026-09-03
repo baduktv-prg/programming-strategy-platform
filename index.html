@@ -3041,13 +3041,13 @@ function computeRecommendationCandidates(day, startIdx, endIdx, all, usedSet, op
       const r = computeMatchScore(typeItems, day, slot.timeStr, all);
       const score = scoreVsEpisodeAvg(r.avgRating, typeItems);
       const avgDurationMin = typeItems.reduce((a,x)=>a+(x._absEnd-x._absStart),0)/typeItems.length;
-      const item = { program_id: g.program_id, name: g.name, episodeKey: key, avgDurationMin, ...r, score, repPlayers };
+      const item = { program_id: g.program_id, name: g.name, episodeKey: key, avgDurationMin, tournament_type: g.items[0]?.tournament_type || null, ...r, score, repPlayers };
       if (r.basis === 'actual') withType.push(item); else withoutType.push(item);
     } else if (g.items.length >= 2) {
       const r = computeMatchScore(g.items, day, slot.timeStr, all);
       const score = scoreVsEpisodeAvg(r.avgRating, g.items);
       const avgDurationMin = g.items.reduce((a,x)=>a+(x._absEnd-x._absStart),0)/g.items.length;
-      withoutType.push({ program_id: g.program_id, name: g.name, episodeKey: key, avgDurationMin, ...r, score, repPlayers });
+      withoutType.push({ program_id: g.program_id, name: g.name, episodeKey: key, avgDurationMin, tournament_type: g.items[0]?.tournament_type || null, ...r, score, repPlayers });
     }
   });
 
@@ -3304,6 +3304,30 @@ async function computeAutoFillBlocks(fixedList, preExcludedEpisodeKeys, alreadyO
   const usedInThisRun = new Set(preExcludedEpisodeKeys || []);
   const occupied = [...fixedList, ...(alreadyOccupiedList || [])]; // 고정 슬롯 + 이미 채워진 추천 블록 둘 다 "찬 자리"로 취급
 
+  // 인접 고정슬롯(DB 연결된 것)의 리드인/리드아웃 통계 — program_id별로 한 번만 계산해서 재사용(성능)
+  const adjacencyCache = {};
+  async function getAdjacencyLiftMap(day, startIdx, endIdx){
+    const fixedBefore = fixedList.find(f => f.day===day && f.endIdx === startIdx && f.program_id);
+    const fixedAfter = fixedList.find(f => f.day===day && f.startIdx === endIdx+1 && f.program_id);
+    const liftMap = {};
+    for (const [fixed, statsFn] of [[fixedBefore, computeAdjacencyStats], [fixedAfter, computeLeadInStats]]) {
+      if (!fixed) continue;
+      const cacheKey = `${statsFn===computeAdjacencyStats?'out':'in'}_${fixed.program_id}`;
+      if (!(cacheKey in adjacencyCache)) adjacencyCache[cacheKey] = await statsFn(fixed.program_id, WS_REC_TYPE);
+      adjacencyCache[cacheKey].results.forEach(r => { liftMap[r.type] = Math.max(liftMap[r.type] ?? -Infinity, r.lift ?? 0); });
+    }
+    return liftMap;
+  }
+  // 후보 목록에 인접 고정슬롯 기준 가점(±15점 이내로 완만하게)을 적용해 재정렬 — 실측/추정 우선순위 큰틀은 안 건드리고, 같은 등급 안에서만 순서 조정
+  function applyAdjacencyBoost(candidates, liftMap){
+    if (!candidates.length || Object.keys(liftMap).length === 0) return candidates;
+    return [...candidates].map(c=>{
+      const lift = c.tournament_type != null && liftMap[c.tournament_type] != null ? liftMap[c.tournament_type] : 0;
+      const boost = Math.max(-15, Math.min(15, lift * 0.3));
+      return { ...c, adjustedScore: c.score + boost };
+    }).sort((a,b)=>b.adjustedScore-a.adjustedScore);
+  }
+
   for (const day of WS_DAY_ORDER) {
     const dayFixed = occupied.filter(f=>f.day===day).sort((a,b)=>a.startIdx-b.startIdx);
     let cursor = 0;
@@ -3324,8 +3348,9 @@ async function computeAutoFillBlocks(fixedList, preExcludedEpisodeKeys, alreadyO
           const slotsNeeded = rt / 30;
           const startIdx = pos, endIdx = pos + slotsNeeded - 1;
           const { topWithType, basisGroups } = computeRecommendationCandidates(day, startIdx, endIdx, all, usedInThisRun, { usedCheckField: 'episodeKey', hardExclude: true, durationBufferMin: 30 });
-          let best = topWithType[0] || null;
-          if (!best) { for (const g of basisGroups) { if (g.items.length > 0) { best = g.items[0]; break; } } }
+          const liftMap = await getAdjacencyLiftMap(day, startIdx, endIdx);
+          let best = applyAdjacencyBoost(topWithType, liftMap)[0] || null;
+          if (!best) { for (const g of basisGroups) { if (g.items.length > 0) { best = applyAdjacencyBoost(g.items, liftMap)[0]; break; } } }
           if (best) {
             // durationBufferMin:30으로 이미 "실제길이+30분 <= 이 RT버킷" 검증을 통과한 후보이므로,
             // RT버킷 크기 그대로 자리를 차지시킴 (버킷 자체가 길이별 여유폭을 담고 있어 이게 더 안정적)
