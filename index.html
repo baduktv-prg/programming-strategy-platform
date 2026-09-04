@@ -1089,6 +1089,27 @@ function getMergedPrograms(){
   return PROGRAMS; // 이제 loadPrograms 단계에서 이미 부 나뉨 통합이 끝난 상태
 }
 // 같은 program_id의 여러 회차를 평균으로 통합 (DNA 분석용)
+// 병합은 안 하지만(대회방식이 달라서 별개 프로그램으로 남겨야 함), 분석화면에서 서로 참고할 수 있게 연결해두는 목록
+// 그룹 하나 = 서로 관련된 프로그램명들의 배열
+const RELATED_PROGRAM_GROUPS = [
+  ['지지옥션배신사숙녀신예연승대항전', '지지옥션배신사대숙녀연승대항전'],
+];
+function getRelatedPrograms(programName){
+  const group = RELATED_PROGRAM_GROUPS.find(g => g.includes(programName));
+  return group ? group.filter(n => n !== programName) : [];
+}
+// 리드인/리드아웃 등 "회차 단위가 아니라 프로그램 단위로 뭉쳐서 통계 내야 하는" 곳에서 씀 —
+// 관련 그룹(RELATED_PROGRAM_GROUPS)에 속한 program_id들을 전부 하나로 취급하기 위한 확장
+function getRelatedProgramIds(programId, all){
+  const selfEntry = all.find(p => p.program_id === programId);
+  if (!selfEntry) return [programId];
+  const group = RELATED_PROGRAM_GROUPS.find(g => g.includes(selfEntry.name));
+  if (!group) return [programId];
+  const ids = new Set([programId]);
+  all.forEach(p => { if (group.includes(p.name)) ids.add(p.program_id); });
+  return Array.from(ids);
+}
+
 function aggregateByProgram(list){
   const map = {};
   list.forEach(p=>{
@@ -1614,6 +1635,21 @@ document.querySelectorAll('#program-value-map .chip-btn[data-vm-type]').forEach(
 
 /* ============ PROGRAM: DNA ============ */
 let dnaTypeFilter = '전체';
+function jumpToRelatedProgram(name){
+  document.querySelectorAll('#program-dna .chip-btn').forEach(b=>b.classList.toggle('active', b.dataset.dnaType==='전체'));
+  dnaTypeFilter = '전체';
+  window.__dnaFiltered = window.__dnaGrouped;
+  const sel = document.getElementById('dna-select');
+  fillSelect(sel, window.__dnaFiltered, null, g => `${g.name} · ${g.type}`);
+  const idx = window.__dnaFiltered.findIndex(g => g.name === name);
+  if (idx >= 0) {
+    sel.value = idx;
+    drawDNA(window.__dnaFiltered[idx]);
+  } else {
+    alert(`"${name}" 데이터를 지금 선택된 기간에서 찾을 수 없어요. 기간을 넓혀서 다시 시도해보세요.`);
+  }
+}
+
 function renderDNA(){
   const sel = document.getElementById('dna-select');
   window.__dnaGrouped = aggregateByProgram(PROGRAMS).sort((a,b)=>a.name.localeCompare(b.name));
@@ -1700,8 +1736,17 @@ async function drawDNA(g){
     ? `출연 기사: ${g.players.length ? g.players.join(', ') : '정보 없음'}`
     : (g.players[0] || '-');
 
+  const related = getRelatedPrograms(g.name);
+  const relatedHtml = related.length > 0
+    ? `<div style="margin-bottom:10px;">
+        <span style="font-size:11px; color:var(--text-tertiary); margin-right:6px;">🔗 관련 프로그램(대회방식이 달라 별도 집계):</span>
+        ${related.map(n=>`<span class="chip-btn" style="font-size:11px; cursor:pointer;" onclick="jumpToRelatedProgram('${n.replace(/'/g,"\\'")}')">${n} 보기</span>`).join(' ')}
+      </div>`
+    : '';
+
   document.getElementById('dna-detail').innerHTML = `
     <div class="card-label">구조화 분석 결과 ${g.count>1 ? `<span style="font-weight:400; color:var(--text-tertiary); font-size:11px;">(평균)</span>` : ''}</div>
+    ${relatedHtml}
     <div id="dna-tags">불러오는 중...</div>
     <ul class="factor-list">
       <li><b>대진:</b> ${playersTxt}</li>
@@ -2527,14 +2572,15 @@ async function loadFullHistory(){
 // (리드아웃과 달리, 평균 내는 대상이 "뒤에 온 프로그램"이 아니라 "기준 프로그램 자기 자신"으로 바뀜)
 async function computeLeadInStats(targetProgramId, typeFilter){
   const all = await loadFullHistory();
-  const targetInstances = all.filter(p => p.program_id === targetProgramId && (typeFilter === '전체' || p.type === typeFilter));
+  const relatedIds = getRelatedProgramIds(targetProgramId, all); // 대회방식은 다르지만 같은 프로그램으로 봐야 하는 관련군까지 포함
+  const targetInstances = all.filter(p => relatedIds.includes(p.program_id) && (typeFilter === '전체' || p.type === typeFilter));
   const avg = arr => arr.reduce((a,b)=>a+b,0)/arr.length;
   const normType = t => t ? String(t).replace(/\s/g, '') : '(미분류)';
   const targetOverallAvg = targetInstances.length ? avg(targetInstances.map(p=>p.rating)) : 0;
 
   const pairs = []; // {lead, target}
   all.forEach((p,i)=>{
-    if (p.program_id !== targetProgramId) return;
+    if (!relatedIds.includes(p.program_id)) return;
     if (typeFilter !== '전체' && p.type !== typeFilter) return;
     const prev = all[i-1];
     if (prev && (p._absStart - prev._absEnd) <= 60) pairs.push({ lead: prev, target: p });
@@ -2559,9 +2605,10 @@ async function computeLeadInStats(targetProgramId, typeFilter){
 
 async function computeAdjacencyStats(leadingProgramId, typeFilter){
   const all = await loadFullHistory();
+  const relatedIds = getRelatedProgramIds(leadingProgramId, all); // 대회방식은 다르지만 같은 프로그램으로 봐야 하는 관련군까지 포함
   const followers = [];
   all.forEach((p,i)=>{
-    if (p.program_id !== leadingProgramId) return;
+    if (!relatedIds.includes(p.program_id)) return;
     if (typeFilter !== '전체' && p.type !== typeFilter) return; // 기준 프로그램이 이 타입으로 방영된 경우만
     const next = all[i+1];
     if (next && (next._absStart - p._absEnd) <= 60) followers.push(next);
