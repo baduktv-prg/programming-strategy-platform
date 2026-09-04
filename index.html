@@ -916,10 +916,11 @@
         <div class="subscreen" data-parent="schedule" id="schedule-competitor" style="display:none;">
           <div class="filter-row">
             <input type="date" class="mini-filter" id="comp-date">
+            <label style="display:flex; align-items:center; gap:4px; font-size:12px;"><input type="checkbox" class="comp-analysis-channel" value="바둑TV" checked> 바둑TV</label>
+            <label style="display:flex; align-items:center; gap:4px; font-size:12px;"><input type="checkbox" class="comp-analysis-channel" value="K바둑" checked> K바둑</label>
             <label style="display:flex; align-items:center; gap:4px; font-size:12px;"><input type="checkbox" class="comp-analysis-channel" value="GOLF & PBA" checked> GOLF&PBA</label>
             <label style="display:flex; align-items:center; gap:4px; font-size:12px;"><input type="checkbox" class="comp-analysis-channel" value="브레인TV" checked> 브레인TV</label>
             <label style="display:flex; align-items:center; gap:4px; font-size:12px;"><input type="checkbox" class="comp-analysis-channel" value="빌리어즈TV" checked> 빌리어즈TV</label>
-            <label style="display:flex; align-items:center; gap:4px; font-size:12px;"><input type="checkbox" class="comp-analysis-channel" value="K바둑" checked> K바둑</label>
           </div>
           <div class="bento-grid">
             <div class="bento-card col-12">
@@ -1660,7 +1661,7 @@ document.querySelectorAll('#program-value-map .chip-btn[data-vm-type]').forEach(
 let dnaTypeFilter = '전체';
 /* ============ PROGRAM: COMPETITOR ANALYSIS (경쟁채널 분석) ============ */
 let competitorChart;
-const COMPETITOR_COLORS = { 'GOLF & PBA':'#34c759', '브레인TV':'#af52de', '빌리어즈TV':'#ff2d55', 'K바둑':'#ff9500' };
+const COMPETITOR_COLORS = { '바둑TV':'#0071e3', 'GOLF & PBA':'#34c759', '브레인TV':'#af52de', '빌리어즈TV':'#ff2d55', 'K바둑':'#ff9500' };
 
 function renderCompetitorTab(){
   const dateInput = document.getElementById('comp-date');
@@ -1674,6 +1675,8 @@ async function drawCompetitorChart(){
   const dateKey = document.getElementById('comp-date').value;
   if (!dateKey) return;
   const checkedChannels = Array.from(document.querySelectorAll('.comp-analysis-channel:checked')).map(cb=>cb.value);
+  const toBucket = (h) => h < 2 ? h + 24 : h; // 0~1시는 전날 방송일의 24~25시로
+  const hourLabels = []; for (let h=2; h<=25; h++) hourLabels.push(h);
 
   const datasets = [];
   for (const chName of checkedChannels) {
@@ -1681,21 +1684,46 @@ async function drawCompetitorChart(){
     if (!chRow) continue;
 
     const byHour = {};
-    const { data: rows } = await sb.from('fact_competitor_minute_rating')
-      .select('clock_time, rating_pct').eq('channel_id', chRow.channel_id).eq('date_key', dateKey)
-      .order('clock_time', { ascending:true }).limit(2000);
-    // 방송일 기준 2시~25시(=다음날 새벽1시)까지 24개 시간대로 집계
-    (rows||[]).forEach(r=>{
-      const h = Number(r.clock_time.slice(0,2));
-      const bucket = h < 2 ? h + 24 : h; // 0~1시는 전날 방송일의 24~25시로
-      (byHour[bucket] = byHour[bucket] || []).push(r.rating_pct);
-    });
+    const programByHour = {}; // 프로그램명 매칭 — 바둑TV/K바둑은 우리 fact_schedule에 있어서 가능, 나머지 경쟁채널은 아직 데이터 없음
 
-    const hourLabels = []; for (let h=2; h<=25; h++) hourLabels.push(h);
+    if (chName === '바둑TV' || chName === 'K바둑') {
+      // 자사 방식과 동일하게 fact_schedule(스케줄 시작시각) + fact_rating_minute(schedule_id 기준 분단위)를 조합
+      const { data: scheds } = await sb.from('fact_schedule')
+        .select('schedule_id, start_time, dim_program!fact_schedule_program_id_fkey(program_name)')
+        .eq('channel_id', chRow.channel_id).eq('date_key', dateKey);
+      const startMap = {}, nameMap = {};
+      (scheds||[]).forEach(s=>{
+        startMap[s.schedule_id] = hhmmToMin(s.start_time.slice(0,5));
+        nameMap[s.schedule_id] = s.dim_program?.program_name || '(프로그램명 없음)';
+        const sh = Number(s.start_time.slice(0,2));
+        programByHour[toBucket(sh)] = nameMap[s.schedule_id]; // 방영 시작 시간대에 프로그램명 표시(대략적 매칭)
+      });
+      const scheduleIds = (scheds||[]).map(s=>s.schedule_id);
+      if (scheduleIds.length) {
+        const { data: rows } = await sb.from('fact_rating_minute')
+          .select('schedule_id, minute_offset, rating_pct').in('schedule_id', scheduleIds).limit(20000);
+        (rows||[]).forEach(r=>{
+          if (r.rating_pct == null) return;
+          const clockMin = startMap[r.schedule_id] + r.minute_offset;
+          const h = Math.floor(clockMin / 60);
+          (byHour[toBucket(h)] = byHour[toBucket(h)] || []).push(r.rating_pct);
+        });
+      }
+    } else {
+      const { data: rows } = await sb.from('fact_competitor_minute_rating')
+        .select('clock_time, rating_pct').eq('channel_id', chRow.channel_id).eq('date_key', dateKey)
+        .order('clock_time', { ascending:true }).limit(2000);
+      (rows||[]).forEach(r=>{
+        const h = Number(r.clock_time.slice(0,2));
+        (byHour[toBucket(h)] = byHour[toBucket(h)] || []).push(r.rating_pct);
+      });
+    }
+
     const values = hourLabels.map(h => byHour[h] && byHour[h].length ? byHour[h].reduce((a,b)=>a+b,0)/byHour[h].length : null);
     datasets.push({
       label: chName, data: values, borderColor: COMPETITOR_COLORS[chName]||'#999', backgroundColor:'transparent',
       fill:false, tension:0.3, pointRadius:2, borderWidth:2, spanGaps:true,
+      programByHour: hourLabels.map(h => programByHour[h] || null),
     });
   }
 
@@ -1705,7 +1733,18 @@ async function drawCompetitorChart(){
     data: { labels: Array.from({length:24}, (_,i)=>`${(i+2)%24}시`), datasets },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: true, position: 'bottom' } },
+      plugins: {
+        legend: { display: true, position: 'bottom' },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const prog = ctx.dataset.programByHour?.[ctx.dataIndex];
+              const base = `${ctx.dataset.label}: ${ctx.parsed.y?.toFixed(3) ?? '-'}%`;
+              return prog ? `${base} (${prog})` : base;
+            }
+          }
+        }
+      },
       scales: { y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.04)' }, title: { display:true, text:'시청률(%)' } }, x: { grid: { display:false } } }
     }
   });
