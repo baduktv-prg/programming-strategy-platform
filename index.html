@@ -459,7 +459,6 @@
           <div class="nav-sub" data-screen="program" data-sub="compare">프로그램 비교 분석</div>
           <div class="nav-sub" data-screen="program" data-sub="minute">프로그램별 분단위 시청률</div>
           <div class="nav-sub" data-screen="program" data-sub="player">기사별 분석</div>
-          <div class="nav-sub" data-screen="program" data-sub="competitor">경쟁채널 분석</div>
         </div>
       </div>
 
@@ -470,6 +469,7 @@
           <div class="nav-sub" data-screen="schedule" data-sub="adjacency">리드인/리드아웃 분석</div>
           <div class="nav-sub" data-screen="schedule" data-sub="counterfactual">가상 편성 시나리오</div>
           <div class="nav-sub" data-screen="schedule" data-sub="weekly">주간 편성안 추천</div>
+          <div class="nav-sub" data-screen="schedule" data-sub="competitor">경쟁채널 분석</div>
           <!-- 자동편성 테스트: 주간편성안 추천에 통합되어 일단 숨김 처리
           <div class="nav-sub" data-screen="schedule" data-sub="autofill">자동 편성 테스트</div>
           -->
@@ -576,7 +576,6 @@
           <div class="subtab" data-parent="program" data-tab="compare">비교 분석</div>
           <div class="subtab" data-parent="program" data-tab="minute">분단위 시청률</div>
           <div class="subtab" data-parent="program" data-tab="player">기사별 분석</div>
-          <div class="subtab" data-parent="program" data-tab="competitor">경쟁채널 분석</div>
         </div>
 
         <div class="subscreen active" data-parent="program" id="program-value-map">
@@ -706,22 +705,6 @@
           </div>
           <div id="player-detail-wrap"></div>
         </div>
-
-        <div class="subscreen" data-parent="program" id="program-competitor" style="display:none;">
-          <div class="filter-row">
-            <input type="date" class="mini-filter" id="comp-date">
-            <label style="display:flex; align-items:center; gap:4px; font-size:12px;"><input type="checkbox" class="comp-analysis-channel" value="GOLF & PBA" checked> GOLF&PBA</label>
-            <label style="display:flex; align-items:center; gap:4px; font-size:12px;"><input type="checkbox" class="comp-analysis-channel" value="브레인TV" checked> 브레인TV</label>
-            <label style="display:flex; align-items:center; gap:4px; font-size:12px;"><input type="checkbox" class="comp-analysis-channel" value="빌리어즈TV" checked> 빌리어즈TV</label>
-          </div>
-          <div class="bento-grid">
-            <div class="bento-card col-12">
-              <div class="card-label">경쟁채널 일별 1시간 단위 시청률</div>
-              <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:10px;">선택한 날짜의 분단위 시청률을, 시간대별로 평균 내서 보여줍니다.</div>
-              <div style="height:340px;"><canvas id="chart-competitor"></canvas></div>
-            </div>
-          </div>
-        </div>
       </div>
 
       <!-- ============ SCHEDULE ============ -->
@@ -731,6 +714,7 @@
           <div class="subtab" data-parent="schedule" data-tab="adjacency">리드인/리드아웃 분석</div>
           <div class="subtab" data-parent="schedule" data-tab="counterfactual">가상 편성 시나리오</div>
           <div class="subtab" data-parent="schedule" data-tab="weekly">주간 편성안 추천</div>
+          <div class="subtab" data-parent="schedule" data-tab="competitor">경쟁채널 분석</div>
           <!-- 자동편성 테스트: 주간편성안 추천에 통합되어 일단 숨김 처리
           <div class="subtab" data-parent="schedule" data-tab="autofill">자동 편성 테스트</div>
           -->
@@ -926,6 +910,23 @@
           <div id="ws-recommend-list" style="padding:16px 18px; overflow-y:auto;"></div>
           <div style="display:flex; justify-content:flex-end; padding:10px 18px; border-top:1px solid var(--border);">
             <button onclick="clearCellChoice()" style="border:none; background:none; color:#ff3b30; font-size:12px; font-weight:600; cursor:pointer; padding:4px 8px;">이 칸 비우기</button>
+          </div>
+        </div>
+
+        <div class="subscreen" data-parent="schedule" id="schedule-competitor" style="display:none;">
+          <div class="filter-row">
+            <input type="date" class="mini-filter" id="comp-date">
+            <label style="display:flex; align-items:center; gap:4px; font-size:12px;"><input type="checkbox" class="comp-analysis-channel" value="GOLF & PBA" checked> GOLF&PBA</label>
+            <label style="display:flex; align-items:center; gap:4px; font-size:12px;"><input type="checkbox" class="comp-analysis-channel" value="브레인TV" checked> 브레인TV</label>
+            <label style="display:flex; align-items:center; gap:4px; font-size:12px;"><input type="checkbox" class="comp-analysis-channel" value="빌리어즈TV" checked> 빌리어즈TV</label>
+            <label style="display:flex; align-items:center; gap:4px; font-size:12px;"><input type="checkbox" class="comp-analysis-channel" value="K바둑" checked> K바둑</label>
+          </div>
+          <div class="bento-grid">
+            <div class="bento-card col-12">
+              <div class="card-label">경쟁채널 일별 1시간 단위 시청률</div>
+              <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:10px;">선택한 날짜의 분단위 시청률을, 시간대별로 평균 내서 보여줍니다.</div>
+              <div style="height:340px;"><canvas id="chart-competitor"></canvas></div>
+            </div>
           </div>
         </div>
       </div>
@@ -1659,7 +1660,7 @@ document.querySelectorAll('#program-value-map .chip-btn[data-vm-type]').forEach(
 let dnaTypeFilter = '전체';
 /* ============ PROGRAM: COMPETITOR ANALYSIS (경쟁채널 분석) ============ */
 let competitorChart;
-const COMPETITOR_COLORS = { 'GOLF & PBA':'#34c759', '브레인TV':'#af52de', '빌리어즈TV':'#ff2d55' };
+const COMPETITOR_COLORS = { 'GOLF & PBA':'#34c759', '브레인TV':'#af52de', '빌리어즈TV':'#ff2d55', 'K바둑':'#ff9500' };
 
 function renderCompetitorTab(){
   const dateInput = document.getElementById('comp-date');
@@ -1678,16 +1679,18 @@ async function drawCompetitorChart(){
   for (const chName of checkedChannels) {
     const { data: chRow } = await sb.from('dim_channel').select('channel_id').eq('channel_name', chName).single();
     if (!chRow) continue;
+
+    const byHour = {};
     const { data: rows } = await sb.from('fact_competitor_minute_rating')
       .select('clock_time, rating_pct').eq('channel_id', chRow.channel_id).eq('date_key', dateKey)
       .order('clock_time', { ascending:true }).limit(2000);
     // 방송일 기준 2시~25시(=다음날 새벽1시)까지 24개 시간대로 집계
-    const byHour = {};
     (rows||[]).forEach(r=>{
       const h = Number(r.clock_time.slice(0,2));
       const bucket = h < 2 ? h + 24 : h; // 0~1시는 전날 방송일의 24~25시로
       (byHour[bucket] = byHour[bucket] || []).push(r.rating_pct);
     });
+
     const hourLabels = []; for (let h=2; h<=25; h++) hourLabels.push(h);
     const values = hourLabels.map(h => byHour[h] && byHour[h].length ? byHour[h].reduce((a,b)=>a+b,0)/byHour[h].length : null);
     datasets.push({
