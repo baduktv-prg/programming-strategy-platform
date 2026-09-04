@@ -2218,7 +2218,15 @@ async function fetchProgramHistory(programId){
 // 1) 이 요일+시간대에 실제로 방영된 이력이 있으면 → 그 실측 평균을 그대로 씀
 // 2) 없으면 → 유사 프로그램(장르+대국자 → 장르만 → 비슷한 RT 순으로 범위 확대)이
 //    그 슬롯에서 실제로 냈던 성과로 추정
-function computeMatchScore(history, dowLabel, timeStr, fullHistory){
+// 표본이 5개 이상일 때만 최솟값·최댓값을 하나씩 빼고 평균(이상치 영향 완화). 그 미만이면 그냥 평균(빼면 표본이 너무 얇아짐)
+function trimmedMean(nums){
+  if (nums.length < 5) return nums.reduce((a,b)=>a+b,0) / nums.length;
+  const sorted = [...nums].sort((a,b)=>a-b);
+  const trimmed = sorted.slice(1, -1);
+  return trimmed.reduce((a,b)=>a+b,0) / trimmed.length;
+}
+
+function computeMatchScore(history, dowLabel, timeStr, fullHistory, typeFilter){
   const dow = DOW_INDEX[dowLabel[0]];
   const hour = Number(timeStr.split(':')[0]);
   if (history.length === 0) return { score: 50, basis: 'none', n: 0, peak: null };
@@ -2236,7 +2244,7 @@ function computeMatchScore(history, dowLabel, timeStr, fullHistory){
   // 1) 실측: 이 요일+시간대에 진짜로 방영된 적 있는지
   const exact = history.filter(h => h.dow === dow && h.hour === hour);
   if (exact.length > 0) {
-    const avgRating = exact.reduce((a,h)=>a+h.rating,0)/exact.length;
+    const avgRating = trimmedMean(exact.map(h=>h.rating));
     return { score: toScore(avgRating), basis: 'actual', basisN: exact.length, avgRating, ...common };
   }
 
@@ -2246,34 +2254,40 @@ function computeMatchScore(history, dowLabel, timeStr, fullHistory){
   const repGenre = mostCommon(history.map(h=>h.tournament_type).filter(Boolean));
   const repGenreNorm = repGenre ? repGenre.replace(/\s/g,'') : null; // "세계 기전"/"세계기전" 같은 띄어쓰기 차이 무시하고 비교
   const repNames = extractPlayerNames(repPlayers);
-  const others = fullHistory;
+  const others = fullHistory; // 참고군 자체는 타입 제한 없이 전체로 둠 (재방 이력 없는 참고 프로그램까지 통째로 배제하면 안 되니까)
   const atSlot = (pool) => pool.filter(p => p.dow === dow && p.hour === hour);
+  // 타입 지정 시: 그 타입 이력이 2건 이상이면 그것만 쓰고, 부족하면 전체(어떤 타입이든)로 대체 — "재방 있으면 재방, 없으면 생방이라도" 원칙
+  const preferType = (matched) => {
+    if (!typeFilter) return matched;
+    const onlyType = matched.filter(p => p.type === typeFilter);
+    return onlyType.length >= 2 ? onlyType : matched;
+  };
 
   let pool = [], basis = 'none';
   if (repGenreNorm) {
     const tier1 = others.filter(p => p.tournament_type && p.tournament_type.replace(/\s/g,'')===repGenreNorm && repPlayers && p.players === repPlayers);
-    const tier1Match = atSlot(tier1);
+    const tier1Match = preferType(atSlot(tier1));
     if (tier1Match.length >= 2) { pool = tier1Match; basis = 'similar_genre_players'; }
   }
   if (pool.length === 0 && repNames.length > 0) {
     // 장르 상관없이, 대표 대국자 중 한 명이라도 겹치는 프로그램들 (특정 기사 자체의 시간대 흥행력)
     const tier2 = others.filter(p => p.players && extractPlayerNames(p.players).some(n => repNames.includes(n)));
-    const tier2Match = atSlot(tier2);
+    const tier2Match = preferType(atSlot(tier2));
     if (tier2Match.length >= 2) { pool = tier2Match; basis = 'similar_players'; }
   }
   if (pool.length === 0 && repGenreNorm) {
     const tier3 = others.filter(p => p.tournament_type && p.tournament_type.replace(/\s/g,'')===repGenreNorm);
-    const tier3Match = atSlot(tier3);
+    const tier3Match = preferType(atSlot(tier3));
     if (tier3Match.length >= 2) { pool = tier3Match; basis = 'similar_genre'; }
   }
   if (pool.length === 0 && peak > 0) {
     const lo = peak * 0.7, hi = peak * 1.3;
-    const tier4Match = atSlot(others.filter(p => p.rating >= lo && p.rating <= hi));
+    const tier4Match = preferType(atSlot(others.filter(p => p.rating >= lo && p.rating <= hi)));
     if (tier4Match.length > 0) { pool = tier4Match; basis = 'similar_rt'; }
   }
   if (pool.length === 0) return { score: 50, basis: 'none', basisN: 0, ...common };
 
-  const avgRating = pool.reduce((a,h)=>a+h.rating,0)/pool.length;
+  const avgRating = trimmedMean(pool.map(h=>h.rating));
   return { score: toScore(avgRating), basis, basisN: pool.length, avgRating, ...common };
 }
 // "신진서vs커제" 같은 대진 표기에서 개별 기사 이름만 뽑아냄
@@ -3028,7 +3042,7 @@ function computeRecommendationCandidates(day, startIdx, endIdx, all, usedSet, op
   });
 
   function scoreVsEpisodeAvg(avgRating, items){
-    const episodeAvg = items.reduce((a,x)=>a+x.rating,0) / items.length;
+    const episodeAvg = trimmedMean(items.map(x=>x.rating));
     if (episodeAvg <= 0 || avgRating == null) return 50;
     return Math.max(10, Math.round(100 * avgRating / episodeAvg));
   }
@@ -3038,13 +3052,13 @@ function computeRecommendationCandidates(day, startIdx, endIdx, all, usedSet, op
     const typeItems = g.items.filter(x=>x.type===WS_REC_TYPE);
     const repPlayers = g.players + (g.round ? ' · '+g.round : '') + ' · ' + g.year + '년';
     if (typeItems.length >= 2) {
-      const r = computeMatchScore(typeItems, day, slot.timeStr, all);
+      const r = computeMatchScore(typeItems, day, slot.timeStr, all, WS_REC_TYPE);
       const score = scoreVsEpisodeAvg(r.avgRating, typeItems);
       const avgDurationMin = typeItems.reduce((a,x)=>a+(x._absEnd-x._absStart),0)/typeItems.length;
       const item = { program_id: g.program_id, name: g.name, episodeKey: key, avgDurationMin, tournament_type: g.items[0]?.tournament_type || null, ...r, score, repPlayers };
       if (r.basis === 'actual') withType.push(item); else withoutType.push(item);
     } else if (g.items.length >= 2) {
-      const r = computeMatchScore(g.items, day, slot.timeStr, all);
+      const r = computeMatchScore(g.items, day, slot.timeStr, all, WS_REC_TYPE);
       const score = scoreVsEpisodeAvg(r.avgRating, g.items);
       const avgDurationMin = g.items.reduce((a,x)=>a+(x._absEnd-x._absStart),0)/g.items.length;
       withoutType.push({ program_id: g.program_id, name: g.name, episodeKey: key, avgDurationMin, tournament_type: g.items[0]?.tournament_type || null, ...r, score, repPlayers });
