@@ -459,6 +459,7 @@
           <div class="nav-sub" data-screen="program" data-sub="compare">프로그램 비교 분석</div>
           <div class="nav-sub" data-screen="program" data-sub="minute">프로그램별 분단위 시청률</div>
           <div class="nav-sub" data-screen="program" data-sub="player">기사별 분석</div>
+          <div class="nav-sub" data-screen="program" data-sub="competitor">경쟁채널 분석</div>
         </div>
       </div>
 
@@ -486,12 +487,14 @@
         </div>
       </div>
 
+      <!-- 업데이트 예정 기능: 기사별 분석이 실제로 만들어져서 숨김 처리
       <div class="nav-group" data-group="update">
         <div class="nav-item" data-screen="update"><span>업데이트 예정 기능</span><span class="nav-caret">▸</span></div>
         <div class="nav-sub-wrap">
           <div class="nav-sub active" data-screen="update" data-sub="player-detail">기사별 세부 정보</div>
         </div>
       </div>
+      -->
     </div>
 
   </div>
@@ -573,6 +576,7 @@
           <div class="subtab" data-parent="program" data-tab="compare">비교 분석</div>
           <div class="subtab" data-parent="program" data-tab="minute">분단위 시청률</div>
           <div class="subtab" data-parent="program" data-tab="player">기사별 분석</div>
+          <div class="subtab" data-parent="program" data-tab="competitor">경쟁채널 분석</div>
         </div>
 
         <div class="subscreen active" data-parent="program" id="program-value-map">
@@ -701,6 +705,22 @@
             <button class="chip-btn" style="color:#ff3b30;" onclick="clearPlayerCompare()">비교 해제</button>
           </div>
           <div id="player-detail-wrap"></div>
+        </div>
+
+        <div class="subscreen" data-parent="program" id="program-competitor" style="display:none;">
+          <div class="filter-row">
+            <input type="date" class="mini-filter" id="comp-date">
+            <label style="display:flex; align-items:center; gap:4px; font-size:12px;"><input type="checkbox" class="comp-analysis-channel" value="GOLF & PBA" checked> GOLF&PBA</label>
+            <label style="display:flex; align-items:center; gap:4px; font-size:12px;"><input type="checkbox" class="comp-analysis-channel" value="브레인TV" checked> 브레인TV</label>
+            <label style="display:flex; align-items:center; gap:4px; font-size:12px;"><input type="checkbox" class="comp-analysis-channel" value="빌리어즈TV" checked> 빌리어즈TV</label>
+          </div>
+          <div class="bento-grid">
+            <div class="bento-card col-12">
+              <div class="card-label">경쟁채널 일별 1시간 단위 시청률</div>
+              <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:10px;">선택한 날짜의 분단위 시청률을, 시간대별로 평균 내서 보여줍니다.</div>
+              <div style="height:340px;"><canvas id="chart-competitor"></canvas></div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -976,6 +996,7 @@
         </div>
       </div>
 
+      <!-- 업데이트 예정 기능 화면: 기사별 분석이 실제로 만들어져서 숨김 처리
       <div class="screen" id="screen-update">
         <div class="subtabs">
           <div class="subtab active" data-parent="update" data-tab="player-detail">기사별 세부 정보</div>
@@ -993,6 +1014,7 @@
           </div>
         </div>
       </div>
+      -->
 
     </div>
   </div>
@@ -1635,6 +1657,57 @@ document.querySelectorAll('#program-value-map .chip-btn[data-vm-type]').forEach(
 
 /* ============ PROGRAM: DNA ============ */
 let dnaTypeFilter = '전체';
+/* ============ PROGRAM: COMPETITOR ANALYSIS (경쟁채널 분석) ============ */
+let competitorChart;
+const COMPETITOR_COLORS = { 'GOLF & PBA':'#34c759', '브레인TV':'#af52de', '빌리어즈TV':'#ff2d55' };
+
+function renderCompetitorTab(){
+  const dateInput = document.getElementById('comp-date');
+  if (!dateInput.value) dateInput.value = window.__latestDate || new Date().toISOString().slice(0,10);
+  dateInput.onchange = drawCompetitorChart;
+  document.querySelectorAll('.comp-analysis-channel').forEach(cb => cb.onchange = drawCompetitorChart);
+  drawCompetitorChart();
+}
+
+async function drawCompetitorChart(){
+  const dateKey = document.getElementById('comp-date').value;
+  if (!dateKey) return;
+  const checkedChannels = Array.from(document.querySelectorAll('.comp-analysis-channel:checked')).map(cb=>cb.value);
+
+  const datasets = [];
+  for (const chName of checkedChannels) {
+    const { data: chRow } = await sb.from('dim_channel').select('channel_id').eq('channel_name', chName).single();
+    if (!chRow) continue;
+    const { data: rows } = await sb.from('fact_competitor_minute_rating')
+      .select('clock_time, rating_pct').eq('channel_id', chRow.channel_id).eq('date_key', dateKey)
+      .order('clock_time', { ascending:true }).limit(2000);
+    // 방송일 기준 2시~25시(=다음날 새벽1시)까지 24개 시간대로 집계
+    const byHour = {};
+    (rows||[]).forEach(r=>{
+      const h = Number(r.clock_time.slice(0,2));
+      const bucket = h < 2 ? h + 24 : h; // 0~1시는 전날 방송일의 24~25시로
+      (byHour[bucket] = byHour[bucket] || []).push(r.rating_pct);
+    });
+    const hourLabels = []; for (let h=2; h<=25; h++) hourLabels.push(h);
+    const values = hourLabels.map(h => byHour[h] && byHour[h].length ? byHour[h].reduce((a,b)=>a+b,0)/byHour[h].length : null);
+    datasets.push({
+      label: chName, data: values, borderColor: COMPETITOR_COLORS[chName]||'#999', backgroundColor:'transparent',
+      fill:false, tension:0.3, pointRadius:2, borderWidth:2, spanGaps:true,
+    });
+  }
+
+  if (competitorChart) competitorChart.destroy();
+  competitorChart = new Chart(document.getElementById('chart-competitor'), {
+    type: 'line',
+    data: { labels: Array.from({length:24}, (_,i)=>`${(i+2)%24}시`), datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: true, position: 'bottom' } },
+      scales: { y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.04)' }, title: { display:true, text:'시청률(%)' } }, x: { grid: { display:false } } }
+    }
+  });
+}
+
 function jumpToRelatedProgram(name){
   document.querySelectorAll('#program-dna .chip-btn').forEach(b=>b.classList.toggle('active', b.dataset.dnaType==='전체'));
   dnaTypeFilter = '전체';
@@ -4127,6 +4200,7 @@ window.addEventListener('afterprint', ()=>{
   renderCompare();
   renderMinuteTab();
   renderPlayerTab();
+  renderCompetitorTab();
   renderMatching();
   renderAdjacency();
   renderCounterfactual();
