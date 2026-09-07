@@ -219,9 +219,34 @@
   }
   .date-nav button:hover { border-color: var(--accent); color: var(--accent); }
   .date-nav-label {
-    font-family: 'DM Mono', monospace; font-size: 12.5px; font-weight: 600; color: var(--text-primary);
+    font-family: 'DM Mono', monospace; font-size: 12.5px; font-weight: 700; color: var(--text-primary);
     white-space: nowrap; min-width: 120px; text-align: center;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-pill);
+    padding: 8px 14px; cursor: pointer; display: inline-block; transition: all .15s;
   }
+  .date-nav-label:hover { border-color: var(--accent); color: var(--accent); }
+  .date-picker-dropdown {
+    position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-hover); padding: 14px; z-index: 300; width: 260px;
+  }
+  .cal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .cal-header button {
+    border: none; background: transparent; color: var(--text-secondary); cursor: pointer;
+    font-size: 13px; padding: 4px 8px; border-radius: 6px;
+  }
+  .cal-header button:hover { background: var(--bg-subtle); color: var(--accent); }
+  .cal-header .cal-title { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+  .cal-dow { font-size: 10px; color: var(--text-muted); text-align: center; padding: 4px 0; font-weight: 700; }
+  .cal-day {
+    font-family: 'DM Mono', monospace; font-size: 12px; text-align: center; padding: 6px 0;
+    border-radius: 6px; cursor: pointer; color: var(--text-primary); transition: all .1s;
+  }
+  .cal-day:hover { background: var(--accent-light); }
+  .cal-day.other-month { color: var(--text-muted); opacity: .4; }
+  .cal-day.selected { background: var(--accent); color: #fff; font-weight: 700; }
+  .cal-day.today { border: 1px solid var(--accent); }
 
   input.date-input {
     font-family: 'DM Mono', monospace; font-size: 12.5px; font-weight: 600; padding: 8px 12px;
@@ -568,14 +593,14 @@
         </div>
         <div class="date-nav">
           <button onclick="navigateDate(-1)">← 이전</button>
-          <span id="date-nav-label" class="date-nav-label"></span>
+          <div style="position:relative;">
+            <span id="date-nav-label" class="date-nav-label" onclick="toggleDatePicker()"></span>
+            <div id="date-picker-dropdown" class="date-picker-dropdown" style="display:none;" onclick="event.stopPropagation()"></div>
+          </div>
           <button onclick="navigateDate(1)">다음 →</button>
         </div>
-        <div style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-secondary);">
-          <input type="date" id="date-from" class="date-input">
-          <span>~</span>
-          <input type="date" id="date-to" class="date-input">
-        </div>
+        <input type="date" id="date-from" class="date-input" style="display:none;">
+        <input type="date" id="date-to" class="date-input" style="display:none;">
         <button class="btn-report" onclick="openReportModal()">보고서 생성</button>
       </div>
     </div>
@@ -1356,6 +1381,64 @@ function navigateDate(dir){
   else a.setMonth(a.getMonth() + dir);
   dateAnchor = a;
   applyDateMode();
+}
+
+let calViewDate = null; // 캘린더가 지금 보여주고 있는 달(선택된 날짜와 별개로 탐색 가능)
+function toggleDatePicker(){
+  const dropdown = document.getElementById('date-picker-dropdown');
+  const isOpen = dropdown.style.display !== 'none';
+  if (isOpen) { dropdown.style.display = 'none'; return; }
+  calViewDate = new Date(dateAnchor);
+  renderCalendar();
+  dropdown.style.display = 'block';
+}
+document.addEventListener('click', (e)=>{
+  const dropdown = document.getElementById('date-picker-dropdown');
+  if (dropdown && dropdown.style.display !== 'none' && !e.target.closest('#date-picker-dropdown') && !e.target.closest('#date-nav-label')) {
+    dropdown.style.display = 'none';
+  }
+});
+function calNavigateMonth(dir){
+  calViewDate.setMonth(calViewDate.getMonth() + dir);
+  renderCalendar();
+}
+function calPickDay(y, m, d){
+  dateAnchor = new Date(y, m, d);
+  document.getElementById('date-picker-dropdown').style.display = 'none';
+  applyDateMode();
+}
+function renderCalendar(){
+  const y = calViewDate.getFullYear(), m = calViewDate.getMonth();
+  const firstDow = new Date(y, m, 1).getDay(); // 0=일
+  const daysInMonth = new Date(y, m+1, 0).getDate();
+  const daysInPrevMonth = new Date(y, m, 0).getDate();
+  const todayStr = toDateStr(new Date());
+  const selectedStr = toDateStr(dateAnchor);
+
+  let html = `<div class="cal-header">
+    <button onclick="calNavigateMonth(-1)">‹</button>
+    <span class="cal-title">${y}년 ${m+1}월</span>
+    <button onclick="calNavigateMonth(1)">›</button>
+  </div><div class="cal-grid">`;
+  ['일','월','화','수','목','금','토'].forEach(d=>{ html += `<div class="cal-dow">${d}</div>`; });
+
+  for (let i = firstDow - 1; i >= 0; i--) {
+    html += `<div class="cal-day other-month">${daysInPrevMonth - i}</div>`;
+  }
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dStr = `${y}-${pad2(m+1)}-${pad2(d)}`;
+    const cls = ['cal-day'];
+    if (dStr === selectedStr) cls.push('selected');
+    if (dStr === todayStr) cls.push('today');
+    html += `<div class="${cls.join(' ')}" onclick="calPickDay(${y},${m},${d})">${d}</div>`;
+  }
+  const totalCells = firstDow + daysInMonth;
+  const trailing = (7 - (totalCells % 7)) % 7;
+  for (let d = 1; d <= trailing; d++) {
+    html += `<div class="cal-day other-month">${d}</div>`;
+  }
+  html += '</div>';
+  document.getElementById('date-picker-dropdown').innerHTML = html;
 }
 
 // 선택한 기간(days)만큼의 프로그램 목록 + 시청률 + 프로그램명 조인해서 PROGRAMS 채움
