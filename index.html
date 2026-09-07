@@ -5,16 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>바둑TV 편성전략 플랫폼</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <style>
   :root {
     --bg-main: #f5f5f7;
     --bg-sidebar: #111113;
     --bg-card: #ffffff;
+    --bg-subtle: #f5f5f7;
     --text-primary: #1d1d1f;
     --text-secondary: #86868b;
     --text-muted: #a1a1a6;
+    --text-tertiary: #a1a1a6;
+    --btn-dark: #1d1d1f;
     --accent: #0071e3;
     --accent-light: rgba(0, 113, 229, 0.08);
     --positive: #34c759;
@@ -28,6 +31,34 @@
     --shadow-hover: 0 20px 40px rgba(0, 0, 0, 0.07);
     --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.05);
   }
+  body.dark-mode {
+    --bg-main: #0c0e14;
+    --bg-sidebar: #0a0b10;
+    --bg-card: #12151e;
+    --bg-subtle: #181c28;
+    --text-primary: #e2e6f0;
+    --text-secondary: #8a92a6;
+    --text-muted: #6b7386;
+    --text-tertiary: #6b7386;
+    --btn-dark: #2a2d3a;
+    --accent: #5b8dee;
+    --accent-light: rgba(91, 141, 238, 0.12);
+    --positive: #3ecf8e;
+    --negative: #e05c5c;
+    --border: rgba(255, 255, 255, 0.08);
+    --border-dark: rgba(255, 255, 255, 0.14);
+    --shadow-card: 0 10px 30px rgba(0, 0, 0, 0.25), 0 1px 4px rgba(0, 0, 0, 0.15);
+    --shadow-hover: 0 20px 40px rgba(0, 0, 0, 0.35);
+    --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.2);
+  }
+  body { transition: background 0.2s, color 0.2s; }
+  .theme-toggle {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--bg-subtle); border: 1px solid var(--border); color: var(--text-primary);
+    font-family: inherit; font-size: 12px; padding: 7px 12px;
+    border-radius: var(--radius-pill); cursor: pointer; transition: all .15s;
+  }
+  .theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
 
   * { box-sizing: border-box; font-feature-settings: "cv02", "cv03", "cv04", "cv11"; }
   
@@ -81,7 +112,7 @@
     top: 8px; left: 8px;
     width: 8px; height: 8px;
     border-radius: 50%;
-    background: #ffffff;
+    background: var(--bg-card);
     box-shadow: 0 0 8px rgba(255,255,255,0.8);
   }
 
@@ -108,7 +139,7 @@
   .nav-item:hover { background: rgba(255, 255, 255, 0.05); color: #fff; }
   .nav-item.active { background: rgba(255, 255, 255, 0.12); color: #fff; }
   
-  .nav-caret { font-size: 9px; color: #6e6e73; transition: transform 0.2s; }
+  .nav-caret { font-size: 9px; color: var(--text-secondary); transition: transform 0.2s; }
   .nav-group.open .nav-caret { transform: rotate(90deg); }
   
   .nav-sub-wrap { max-height: 0; overflow: hidden; transition: max-height 0.25s ease-out; }
@@ -117,7 +148,7 @@
   .nav-sub {
     padding: 10px 16px 10px 36px;
     font-size: 13px;
-    color: #86868b;
+    color: var(--text-secondary);
     cursor: pointer;
     border-radius: var(--radius-sm);
     transition: all 0.15s;
@@ -128,7 +159,7 @@
   .nav-sub.active { color: var(--accent); font-weight: 700; background: var(--accent-light); }
 
   .sidebar-foot { padding: 20px 12px 0 12px; border-top: 1px solid var(--border-dark); margin-top: 16px; }
-  .sidebar-foot-label { font-size: 11px; color: #6e6e73; line-height: 1.4; }
+  .sidebar-foot-label { font-size: 11px; color: var(--text-secondary); line-height: 1.4; }
 
   /* ===== Main ===== */
   .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
@@ -150,7 +181,7 @@
   select.period-select, select.mini-filter, input.mini-filter {
     font-family: inherit; font-size: 13px; font-weight: 600; padding: 10px 16px;
     border: 1px solid var(--border); border-radius: var(--radius-pill);
-    background: #fff; color: var(--text-primary); cursor: pointer;
+    background: var(--bg-card); color: var(--text-primary); cursor: pointer;
     box-shadow: var(--shadow-sm); outline: none; transition: all 0.2s;
   }
   select.period-select:hover, select.mini-filter:hover, input.mini-filter:hover { border-color: rgba(0,0,0,0.15); }
@@ -163,7 +194,7 @@
   .searchable-wrap input.mini-filter { padding-right: 30px; }
   .searchable-dropdown-list {
     position: absolute; top: 100%; left: 0; right: 0; z-index: 50; margin-top: 4px;
-    max-height: 240px; overflow-y: auto; background: #fff; border: 1px solid var(--border);
+    max-height: 240px; overflow-y: auto; background: var(--bg-card); border: 1px solid var(--border);
     border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); display: none;
   }
   .searchable-dropdown-list.open { display: block; }
@@ -171,14 +202,14 @@
   .searchable-dropdown-item:hover { background: var(--accent-light); color: var(--accent); }
 
   input.date-input {
-    font-family: inherit; font-size: 12.5px; font-weight: 600; padding: 8px 10px;
-    border: 1px solid var(--border); border-radius: 8px;
-    background: #fff; color: var(--text-primary); outline: none;
+    font-family: 'DM Mono', monospace; font-size: 12.5px; font-weight: 600; padding: 8px 12px;
+    border: 1px solid var(--border); border-radius: var(--radius-pill);
+    background: var(--bg-subtle); color: var(--text-primary); outline: none;
   }
   .chip-btn {
     font-family: inherit; font-size: 12px; font-weight: 700; padding: 8px 12px;
     border: 1px solid var(--border); border-radius: var(--radius-pill);
-    background: #fff; color: var(--text-secondary); cursor: pointer; transition: all .15s;
+    background: var(--bg-card); color: var(--text-secondary); cursor: pointer; transition: all .15s;
   }
   .chip-btn:hover { border-color: rgba(0,0,0,0.15); }
   .chip-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
@@ -191,7 +222,7 @@
 
   .btn-report {
     font-family: inherit; font-size: 13px; font-weight: 700; padding: 10px 20px;
-    background: var(--text-primary); color: #fff; border: none;
+    background: var(--btn-dark); color: #fff; border: none;
     border-radius: var(--radius-pill); cursor: pointer; display: flex;
     align-items: center; gap: 8px; box-shadow: var(--shadow-sm); transition: all 0.2s;
   }
@@ -285,7 +316,7 @@
   }
   .subtab:hover { color: var(--text-primary); }
   .subtab.active {
-    background: #ffffff;
+    background: var(--bg-card);
     color: var(--text-primary);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
   }
@@ -409,26 +440,26 @@
     text-overflow: clip !important;
   }
 }
-.report-print-item .bento-card { box-shadow:none; border:1px solid #eee; }
+.report-print-item .bento-card { box-shadow:none; border:1px solid var(--border); }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
 <div id="report-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:1000; align-items:center; justify-content:center;">
-  <div style="background:#fff; border-radius:16px; padding:28px; width:520px; max-height:82vh; display:flex; flex-direction:column; box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+  <div style="background:var(--bg-card); border-radius:16px; padding:28px; width:520px; max-height:82vh; display:flex; flex-direction:column; box-shadow:0 20px 60px rgba(0,0,0,0.2);">
     <div style="font-size:16px; font-weight:700; margin-bottom:4px;">보고서 만들기</div>
     <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:14px;">각 화면 우측 하단의 "+ 보고서에 추가" 버튼으로 담은 항목들이에요. 순서 조정, 코멘트 작성, 삭제가 가능합니다.</div>
     <input id="report-title-input" placeholder="보고서 제목" value="바둑TV 편성전략 리포트" style="padding:10px 12px; border:1px solid var(--border); border-radius:10px; font-size:13px; margin-bottom:14px; font-family:inherit;">
     <div id="report-pin-list" style="overflow-y:auto; flex:1; margin-bottom:14px; border-top:1px solid var(--border); padding-top:10px;"></div>
     <div style="display:flex; gap:8px;">
-      <button onclick="closeReportModal()" style="flex:1; padding:10px; border-radius:10px; border:1px solid var(--border); background:#fff; cursor:pointer; font-weight:600;">취소</button>
+      <button onclick="closeReportModal()" style="flex:1; padding:10px; border-radius:10px; border:1px solid var(--border); background:var(--bg-card); cursor:pointer; font-weight:600;">취소</button>
       <button onclick="generateReport()" style="flex:1; padding:10px; border-radius:10px; border:none; background:var(--accent); color:#fff; cursor:pointer; font-weight:600;">PDF로 저장</button>
     </div>
   </div>
 </div>
 
-<button id="pin-add-btn" onclick="captureCurrentPanel()" type="button" style="position:fixed; bottom:24px; right:24px; z-index:150; padding:12px 20px; border-radius:999px; border:none; background:#1d1d1f; color:#fff; font-weight:700; font-size:13px; cursor:pointer; box-shadow:0 6px 20px rgba(0,0,0,0.25); display:flex; align-items:center; gap:8px;">
+<button id="pin-add-btn" onclick="captureCurrentPanel()" type="button" style="position:fixed; bottom:24px; right:24px; z-index:150; padding:12px 20px; border-radius:999px; border:none; background:var(--btn-dark); color:#fff; font-weight:700; font-size:13px; cursor:pointer; box-shadow:0 6px 20px rgba(0,0,0,0.25); display:flex; align-items:center; gap:8px;">
   + 보고서에 추가
   <span id="pin-count-badge" style="display:none; background:var(--accent); color:#fff; border-radius:999px; padding:1px 7px; font-size:11px;">0</span>
 </button>
@@ -507,6 +538,7 @@
         <div class="topbar-sub" id="topbar-sub">채널 전체 성과와 주요 편성 이슈 요약</div>
       </div>
       <div class="topbar-right">
+        <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">🌙 다크</button>
         <div style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-secondary);">
           <input type="date" id="date-from" class="date-input">
           <span>~</span>
@@ -701,7 +733,7 @@
               <input class="mini-filter" id="player-search-b" placeholder="비교할 대국자(선택)" autocomplete="off">
               <div class="searchable-dropdown-list" id="player-search-b-dropdown"></div>
             </div>
-            <button class="chip-btn" style="color:#ff3b30;" onclick="clearPlayerCompare()">비교 해제</button>
+            <button class="chip-btn" style="color:var(--negative);" onclick="clearPlayerCompare()">비교 해제</button>
           </div>
           <div id="player-detail-wrap"></div>
         </div>
@@ -815,8 +847,8 @@
             <select class="mini-filter" id="ws-template-select" style="max-width:160px;"><option value="">템플릿 불러오기...</option></select>
             <button class="chip-btn" onclick="loadWeeklyTemplate()">불러오기</button>
             <button class="chip-btn" onclick="saveWeeklyTemplate()">현재 편성을 템플릿으로 저장</button>
-            <button class="chip-btn" style="background:#1d1d1f; color:#fff;" onclick="runWeeklyAutoFill()">자동으로 빈 슬롯 채우기</button>
-            <button class="chip-btn" style="color:#ff3b30;" onclick="clearAllFixed()">전체 초기화</button>
+            <button class="chip-btn" style="background:var(--btn-dark); color:#fff;" onclick="runWeeklyAutoFill()">자동으로 빈 슬롯 채우기</button>
+            <button class="chip-btn" style="color:var(--negative);" onclick="clearAllFixed()">전체 초기화</button>
           </div>
           <div class="filter-row" style="flex-wrap:wrap; align-items:flex-start;">
             <div style="display:flex; gap:4px; flex-wrap:wrap;" id="ws-day-multi">
@@ -841,7 +873,7 @@
               <div class="searchable-dropdown-list" id="ws-fixed-program-dropdown"></div>
             </div>
             <textarea id="ws-fixed-name" placeholder="고정 편성 내용 입력 (프로그램명, 대국자, 부, 해설/진행 등 원하는 형식으로 자유롭게)" style="flex:1; min-width:220px; min-height:38px; max-height:100px; padding:8px 12px; border:1px solid var(--border); border-radius:12px; font-family:inherit; font-size:13px; resize:vertical;"></textarea>
-            <button class="chip-btn" style="background:#1d1d1f; color:#fff; align-self:flex-start;" onclick="addFixedProgram()">+ 선택한 요일에 고정 편성 추가</button>
+            <button class="chip-btn" style="background:var(--btn-dark); color:#fff; align-self:flex-start;" onclick="addFixedProgram()">+ 선택한 요일에 고정 편성 추가</button>
           </div>
           <div style="font-size:10px; color:var(--text-tertiary); margin:-4px 0 10px 2px;">🔗 DB 프로그램을 검색해서 연결하면, 이 고정 슬롯이 실제 방영 이력이 있는 프로그램으로 인식돼요 (나중에 리드인/리드아웃 분석 등에 활용 예정). 연결 안 해도 그냥 자유 텍스트로 입력만 하셔도 됩니다.</div>
           <div class="bento-grid">
@@ -850,7 +882,7 @@
               <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:10px;">고정 편성: <b style="color:#C6EFCE; text-shadow:0 0 1px #999;">■</b> 생방 · <b style="color:#FFFF00; text-shadow:0 0 1px #999;">■</b> 본방 · <b style="color:#e5e5ea; text-shadow:0 0 1px #999;">■</b> 재방 (마우스 올리면 전체 내용 확인) · 빈 칸을 클릭하면 그 슬롯에 어울리는 프로그램을 추천해드려요.</div>
               <details style="margin-bottom:14px;">
                 <summary style="font-size:11px; color:var(--text-tertiary); cursor:pointer; user-select:none;">추천 점수는 어떻게 계산되나요? (펼쳐보기)</summary>
-                <div style="font-size:11px; color:var(--text-tertiary); line-height:1.8; margin-top:8px; padding:12px 14px; background:#f5f5f7; border-radius:10px;">
+                <div style="font-size:11px; color:var(--text-tertiary); line-height:1.8; margin-top:8px; padding:12px 14px; background:var(--bg-subtle); border-radius:10px;">
                   1. 바둑TV에서 2회 이상 방영된 적 있는 모든 "회차"(같은 프로그램이라도 대진이 다르면 별개로 취급)를 일단 후보로 놓습니다.<br>
                   2. 선택한 슬롯 길이(RT)에 맞는 방영길이를 가진 회차만 남깁니다. (예: 150분 슬롯 → 120분 초과~130분 이하인 것만)<br>
                   3. 남은 후보 하나하나에 대해, <b>각자 독립적으로</b> 아래 순서를 시도합니다 — 어떤 후보를 위해 다른 후보를 참고하는 게 아니라, 후보 각자가 자기 데이터로 이 시험을 봅니다.<br>
@@ -878,9 +910,9 @@
           <div class="filter-row" style="flex-wrap:wrap;">
             <select class="mini-filter" id="af-template-select"><option value="">템플릿 불러오기...</option></select>
             <button class="chip-btn" onclick="loadAutoFillTemplate()">불러오기</button>
-            <button class="chip-btn" style="background:#1d1d1f; color:#fff;" onclick="runAutoFill()">자동으로 빈 슬롯 채우기</button>
+            <button class="chip-btn" style="background:var(--btn-dark); color:#fff;" onclick="runAutoFill()">자동으로 빈 슬롯 채우기</button>
             <button class="chip-btn" onclick="saveAutoFillAsTemplate()">현재 편성안을 템플릿으로 저장</button>
-            <button class="chip-btn" style="color:#ff3b30;" onclick="clearAutoFill()">초기화</button>
+            <button class="chip-btn" style="color:var(--negative);" onclick="clearAutoFill()">초기화</button>
           </div>
           <div class="bento-grid">
             <div class="bento-card col-12">
@@ -889,7 +921,7 @@
                 <b style="color:#C6EFCE; text-shadow:0 0 1px #999;">■</b> 생방 · <b style="color:#FFFF00; text-shadow:0 0 1px #999;">■</b> 본방 · <b style="color:#e5e5ea; text-shadow:0 0 1px #999;">■</b> 재방(고정) · <b style="color:#b8ddfc;">■</b> 자동 추천으로 채워짐.
                 템플릿을 먼저 불러온 다음, "자동으로 빈 슬롯 채우기"를 누르면 고정 슬롯을 제외한 나머지 구간을 큰 프로그램 위주로 채우고, 남는 자리만 작게 쪼개서 채웁니다. 주간 편성안 추천 탭과는 별개로 동작하는 실험용 화면입니다.
               </div>
-              <div id="af-stats" style="font-size:12px; font-weight:700; margin-bottom:10px; padding:8px 12px; background:#f5f5f7; border-radius:8px;"></div>
+              <div id="af-stats" style="font-size:12px; font-weight:700; margin-bottom:10px; padding:8px 12px; background:var(--bg-subtle); border-radius:8px;"></div>
               <div style="overflow-x:auto; max-height:720px; overflow-y:auto;">
                 <div id="af-grid" style="display:grid; grid-template-columns:52px repeat(7,1fr); gap:3px; font-size:11px; min-width:700px;"></div>
               </div>
@@ -898,18 +930,18 @@
         </div>
         -->
 
-        <div id="ws-recommend-panel" style="display:none; position:fixed; bottom:90px; right:24px; width:420px; max-height:60vh; display:flex; flex-direction:column; background:#fff; border-radius:16px; box-shadow:0 12px 40px rgba(0,0,0,0.18); z-index:140;">
+        <div id="ws-recommend-panel" style="display:none; position:fixed; bottom:90px; right:24px; width:420px; max-height:60vh; display:flex; flex-direction:column; background:var(--bg-card); border-radius:16px; box-shadow:0 12px 40px rgba(0,0,0,0.18); z-index:140;">
           <div id="ws-recommend-header" style="display:flex; justify-content:space-between; align-items:center; padding:14px 18px; border-bottom:1px solid var(--border); cursor:move; user-select:none;">
             <div style="display:flex; align-items:center; gap:8px;">
               <span style="color:var(--text-tertiary); font-size:14px;">⠿</span>
               <div class="card-label" id="ws-recommend-title" style="margin-bottom:0;">추천 후보</div>
             </div>
-            <button onclick="document.getElementById('ws-recommend-panel').style.display='none';" style="border:none; background:#f0f0f0; border-radius:8px; width:26px; height:26px; cursor:pointer;">✕</button>
+            <button onclick="document.getElementById('ws-recommend-panel').style.display='none';" style="border:none; background:var(--bg-subtle); border-radius:8px; width:26px; height:26px; cursor:pointer;">✕</button>
           </div>
           <div id="ws-duration-rule-label" style="padding:8px 18px 0; font-size:10px; color:var(--text-tertiary);"></div>
           <div id="ws-recommend-list" style="padding:16px 18px; overflow-y:auto;"></div>
           <div style="display:flex; justify-content:flex-end; padding:10px 18px; border-top:1px solid var(--border);">
-            <button onclick="clearCellChoice()" style="border:none; background:none; color:#ff3b30; font-size:12px; font-weight:600; cursor:pointer; padding:4px 8px;">이 칸 비우기</button>
+            <button onclick="clearCellChoice()" style="border:none; background:none; color:var(--negative); font-size:12px; font-weight:600; cursor:pointer; padding:4px 8px;">이 칸 비우기</button>
           </div>
         </div>
 
@@ -1035,8 +1067,14 @@ let TREND = [];
 let ALL_PROGRAMS = [];
 let HOURLY_TARGET = {};
 
-const ACCENT_COLOR = "#0071e3";
-const ACCENT_LIGHT = "rgba(0,113,229,0.12)";
+let ACCENT_COLOR = "#0071e3";
+let ACCENT_LIGHT = "rgba(0,113,229,0.12)";
+function refreshAccentColorVars(){
+  // 캔버스(Chart.js 등)는 CSS 변수(var())를 못 읽으므로, 테마 바뀔 때마다 실제 계산된 색상값으로 갱신해둠
+  const cs = getComputedStyle(document.body);
+  ACCENT_COLOR = (cs.getPropertyValue('--accent') || '#0071e3').trim();
+  ACCENT_LIGHT = (cs.getPropertyValue('--accent-light') || 'rgba(0,113,229,0.12)').trim();
+}
 
 /* ============ 실제 데이터 로딩 ============ */
 function subtractDays(dateStr, days){
@@ -1178,6 +1216,25 @@ function aggregateByProgramAndPlayers(list){
     };
   });
 }
+
+function toggleTheme(){
+  const isDark = document.body.classList.toggle('dark-mode');
+  document.getElementById('theme-toggle').textContent = isDark ? '☀️ 라이트' : '🌙 다크';
+  localStorage.setItem('baduk-theme', isDark ? 'dark' : 'light');
+  refreshAccentColorVars();
+}
+(function restoreTheme(){
+  if (localStorage.getItem('baduk-theme') === 'dark') {
+    document.addEventListener('DOMContentLoaded', () => {
+      document.body.classList.add('dark-mode');
+      const btn = document.getElementById('theme-toggle');
+      if (btn) btn.textContent = '☀️ 라이트';
+      refreshAccentColorVars();
+    });
+  } else {
+    document.addEventListener('DOMContentLoaded', refreshAccentColorVars);
+  }
+})();
 
 async function loadData() {
   // 1) 바둑TV 채널 ID 조회
@@ -2000,7 +2057,7 @@ function buildPlayerBlockHtml(name, instances, colClass){
     days.forEach(d=>{
       const cellRatings = byCell[`${d}_${h}`];
       if (!cellRatings || cellRatings.length === 0) {
-        heatmapHtml += `<div style="height:26px; border-radius:6px; background:#f5f5f7;"></div>`;
+        heatmapHtml += `<div style="height:26px; border-radius:6px; background:var(--bg-subtle);"></div>`;
         return;
       }
       const cellAvg = cellRatings.reduce((a,b)=>a+b,0) / cellRatings.length;
@@ -2323,7 +2380,7 @@ function drawCompare(){
         <div style="display:flex; align-items:center; gap:8px;">
           <div style="flex:1; text-align:right; font-weight:700; font-size:13px;">${m.va.toFixed(2)}</div>
           <div style="flex:2; display:flex; gap:2px;">
-            <div style="flex:1; display:flex; justify-content:flex-end;"><div style="height:14px; width:${wa}%; background:#e5e5ea; border-radius:4px 0 0 4px;"></div></div>
+            <div style="flex:1; display:flex; justify-content:flex-end;"><div style="height:14px; width:${wa}%; background:var(--border); border-radius:4px 0 0 4px;"></div></div>
             <div style="flex:1;"><div style="height:14px; width:${wb}%; background:${ACCENT_COLOR}; border-radius:0 4px 4px 0;"></div></div>
           </div>
           <div style="flex:1; font-weight:700; font-size:13px; color:${ACCENT_COLOR};">${m.vb.toFixed(2)}</div>
@@ -2585,7 +2642,7 @@ function renderHeatmap(history, fullHistory){
     const avoid = [...meaningfulCells].sort((a,b)=>a.s-b.s)[0];
 
     const summaryCard = (label, main, sub, color) => `
-      <div style="flex:1; min-width:150px; padding:14px 16px; background:#f5f5f7; border-radius:12px; border-left:4px solid ${color};">
+      <div style="flex:1; min-width:150px; padding:14px 16px; background:var(--bg-subtle); border-radius:12px; border-left:4px solid ${color};">
         <div style="font-size:11px; color:var(--text-tertiary); font-weight:700; margin-bottom:6px;">${label}</div>
         <div style="font-size:18px; font-weight:800; margin-bottom:2px;">${main}</div>
         <div style="font-size:11px; color:var(--text-secondary);">${sub}</div>
@@ -2593,17 +2650,17 @@ function renderHeatmap(history, fullHistory){
 
     topListHtml = `
       <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px;">
-        ${summaryCard('🎯 최고의 시간대', `${peak.d}요일 ${peak.t}`, `${peak.s}점 · ${BASIS_LABEL[peak.basis]}`, '#34c759')}
-        ${summaryCard('📅 최고의 요일', `${bestDay.d}요일`, `평균 ${Math.round(bestDay.avg)}점`, '#0071e5')}
-        ${summaryCard('⚠️ 피해야 할 시간대', `${avoid.d}요일 ${avoid.t}`, `${avoid.s}점 · ${BASIS_LABEL[avoid.basis]}`, '#ff3b30')}
+        ${summaryCard('🎯 최고의 시간대', `${peak.d}요일 ${peak.t}`, `${peak.s}점 · ${BASIS_LABEL[peak.basis]}`, 'var(--positive)')}
+        ${summaryCard('📅 최고의 요일', `${bestDay.d}요일`, `평균 ${Math.round(bestDay.avg)}점`, 'var(--accent)')}
+        ${summaryCard('⚠️ 피해야 할 시간대', `${avoid.d}요일 ${avoid.t}`, `${avoid.s}점 · ${BASIS_LABEL[avoid.basis]}`, 'var(--negative)')}
       </div>`;
   } else {
-    topListHtml = `<div style="margin-bottom:16px; padding:14px 16px; background:#f5f5f7; border-radius:12px; font-size:12px; color:var(--text-tertiary);">이 프로그램은 실측·추정 근거를 가진 시간대가 아직 없어요 (데이터가 더 쌓이면 표시됩니다).</div>`;
+    topListHtml = `<div style="margin-bottom:16px; padding:14px 16px; background:var(--bg-subtle); border-radius:12px; font-size:12px; color:var(--text-tertiary);">이 프로그램은 실측·추정 근거를 가진 시간대가 아직 없어요 (데이터가 더 쌓이면 표시됩니다).</div>`;
   }
 
   let html = topListHtml;
   html += '<div style="max-height:640px; overflow-y:auto;"><div style="display:grid; grid-template-columns:52px repeat(7,1fr); gap:6px; font-size:12px;">';
-  html += '<div></div>' + days.map(d=>`<div style="text-align:center; color:var(--text-secondary); font-weight:700; padding-bottom:4px; position:sticky; top:0; background:#fff;">${d}</div>`).join('');
+  html += '<div></div>' + days.map(d=>`<div style="text-align:center; color:var(--text-secondary); font-weight:700; padding-bottom:4px; position:sticky; top:0; background:var(--bg-card);">${d}</div>`).join('');
   times.forEach(t=>{
     html += `<div style="color:var(--text-secondary); font-weight:700; display:flex; align-items:center; font-size:11px;">${t.label}</div>`;
     days.forEach(d=>{
@@ -2614,7 +2671,7 @@ function renderHeatmap(history, fullHistory){
       const textColor = hasEvidence ? '#fff' : 'var(--text-tertiary)';
       const textShadow = hasEvidence ? 'text-shadow:0 1px 3px rgba(0,0,0,0.35);' : '';
       const rank = top3.indexOf(`${d}_${t.label}`);
-      const badge = rank>=0 ? `<span style="position:absolute; top:2px; right:3px; font-size:8px; background:#ff3b30; color:#fff; border-radius:5px; padding:0px 4px; font-weight:800; z-index:1;">TOP${rank+1}</span>` : '';
+      const badge = rank>=0 ? `<span style="position:absolute; top:2px; right:3px; font-size:8px; background:var(--negative); color:#fff; border-radius:5px; padding:0px 4px; font-weight:800; z-index:1;">TOP${rank+1}</span>` : '';
       // 테두리는 오직 실측/추정 여부만 표시 (TOP3라고 덮어쓰지 않음 — 둘은 서로 다른 정보라 같이 보여야 함)
       let border = 'border:2px solid transparent;';
       if (cell.basis === 'actual') border = 'border:2px solid rgba(0,0,0,0.35);';
@@ -2627,7 +2684,7 @@ function renderHeatmap(history, fullHistory){
   });
   html += '</div></div>';
   html += `
-    <div style="margin-top:12px; padding:10px 12px; background:#f5f5f7; border-radius:10px; font-size:11px; color:var(--text-secondary);">
+    <div style="margin-top:12px; padding:10px 12px; background:var(--bg-subtle); border-radius:10px; font-size:11px; color:var(--text-secondary);">
       <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:8px;">
         <div style="display:flex; align-items:center; gap:6px;"><span style="width:16px; height:16px; border-radius:4px; background:${heatColor(20)};"></span>낮음</div>
         <span style="color:var(--text-tertiary);">→</span>
@@ -2636,9 +2693,9 @@ function renderHeatmap(history, fullHistory){
         <div style="display:flex; align-items:center; gap:6px;"><span style="width:16px; height:16px; border-radius:4px; background:${heatColor(85)};"></span>높음</div>
       </div>
       <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
-        <div style="display:flex; align-items:center; gap:6px;"><span style="width:16px; height:16px; border-radius:4px; background:#ccc; border:2px solid rgba(0,0,0,0.35);"></span>실제 방영 이력 기준</div>
-        <div style="display:flex; align-items:center; gap:6px;"><span style="width:16px; height:16px; border-radius:4px; background:#ccc; border:2px dashed rgba(0,0,0,0.4);"></span>유사 프로그램으로 추정</div>
-        <div style="display:flex; align-items:center; gap:6px;"><span style="width:16px; height:16px; border-radius:4px; background:#ccc; box-shadow: 0 0 0 2px #ffd60a, 0 0 6px rgba(255,214,10,0.6);"></span>TOP3</div>
+        <div style="display:flex; align-items:center; gap:6px;"><span style="width:16px; height:16px; border-radius:4px; background:var(--text-muted); border:2px solid rgba(0,0,0,0.35);"></span>실제 방영 이력 기준</div>
+        <div style="display:flex; align-items:center; gap:6px;"><span style="width:16px; height:16px; border-radius:4px; background:var(--text-muted); border:2px dashed rgba(0,0,0,0.4);"></span>유사 프로그램으로 추정</div>
+        <div style="display:flex; align-items:center; gap:6px;"><span style="width:16px; height:16px; border-radius:4px; background:var(--text-muted); box-shadow: 0 0 0 2px #ffd60a, 0 0 6px rgba(255,214,10,0.6);"></span>TOP3</div>
       </div>
       <div style="margin-top:6px; color:var(--text-tertiary);">칸에 마우스를 올리면 근거를 확인할 수 있어요.</div>
     </div>`;
@@ -2808,7 +2865,7 @@ function renderAdjacency(){
       <tr><th style="text-align:left; padding:8px;">${colHeader}</th><th style="padding:8px;">표본(n)</th><th style="padding:8px;">전체 평균</th><th style="padding:8px;">${followColHeader}</th><th style="padding:8px;">차이</th></tr>
       ${results.map((r,i)=>{
         const liftTxt = r.lift==null ? '-' : (r.lift>=0?'▲ +':'▼ ') + Math.abs(r.lift).toFixed(0) + '%';
-        const liftColor = r.lift==null ? 'var(--text-tertiary)' : (r.lift>=0 ? '#34c759' : '#ff3b30');
+        const liftColor = r.lift==null ? 'var(--text-tertiary)' : (r.lift>=0 ? 'var(--positive)' : 'var(--negative)');
         const lowConfidence = r.n <= 2 ? ` <span style="color:var(--text-tertiary); font-size:10px;">(표본 적음)</span>` : '';
         return `<tr style="border-bottom:1px solid var(--border); cursor:pointer;" onclick="document.getElementById('adj-detail-${i}').style.display = document.getElementById('adj-detail-${i}').style.display==='none' ? 'table-row' : 'none';">
           <td style="padding:8px;">▸ ${r.type}${lowConfidence}</td>
@@ -3022,7 +3079,7 @@ function findRecommendedAt(day, slotIdx){
 
 function renderWeeklyGrid(){
   const grid = document.getElementById('ws-grid');
-  let html = '<div></div>' + WS_DAY_ORDER.map(d=>`<div style="text-align:center; font-weight:700; color:var(--text-secondary); padding-bottom:4px; position:sticky; top:0; background:#fff;">${d}</div>`).join('');
+  let html = '<div></div>' + WS_DAY_ORDER.map(d=>`<div style="text-align:center; font-weight:700; color:var(--text-secondary); padding-bottom:4px; position:sticky; top:0; background:var(--bg-card);">${d}</div>`).join('');
 
   WS_SLOTS.forEach(slot=>{
     const isHourMark = slot.label.endsWith(':00');
@@ -3037,14 +3094,14 @@ function renderWeeklyGrid(){
         const bg = fixed.type==='재방' ? '#e5e5ea' : fixed.type==='본방' ? '#FFFF00' : '#C6EFCE'; // 생방=연두, 본방=노랑 (원본 편성표 색상코드), 재방=회색
         const linkBadge = fixed.program_id ? '🔗' : '';
         const linkTitle = fixed.program_id ? ' [DB 연결됨]' : '';
-        html += `<div draggable="true" ondragstart="onFixedDragStart(${fixed.id})" ondragover="event.preventDefault()" ondrop="onCellDrop(event,'${day}', ${slot.idx})" style="height:18px; background:${bg}; color:#1d1d1f; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; position:relative; overflow:hidden; padding:0 3px; border-radius:${isStart?'6px 6px 0 0':'0'}; cursor:grab;" title="[${fixed.type}]${linkTitle} ${escaped} (드래그해서 옮기기 가능)">
+        html += `<div draggable="true" ondragstart="onFixedDragStart(${fixed.id})" ondragover="event.preventDefault()" ondrop="onCellDrop(event,'${day}', ${slot.idx})" style="height:18px; background:${bg}; color:var(--text-primary); display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; position:relative; overflow:hidden; padding:0 3px; border-radius:${isStart?'6px 6px 0 0':'0'}; cursor:grab;" title="[${fixed.type}]${linkTitle} ${escaped} (드래그해서 옮기기 가능)">
           ${isStart ? `<span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${linkBadge}${fixed.name.split('\n')[0]}</span><span onclick="removeFixedProgram(${fixed.id})" style="position:absolute; top:0; right:2px; cursor:pointer; opacity:0.5; font-size:9px;">✕</span>` : ''}
         </div>`;
       } else if (chosen) {
         const isStart = chosen.startIdx === slot.idx;
         const inPreview = isInDragPreview(day, slot.idx);
         const chosenBg = chosen.type==='재방' ? '#e5e5ea' : chosen.type==='본방' ? '#FFFF00' : chosen.type==='생방' ? '#C6EFCE' : 'var(--accent-light)';
-        const chosenColor = chosen.type ? '#1d1d1f' : 'var(--accent)';
+        const chosenColor = chosen.type ? 'var(--btn-dark)' : 'var(--accent)';
         const chosenTitle = `${chosen.name}${chosen.repPlayers ? ' · '+chosen.repPlayers : ''} (추천 · ${chosen.score}점)${chosen.type?' · '+chosen.type:''}`;
         html += `<div onmousedown="onCellMouseDown(event,'${day}', ${slot.idx})" onmouseover="onCellMouseOver('${day}', ${slot.idx})" ondragover="event.preventDefault()" ondrop="onCellDrop(event,'${day}', ${slot.idx})" style="height:18px; border-radius:${isStart?'6px 6px 0 0':'0'}; background:${inPreview?'#b8ddfc':chosenBg}; color:${chosenColor}; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; cursor:pointer; position:relative; padding:0 3px; overflow:hidden;" title="${chosenTitle} — 드래그해서 범위 다시 선택 가능">
           ${isStart ? `<span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${chosen.name}${chosen.repPlayers ? ' · '+chosen.repPlayers : ''}</span><span onclick="event.stopPropagation(); removeRecommendedBlock(${chosen.id})" style="position:absolute; top:0; right:2px; cursor:pointer; opacity:0.5; font-size:9px;">✕</span>` : ''}
@@ -3340,7 +3397,7 @@ async function loadCellRecommendations(day, startIdx, endIdx){
       program_id: c.program_id, repPlayers: c.repPlayers || null, avgRating: c.avgRating,
     }).replace(/'/g,"&apos;");
     return `
-      <button onclick='chooseRecommendation(${payload})' style="display:block; width:100%; text-align:left; padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:${used?'#f5f5f7':'#fff'}; margin-bottom:6px; cursor:pointer; font-family:inherit;">
+      <button onclick='chooseRecommendation(${payload})' style="display:block; width:100%; text-align:left; padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:${used?'var(--bg-subtle)':'var(--bg-card)'}; margin-bottom:6px; cursor:pointer; font-family:inherit;">
         <div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">
           <span style="font-weight:700; font-size:13px; word-break:break-all;">${c.name}</span>
           <span style="font-weight:700; font-size:13px; color:var(--accent); white-space:nowrap;">${c.score}점</span>
@@ -3612,7 +3669,7 @@ function renderAutoFillGrid(){
   }
   const grid = document.getElementById('af-grid');
   if (!grid) return;
-  let html = '<div></div>' + WS_DAY_ORDER.map(d=>`<div style="text-align:center; font-weight:700; color:var(--text-secondary); padding-bottom:4px; position:sticky; top:0; background:#fff;">${d}</div>`).join('');
+  let html = '<div></div>' + WS_DAY_ORDER.map(d=>`<div style="text-align:center; font-weight:700; color:var(--text-secondary); padding-bottom:4px; position:sticky; top:0; background:var(--bg-card);">${d}</div>`).join('');
 
   WS_SLOTS.forEach(slot=>{
     const isHourMark = slot.label.endsWith(':00');
@@ -3624,17 +3681,17 @@ function renderAutoFillGrid(){
         const isStart = fixed.startIdx === slot.idx;
         const bg = fixed.type==='재방' ? '#e5e5ea' : fixed.type==='본방' ? '#FFFF00' : '#C6EFCE';
         const escaped = fixed.name.replace(/"/g,'&quot;').replace(/\n/g,' ');
-        html += `<div draggable="true" ondragstart="onAutoFillFixedDragStart(${fixed.id})" ondragover="event.preventDefault()" ondrop="onAutoFillCellDrop(event,'${day}', ${slot.idx})" style="height:18px; background:${bg}; color:#1d1d1f; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; position:relative; overflow:hidden; padding:0 3px; border-radius:${isStart?'6px 6px 0 0':'0'}; cursor:grab;" title="[고정] ${escaped} (드래그해서 옮기기 가능)">
+        html += `<div draggable="true" ondragstart="onAutoFillFixedDragStart(${fixed.id})" ondragover="event.preventDefault()" ondrop="onAutoFillCellDrop(event,'${day}', ${slot.idx})" style="height:18px; background:${bg}; color:var(--text-primary); display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; position:relative; overflow:hidden; padding:0 3px; border-radius:${isStart?'6px 6px 0 0':'0'}; cursor:grab;" title="[고정] ${escaped} (드래그해서 옮기기 가능)">
           ${isStart ? `<span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${fixed.name.split('\n')[0]}</span><span onclick="event.stopPropagation(); removeAutoFillFixed(${fixed.id})" style="position:absolute; top:0; right:2px; cursor:pointer; opacity:0.5; font-size:9px;">✕</span>` : ''}
         </div>`;
       } else if (block) {
         const isStart = block.startIdx === slot.idx;
         const label = `${block.name}${block.repPlayers ? ' · '+block.repPlayers : ''}`;
-        html += `<div ondragover="event.preventDefault()" ondrop="onAutoFillCellDrop(event,'${day}', ${slot.idx})" style="height:18px; background:#b8ddfc; color:#1d1d1f; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; position:relative; overflow:hidden; padding:0 3px; border-radius:${isStart?'6px 6px 0 0':'0'};" title="${label} (${block.score}점 · ${BASIS_LABEL[block.basis]})">
+        html += `<div ondragover="event.preventDefault()" ondrop="onAutoFillCellDrop(event,'${day}', ${slot.idx})" style="height:18px; background:#b8ddfc; color:var(--text-primary); display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; position:relative; overflow:hidden; padding:0 3px; border-radius:${isStart?'6px 6px 0 0':'0'};" title="${label} (${block.score}점 · ${BASIS_LABEL[block.basis]})">
           ${isStart ? `<span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${label}</span><span onclick="event.stopPropagation(); removeAutoFillResult(${block.id})" style="position:absolute; top:0; right:2px; cursor:pointer; opacity:0.5; font-size:9px;">✕</span>` : ''}
         </div>`;
       } else {
-        html += `<div ondragover="event.preventDefault()" ondrop="onAutoFillCellDrop(event,'${day}', ${slot.idx})" style="height:18px; border-radius:5px; background:#f5f5f7;"></div>`;
+        html += `<div ondragover="event.preventDefault()" ondrop="onAutoFillCellDrop(event,'${day}', ${slot.idx})" style="height:18px; border-radius:5px; background:var(--bg-subtle);"></div>`;
       }
     });
   });
@@ -3842,7 +3899,7 @@ function renderRegression(){
         data:{ labels, datasets:[{
           data, borderColor: ACCENT_COLOR, backgroundColor: ACCENT_LIGHT, fill:true, tension:0.3,
           pointRadius: labels.map((_,i)=> i===boundaryIdx ? 6 : 2),
-          pointBackgroundColor: labels.map((_,i)=> i===boundaryIdx ? '#ff3b30' : ACCENT_COLOR),
+          pointBackgroundColor: labels.map((_,i)=> i===boundaryIdx ? 'var(--negative)' : ACCENT_COLOR),
         }]},
         options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
           scales:{ y:{ beginAtZero:true, grid:{color:'rgba(0,0,0,0.04)'} }, x:{ grid:{display:false}, ticks:{maxRotation:60, minRotation:60} } } }
@@ -3887,13 +3944,13 @@ function renderSankey(){
       stroke="${ACCENT_COLOR}" stroke-opacity="${0.2+f.val/150}" stroke-width="${Math.max(4,f.val/2.5)}" fill="none"/>`;
   });
   nodes.forEach(n=>{
-    s += `<rect x="${n.x}" y="${n.y}" width="150" height="32" rx="8" fill="#ffffff" stroke="rgba(0,0,0,0.1)" stroke-width="1"/>`;
-    s += `<text x="${n.x+75}" y="${n.y+20}" font-size="12" font-weight="600" text-anchor="middle" fill="#1d1d1f" font-family="Plus Jakarta Sans, Noto Sans KR">${n.name}</text>`;
+    s += `<rect x="${n.x}" y="${n.y}" width="150" height="32" rx="8" fill="var(--bg-card)" stroke="rgba(0,0,0,0.1)" stroke-width="1"/>`;
+    s += `<text x="${n.x+75}" y="${n.y+20}" font-size="12" font-weight="600" text-anchor="middle" fill="var(--text-primary)" font-family="Plus Jakarta Sans, Noto Sans KR">${n.name}</text>`;
   });
   flows.forEach(f=>{
     const a = nodes[f.from], b = nodes[f.to];
     const midx = (a.x+b.x)/2;
-    s += `<text x="${midx}" y="${(a.y+b.y)/2+12}" font-size="11" font-weight="600" fill="#86868b" text-anchor="middle">${f.label}</text>`;
+    s += `<text x="${midx}" y="${(a.y+b.y)/2+12}" font-size="11" font-weight="600" fill="var(--text-secondary)" text-anchor="middle">${f.label}</text>`;
   });
   svg.innerHTML = s;
 }
@@ -3966,7 +4023,7 @@ async function renderFatigue(){
         <td style="padding:6px;">${r.name}</td>
         <td style="padding:6px; color:var(--text-tertiary);">${r.players}${r.round?' · '+r.round:''}</td>
         <td style="padding:6px; text-align:center;">${r.count}회</td>
-        <td style="padding:6px; text-align:center; font-weight:700; color:${r.threshold ? (r.threshold<=2?'#ff3b30':'var(--text-primary)') : 'var(--text-tertiary)'};">${r.threshold ? r.threshold+'회차' : '안 꺾임'}</td>
+        <td style="padding:6px; text-align:center; font-weight:700; color:${r.threshold ? (r.threshold<=2?'var(--negative)':'var(--text-primary)') : 'var(--text-tertiary)'};">${r.threshold ? r.threshold+'회차' : '안 꺾임'}</td>
       </tr>`).join('')}</tbody>
   `;
 
@@ -3988,7 +4045,7 @@ async function renderFatigue(){
       type:'line',
       data:{ labels, datasets:[{
         data, borderColor: ACCENT_COLOR, backgroundColor: ACCENT_LIGHT,
-        fill:true, tension:0.3, pointRadius:5, pointBackgroundColor: (ctx)=> data[ctx.dataIndex]!=null && data[ctx.dataIndex]<100 ? '#ff3b30' : ACCENT_COLOR,
+        fill:true, tension:0.3, pointRadius:5, pointBackgroundColor: (ctx)=> data[ctx.dataIndex]!=null && data[ctx.dataIndex]<100 ? 'var(--negative)' : ACCENT_COLOR,
         spanGaps: true
       }]},
       options:{ responsive: true, maintainAspectRatio: false,
@@ -4041,14 +4098,14 @@ function buildPrintFriendlySchedule(fixedList, blockList){
   });
 
   let html = '<table style="width:100%; border-collapse:collapse; font-size:8.5px; table-layout:fixed;">';
-  html += '<tr><th style="border:1px solid #ddd; padding:2px; width:34px;"></th>' +
-    WS_DAY_ORDER.map(d=>`<th style="border:1px solid #ddd; padding:3px; background:#f5f5f7;">${d}</th>`).join('') + '</tr>';
+  html += '<tr><th style="border:1px solid var(--border); padding:2px; width:34px;"></th>' +
+    WS_DAY_ORDER.map(d=>`<th style="border:1px solid var(--border); padding:3px; background:var(--bg-subtle);">${d}</th>`).join('') + '</tr>';
 
   for (let i = 0; i < numSlots; i++) {
-    let row = `<tr><td style="border:1px solid #ddd; padding:1px 2px; font-weight:700; font-size:7.5px; white-space:nowrap;">${WS_SLOTS[i].label}</td>`;
+    let row = `<tr><td style="border:1px solid var(--border); padding:1px 2px; font-weight:700; font-size:7.5px; white-space:nowrap;">${WS_SLOTS[i].label}</td>`;
     WS_DAY_ORDER.forEach(day=>{
       const cell = dayGrids[day][i];
-      if (!cell) { row += `<td style="border:1px solid #ddd; background:#fafafa;"></td>`; return; }
+      if (!cell) { row += `<td style="border:1px solid var(--border); background:var(--bg-subtle);"></td>`; return; }
       if (!cell.isStart) return; // rowspan으로 이미 병합된 칸이라 별도 <td> 생략 (표준 표 문법)
       let bg, label;
       if (cell.kind === 'fixed') {
@@ -4059,7 +4116,7 @@ function buildPrintFriendlySchedule(fixedList, blockList){
         const nameEsc = String(cell.data.name||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
         label = nameEsc + (cell.data.repPlayers ? '<br><span style="font-weight:400; font-size:7px;">'+cell.data.repPlayers+'</span>' : '');
       }
-      row += `<td rowspan="${cell.span}" style="border:1px solid #ddd; background:${bg}; padding:2px 3px; vertical-align:top; font-size:7.5px; line-height:1.3; word-break:break-word;">${label}</td>`;
+      row += `<td rowspan="${cell.span}" style="border:1px solid var(--border); background:${bg}; padding:2px 3px; vertical-align:top; font-size:7.5px; line-height:1.3; word-break:break-word;">${label}</td>`;
     });
     row += '</tr>';
     html += row;
@@ -4085,7 +4142,7 @@ function captureCurrentPanel(){
     });
     updatePinBadge();
     const btn = document.getElementById('pin-add-btn');
-    const orig = btn.style.background; btn.style.background = '#34c759'; setTimeout(()=>{ btn.style.background = orig; }, 350);
+    const orig = btn.style.background; btn.style.background = 'var(--positive)'; setTimeout(()=>{ btn.style.background = orig; }, 350);
     return;
   }
   if (activeSub.id === 'schedule-autofill') {
@@ -4099,7 +4156,7 @@ function captureCurrentPanel(){
     });
     updatePinBadge();
     const btn = document.getElementById('pin-add-btn');
-    const orig = btn.style.background; btn.style.background = '#34c759'; setTimeout(()=>{ btn.style.background = orig; }, 350);
+    const orig = btn.style.background; btn.style.background = 'var(--positive)'; setTimeout(()=>{ btn.style.background = orig; }, 350);
     return;
   }
 
@@ -4135,7 +4192,7 @@ function captureCurrentPanel(){
   updatePinBadge();
   const btn = document.getElementById('pin-add-btn');
   const orig = btn.style.background;
-  btn.style.background = '#34c759';
+  btn.style.background = 'var(--positive)';
   setTimeout(()=>{ btn.style.background = orig; }, 350);
 }
 
@@ -4181,9 +4238,9 @@ function renderPinListInModal(){
         <span style="font-size:11px; color:var(--text-tertiary); font-weight:700;">#${i+1}</span>
         <input value="${item.title.replace(/"/g,'&quot;')}" oninput="updatePinTitle('${item.id}', this.value)"
           style="flex:1; border:none; border-bottom:1px solid var(--border); font-size:13px; font-weight:600; padding:2px 4px; font-family:inherit;">
-        <button onclick="movePin('${item.id}', -1)" style="border:none; background:#f0f0f0; border-radius:6px; width:24px; height:24px; cursor:pointer;">↑</button>
-        <button onclick="movePin('${item.id}', 1)" style="border:none; background:#f0f0f0; border-radius:6px; width:24px; height:24px; cursor:pointer;">↓</button>
-        <button onclick="removePin('${item.id}')" style="border:none; background:#ffebeb; color:#ff3b30; border-radius:6px; width:24px; height:24px; cursor:pointer;">✕</button>
+        <button onclick="movePin('${item.id}', -1)" style="border:none; background:var(--bg-subtle); border-radius:6px; width:24px; height:24px; cursor:pointer;">↑</button>
+        <button onclick="movePin('${item.id}', 1)" style="border:none; background:var(--bg-subtle); border-radius:6px; width:24px; height:24px; cursor:pointer;">↓</button>
+        <button onclick="removePin('${item.id}')" style="border:none; background:#ffebeb; color:var(--negative); border-radius:6px; width:24px; height:24px; cursor:pointer;">✕</button>
       </div>
       <textarea placeholder="코멘트 (선택)" oninput="updatePinComment('${item.id}', this.value)"
         style="width:100%; min-height:44px; border:1px solid var(--border); border-radius:8px; padding:8px; font-size:12px; font-family:inherit; resize:vertical;">${item.comment}</textarea>
@@ -4213,13 +4270,13 @@ function generateReport(){
     <div class="report-cover" style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:90vh; text-align:center;">
       <div style="font-size:28px; font-weight:800; margin-bottom:12px;">${title}</div>
       <div style="font-size:14px; color:#666;">분석 기간: ${periodFrom} ~ ${periodTo}</div>
-      <div style="font-size:12px; color:#999; margin-top:6px;">생성일: ${genDate}</div>
+      <div style="font-size:12px; color:var(--text-muted); margin-top:6px;">생성일: ${genDate}</div>
     </div>
     ${window.__pinnedItems.map(item => `
       <div class="report-print-item">
         <div style="font-size:16px; font-weight:700; margin-bottom:10px;">${item.title}</div>
         <div${item.html.trim().startsWith('<table') ? '' : ' class="bento-grid"'}>${item.html}</div>
-        ${item.comment ? `<div style="margin-top:10px; padding:12px; background:#f5f5f7; border-radius:10px; font-size:13px; line-height:1.6; white-space:pre-wrap;"><b>코멘트</b><br>${item.comment.replace(/</g,'&lt;')}</div>` : ''}
+        ${item.comment ? `<div style="margin-top:10px; padding:12px; background:var(--bg-subtle); border-radius:10px; font-size:13px; line-height:1.6; white-space:pre-wrap;"><b>코멘트</b><br>${item.comment.replace(/</g,'&lt;')}</div>` : ''}
       </div>
     `).join('')}
   `;
