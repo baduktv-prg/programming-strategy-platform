@@ -1757,9 +1757,18 @@ async function drawCompetitorChart(){
       });
       const scheduleIds = (scheds||[]).map(s=>s.schedule_id);
       if (scheduleIds.length) {
-        const { data: rows } = await sb.from('fact_rating_minute')
-          .select('schedule_id, minute_offset, rating_pct').in('schedule_id', scheduleIds).limit(20000);
-        (rows||[]).forEach(r=>{
+        // Supabase 서버 기본 상한(보통 1000건)에 걸려 뒷부분이 잘리는 걸 방지 — 페이지네이션으로 끝까지 다 가져옴
+        let allRows = [], page = 0;
+        while (true) {
+          const { data: rows } = await sb.from('fact_rating_minute')
+            .select('schedule_id, minute_offset, rating_pct').in('schedule_id', scheduleIds)
+            .range(page * 1000, page * 1000 + 999);
+          if (!rows || rows.length === 0) break;
+          allRows = allRows.concat(rows);
+          if (rows.length < 1000) break; // 이번 페이지가 1000건 미만이면 마지막 페이지
+          page++;
+        }
+        allRows.forEach(r=>{
           if (r.rating_pct == null) return;
           const clockMin = startMap[r.schedule_id] + r.minute_offset;
           const h = Math.floor(clockMin / 60);
