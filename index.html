@@ -1446,7 +1446,7 @@ async function loadPrograms(startDate, endDate) {
   const { data: rows, error: progErr } = await sb
     .from('fact_schedule')
     .select(`
-      schedule_id, date_key, start_time, end_time, is_rerun, broadcast_type, players, round_stage, segment_topic,
+      schedule_id, date_key, start_time, end_time, is_rerun, broadcast_type, players, round_stage, segment_topic, actual_tournament_year,
       dim_program!fact_schedule_program_id_fkey ( program_id, program_name ),
       fact_rating ( rating_pct, share_pct, viewers, reach_pct, avg_view_minutes, target_rating_pct, achievement_pct, prev_rating_pct )
     `)
@@ -1487,6 +1487,7 @@ async function loadPrograms(startDate, endDate) {
       players: r.players || '-',
       round_stage: r.round_stage || null,
       segment_topic: r.segment_topic || null,
+      actual_tournament_year: r.actual_tournament_year || null,
       target: rating.target_rating_pct || 0,
       achievement: rating.achievement_pct || 0,
     };
@@ -2862,7 +2863,7 @@ async function loadFullHistory(){
   if (FULL_HISTORY_CACHE) return FULL_HISTORY_CACHE;
   const { data: rows, error } = await sb.from('fact_schedule')
     .select(`
-      schedule_id, program_id, date_key, start_time, end_time, is_rerun, broadcast_type, players, round_stage, segment_topic,
+      schedule_id, program_id, date_key, start_time, end_time, is_rerun, broadcast_type, players, round_stage, segment_topic, actual_tournament_year,
       dim_program!fact_schedule_program_id_fkey ( program_id, program_name, tournament_type ),
       fact_rating ( rating_pct )
     `)
@@ -2887,6 +2888,7 @@ async function loadFullHistory(){
       players: (r.players && r.players !== '-') ? r.players : null,
       round_stage: r.round_stage || null,
       segment_topic: r.segment_topic || null,
+      actual_tournament_year: r.actual_tournament_year || null,
       date: r.date_key, start, end, rating, duration: 1,
       dow: new Date(r.date_key + 'T00:00:00').getDay(), hour: Number(start.split(':')[0]),
       type: r.broadcast_type==='재' ? '재방' : r.broadcast_type==='본' ? '본방' : r.broadcast_type==='생' ? '생방' : (r.is_rerun ? '재방' : '생방'),
@@ -3400,10 +3402,9 @@ function computeRecommendationCandidates(day, startIdx, endIdx, all, usedSet, op
   const noRoundItems = [];
   all.forEach(p=>{
     const playersKey = (p.players && p.players !== '-') ? p.players : '(대국자 정보없음)';
-    // 프로그램명에 연도가 박혀있으면(예: "2024삼성화재배...") 그게 실제 대회 연도라 더 정확함 — 방영일자보다 우선 사용
-    // 이름에 연도가 없으면(예: "응씨배세계바둑선수권대회") 어쩔 수 없이 방영일자로 추정 (오래된 콘텐츠를 나중에 재방하면 틀릴 수 있는 한계 있음)
+    // 사람이 직접 입력한 실제대회연도가 있으면 최우선(제일 정확함) — 없으면 프로그램명에 박힌 연도 — 그것도 없으면 방영일자로 추정(한계 있음)
     const nameYearMatch = p.name.match(/^(19|20)\d{2}/);
-    const yearKey = nameYearMatch ? nameYearMatch[0] : p.date.slice(0,4);
+    const yearKey = p.actual_tournament_year || (nameYearMatch ? nameYearMatch[0] : p.date.slice(0,4));
     const roundOrTopic = p.round_stage || p.segment_topic; // 일반 대회는 라운드, 코너쇼는 다룬 대회명 — 둘 중 하나만 채워짐
     if (!roundOrTopic) { noRoundItems.push({ ...p, playersKey, yearKey }); return; }
     const key = p.program_id + '::' + playersKey + '::' + roundOrTopic + '::' + yearKey;
@@ -4117,7 +4118,7 @@ function buildFatigueCandidates(){
     if (!p.players || p.players === '-') return; // 대국자 정보 없으면 "같은 콘텐츠" 식별이 안 되니 제외
     const roundKey = p.round_stage || p.segment_topic || '';
     const nameYearMatch = p.name.match(/^(19|20)\d{2}/);
-    const yearKey = nameYearMatch ? nameYearMatch[0] : p.date.slice(0,4);
+    const yearKey = p.actual_tournament_year || (nameYearMatch ? nameYearMatch[0] : p.date.slice(0,4));
     const key = p.program_id + '_' + p.players + '_' + roundKey + '_' + yearKey; // 대국자·라운드 같아도 연도 다르면 별개 콘텐츠로 취급
     if (!map[key]) map[key] = { program_id: p.program_id, name: p.name, players: p.players, round: roundKey, year: yearKey, instances: [] };
     map[key].instances.push(p);
