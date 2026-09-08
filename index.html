@@ -2606,9 +2606,11 @@ function trimmedMean(nums){
   return trimmed.reduce((a,b)=>a+b,0) / trimmed.length;
 }
 
-function computeMatchScore(history, dowLabel, timeStr, fullHistory, typeFilter){
+function computeMatchScore(history, dowLabel, timeStr, fullHistory, typeFilter, groupWeekday){
   const dow = DOW_INDEX[dowLabel[0]];
   const hour = Number(timeStr.split(':')[0]);
+  const isWeekendDow = (d) => d === 0 || d === 6; // 일=0, 토=6
+  const matchDow = groupWeekday ? (d) => isWeekendDow(d) === isWeekendDow(dow) : (d) => d === dow;
   if (history.length === 0) return { score: 50, basis: 'none', n: 0, peak: null };
 
   const peak = Math.max(...history.map(h=>h.rating));
@@ -2621,8 +2623,8 @@ function computeMatchScore(history, dowLabel, timeStr, fullHistory, typeFilter){
   const repPlayers = mostCommon(history.map(h=>h.players).filter(Boolean)); // 이 프로그램의 대표(가장 흔한) 대국자
   const common = { n: history.length, peak, liveN: liveHist.length, rerunN: rerunHist.length, liveAvg, rerunAvg, repPlayers };
 
-  // 1) 실측: 이 요일+시간대에 진짜로 방영된 적 있는지
-  const exact = history.filter(h => h.dow === dow && h.hour === hour);
+  // 1) 실측: 이 요일(또는 평일/주말 그룹)+시간대에 진짜로 방영된 적 있는지
+  const exact = history.filter(h => matchDow(h.dow) && h.hour === hour);
   if (exact.length > 0) {
     const avgRating = trimmedMean(exact.map(h=>h.rating));
     return { score: toScore(avgRating), basis: 'actual', basisN: exact.length, avgRating, ...common };
@@ -2635,7 +2637,7 @@ function computeMatchScore(history, dowLabel, timeStr, fullHistory, typeFilter){
   const repGenreNorm = repGenre ? repGenre.replace(/\s/g,'') : null; // "세계 기전"/"세계기전" 같은 띄어쓰기 차이 무시하고 비교
   const repNames = extractPlayerNames(repPlayers);
   const others = fullHistory; // 참고군 자체는 타입 제한 없이 전체로 둠 (재방 이력 없는 참고 프로그램까지 통째로 배제하면 안 되니까)
-  const atSlot = (pool) => pool.filter(p => p.dow === dow && p.hour === hour);
+  const atSlot = (pool) => pool.filter(p => matchDow(p.dow) && p.hour === hour);
   // 타입 지정 시: 그 타입 이력이 2건 이상이면 그것만 쓰고, 부족하면 전체(어떤 타입이든)로 대체 — "재방 있으면 재방, 없으면 생방이라도" 원칙
   const preferType = (matched) => {
     if (!typeFilter) return matched;
@@ -3429,19 +3431,29 @@ function computeRecommendationCandidates(day, startIdx, endIdx, all, usedSet, op
     return Math.max(10, Math.round(100 * avgRating / episodeAvg));
   }
 
+  // 최근에 이미 방영된 회차는 점수를 깎음(완전 제외는 아님) — 계속 우려먹는 걸 방지, 근데 대안이 없으면 여전히 추천될 수 있게
+  function recencyPenalty(items){
+    const mostRecent = items.reduce((max,x)=> x.date > max ? x.date : max, items[0].date);
+    const daysSince = Math.round((new Date(window.__latestDate) - new Date(mostRecent)) / 86400000);
+    if (daysSince <= 7) return 30;   // 최근 1주 이내 방영 — 크게 감점
+    if (daysSince <= 14) return 15;  // 최근 2주 이내 방영 — 중간 감점
+    return 0;
+  }
+
   const withType = [], withoutType = [];
   Object.entries(byEpisode).forEach(([key, g])=>{
     const typeItems = g.items.filter(x=>x.type===WS_REC_TYPE);
     const repPlayers = g.players + (g.round ? ' · '+g.round : '') + ' · ' + g.year + '년';
+    const penalty = recencyPenalty(g.items);
     if (typeItems.length >= 2) {
-      const r = computeMatchScore(typeItems, day, slot.timeStr, all, WS_REC_TYPE);
-      const score = scoreVsEpisodeAvg(r.avgRating, typeItems);
+      const r = computeMatchScore(typeItems, day, slot.timeStr, all, WS_REC_TYPE, true);
+      const score = Math.max(10, scoreVsEpisodeAvg(r.avgRating, typeItems) - penalty);
       const avgDurationMin = typeItems.reduce((a,x)=>a+(x._absEnd-x._absStart),0)/typeItems.length;
       const item = { program_id: g.program_id, name: g.name, episodeKey: key, avgDurationMin, tournament_type: g.items[0]?.tournament_type || null, ...r, score, repPlayers };
       if (r.basis === 'actual') withType.push(item); else withoutType.push(item);
     } else if (g.items.length >= 2) {
-      const r = computeMatchScore(g.items, day, slot.timeStr, all, WS_REC_TYPE);
-      const score = scoreVsEpisodeAvg(r.avgRating, g.items);
+      const r = computeMatchScore(g.items, day, slot.timeStr, all, WS_REC_TYPE, true);
+      const score = Math.max(10, scoreVsEpisodeAvg(r.avgRating, g.items) - penalty);
       const avgDurationMin = g.items.reduce((a,x)=>a+(x._absEnd-x._absStart),0)/g.items.length;
       withoutType.push({ program_id: g.program_id, name: g.name, episodeKey: key, avgDurationMin, tournament_type: g.items[0]?.tournament_type || null, ...r, score, repPlayers });
     }
