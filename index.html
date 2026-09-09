@@ -3394,7 +3394,7 @@ function initRecommendPanelDrag(){
 
 // 공용 후보 계산 함수 — 주간편성안 추천(수동 클릭)과 자동편성 테스트(자동채우기)가 같이 씀
 function computeRecommendationCandidates(day, startIdx, endIdx, all, usedSet, opts = {}){
-  const { usedCheckField = 'program_id', hardExclude = false, durationBufferMin = 0 } = opts;
+  const { usedCheckField = 'program_id', hardExclude = false, durationBufferMin = 0, durationMinThreshold = 0 } = opts;
   const slot = WS_SLOTS[startIdx];
   const targetDurationMin = (endIdx - startIdx + 1) * 30;
 
@@ -3459,9 +3459,12 @@ function computeRecommendationCandidates(day, startIdx, endIdx, all, usedSet, op
     }
   });
 
-  // 버킷 표 대신 단순 공식: (실제 평균 방영길이 + 여유시간) <= 목표 슬롯 길이
-  // 수동 선택(사람이 정확히 그 길이를 원해서 고름)은 durationBufferMin=0(여유 없이 엄격), 자동채우기는 30(전환 여유 포함)
-  const applyDurationFilter = (arr) => arr.filter(r => (r.avgDurationMin + durationBufferMin) <= targetDurationMin);
+  // 버킷 표 대신 단순 공식: (실제 평균 방영길이 + 여유시간)이 목표 슬롯 길이 이내이면서, durationMinThreshold(이전 버킷 크기)보다는 커야 함
+  // 이게 없으면 60분짜리 프로그램이 300분 빈칸에서도 통과돼서 300분 전체를 잘못 차지해버리는 문제가 생김
+  const applyDurationFilter = (arr) => arr.filter(r => {
+    const effectiveLen = r.avgDurationMin + durationBufferMin;
+    return effectiveLen <= targetDurationMin && effectiveLen > durationMinThreshold;
+  });
   const isUsed = (r) => usedSet.has(r[usedCheckField]);
   const sortWithUsedLast = (arr) => {
     const base = hardExclude ? arr.filter(r => !isUsed(r)) : arr;
@@ -3752,10 +3755,13 @@ async function computeAutoFillBlocks(fixedList, preExcludedEpisodeKeys, alreadyO
         const remainingMin = (gap.end - pos) * 30;
         const tryRTs = AUTOFILL_RT_ORDER.filter(rt => rt <= remainingMin);
         let placed = false;
-        for (const rt of tryRTs) {
+        for (let ri = 0; ri < tryRTs.length; ri++) {
+          const rt = tryRTs[ri];
+          // 이 RT보다 한 단계 작은 버킷 크기(배열상 다음 원소, AUTOFILL_RT_ORDER가 큰 순이므로) — 그보다는 커야 이 버킷에 맞는 크기
+          const nextSmallerRt = AUTOFILL_RT_ORDER[AUTOFILL_RT_ORDER.indexOf(rt) + 1] || 0;
           const slotsNeeded = rt / 30;
           const startIdx = pos, endIdx = pos + slotsNeeded - 1;
-          const { topWithType, basisGroups } = computeRecommendationCandidates(day, startIdx, endIdx, all, usedInThisRun, { usedCheckField: 'episodeKey', hardExclude: true, durationBufferMin: 30 });
+          const { topWithType, basisGroups } = computeRecommendationCandidates(day, startIdx, endIdx, all, usedInThisRun, { usedCheckField: 'episodeKey', hardExclude: true, durationBufferMin: 30, durationMinThreshold: nextSmallerRt });
           const liftMap = await getAdjacencyLiftMap(day, startIdx, endIdx);
           let best = applyAdjacencyBoost(topWithType, liftMap)[0] || null;
           if (!best) { for (const g of basisGroups) { if (g.items.length > 0) { best = applyAdjacencyBoost(g.items, liftMap)[0]; break; } } }
