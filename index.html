@@ -4293,7 +4293,7 @@ function buildPrintFriendlySchedule(fixedList, blockList){
         bg = cell.data.type==='재방' ? '#e5e5ea' : cell.data.type==='본방' ? '#FFFF00' : '#C6EFCE';
         label = String(cell.data.name||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\n/g, '<br>');
       } else {
-        bg = 'transparent';
+        bg = '#b8ddfc';
         const nameEsc = String(cell.data.name||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
         label = nameEsc + (cell.data.repPlayers ? '<br><span style="font-weight:400; font-size:7px;">'+cell.data.repPlayers+'</span>' : '');
       }
