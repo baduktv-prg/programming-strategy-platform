@@ -3179,10 +3179,15 @@ async function refreshTemplateList(){
   sel.innerHTML = '<option value="">템플릿 불러오기...</option>' + (data||[]).map(t=>`<option value="${t.template_id}">${t.template_name}</option>`).join('');
 }
 async function saveWeeklyTemplate(){
-  if (fixedPrograms.length === 0) { alert('저장할 고정 편성이 없어요.'); return; }
+  if (fixedPrograms.length === 0 && recommendedBlocks.length === 0) { alert('저장할 편성이 없어요.'); return; }
   const name = prompt('템플릿 이름을 입력해주세요 (예: 8월 기본 편성)');
   if (!name) return;
-  const templateData = fixedPrograms.map(({id, ...rest}) => rest); // id는 저장 안 함(불러올 때 새로 부여)
+  // 고정 슬롯(fixedPrograms)뿐 아니라, 자동채우기/추천으로 채운 블록(recommendedBlocks)도 같이 저장해야
+  // 나중에 불러왔을 때 화면에 보이던 내용이 그대로 복원됨 — 구분을 위해 각 항목에 _source 표시를 남김
+  const templateData = [
+    ...fixedPrograms.map(({id, ...rest}) => ({ ...rest, _source: 'fixed' })),
+    ...recommendedBlocks.map(({id, ...rest}) => ({ ...rest, _source: 'recommended' })),
+  ];
   await upsertTemplateByName(name, templateData);
   await refreshTemplateList();
   alert(`"${name}" 템플릿으로 저장했어요. (같은 이름이 있으면 덮어써집니다)`);
@@ -3211,10 +3216,15 @@ async function loadWeeklyTemplate(){
   const { data, error } = await sb.from('weekly_schedule_templates')
     .select('template_data').eq('template_id', templateId).single();
   if (error || !data) { alert('불러오기 실패했어요.'); return; }
-  if (fixedPrograms.length > 0 && !confirm('지금 있는 고정 편성에 템플릿 내용을 추가할까요? (취소하면 지금 편성을 먼저 지우고 불러옵니다)')) {
+  if ((fixedPrograms.length > 0 || recommendedBlocks.length > 0) && !confirm('지금 있는 편성에 템플릿 내용을 추가할까요? (취소하면 지금 편성을 먼저 지우고 불러옵니다)')) {
     fixedPrograms = [];
+    recommendedBlocks = [];
   }
-  (data.template_data || []).forEach(item => fixedPrograms.push({ id: fixedSeq++, ...item }));
+  (data.template_data || []).forEach(item => {
+    const { _source, ...rest } = item;
+    if (_source === 'recommended') recommendedBlocks.push({ id: recSeq++, ...rest });
+    else fixedPrograms.push({ id: fixedSeq++, ...rest }); // _source 없는 예전 템플릿은 전부 고정슬롯으로 처리(기존 방식 그대로)
+  });
   renderWeeklyGrid();
 }
 
