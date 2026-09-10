@@ -543,8 +543,10 @@
       <div class="nav-group" data-group="schedule">
         <div class="nav-item" data-screen="schedule"><span>편성 분석</span><span class="nav-caret">▸</span></div>
         <div class="nav-sub-wrap">
+          <!-- 편성 궁합 분석: 큰 의미 없고 복잡해 보여서 숨김 처리
           <div class="nav-sub active" data-screen="schedule" data-sub="matching">편성 궁합 분석</div>
-          <div class="nav-sub" data-screen="schedule" data-sub="adjacency">리드인/리드아웃 분석</div>
+          -->
+          <div class="nav-sub active" data-screen="schedule" data-sub="adjacency">리드인/리드아웃 분석</div>
           <div class="nav-sub" data-screen="schedule" data-sub="counterfactual">가상 편성 시나리오</div>
           <div class="nav-sub" data-screen="schedule" data-sub="weekly">주간 편성안 추천</div>
           <div class="nav-sub" data-screen="schedule" data-sub="competitor">일별 경쟁 채널 분석</div>
@@ -590,8 +592,9 @@
           <button id="mode-daily" class="date-mode-btn" onclick="setDateMode('daily')">일간</button>
           <button id="mode-weekly" class="date-mode-btn" onclick="setDateMode('weekly')">주간</button>
           <button id="mode-monthly" class="date-mode-btn" onclick="setDateMode('monthly')">월간</button>
+          <button id="mode-custom" class="date-mode-btn" onclick="setDateMode('custom')">직접설정</button>
         </div>
-        <div class="date-nav">
+        <div class="date-nav" id="date-nav-controls">
           <button onclick="navigateDate(-1)">← 이전</button>
           <div style="position:relative;">
             <span id="date-nav-label" class="date-nav-label" onclick="toggleDatePicker()"></span>
@@ -599,8 +602,11 @@
           </div>
           <button onclick="navigateDate(1)">다음 →</button>
         </div>
-        <input type="date" id="date-from" class="date-input" style="display:none;">
-        <input type="date" id="date-to" class="date-input" style="display:none;">
+        <div id="date-range-controls" style="display:none; align-items:center; gap:6px; font-size:12px; color:var(--text-secondary);">
+          <input type="date" id="date-from" class="date-input">
+          <span>~</span>
+          <input type="date" id="date-to" class="date-input">
+        </div>
         <button class="btn-report" onclick="openReportModal()">보고서 생성</button>
       </div>
     </div>
@@ -705,7 +711,7 @@
         <div class="subscreen" data-parent="program" id="program-compare" style="display:none;">
           <div class="filter-row" style="flex-wrap:wrap; gap:20px; align-items:flex-start;">
             <div>
-              <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:6px; font-weight:700;">A</div>
+              <div style="display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:50%; background:#0071e3; color:#fff; font-size:12px; font-weight:800; margin-bottom:8px;">A</div>
               <div style="display:flex; gap:4px; margin-bottom:6px;">
                 <button class="chip-btn active" data-cmp-slot="a" data-type="전체">전체</button>
                 <button class="chip-btn" data-cmp-slot="a" data-type="생방">생방</button>
@@ -718,7 +724,7 @@
               </div>
             </div>
             <div>
-              <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:6px; font-weight:700;">B</div>
+              <div style="display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:50%; background:#af52de; color:#fff; font-size:12px; font-weight:800; margin-bottom:8px;">B</div>
               <div style="display:flex; gap:4px; margin-bottom:6px;">
                 <button class="chip-btn active" data-cmp-slot="b" data-type="전체">전체</button>
                 <button class="chip-btn" data-cmp-slot="b" data-type="생방">생방</button>
@@ -786,6 +792,7 @@
             </div>
             <button class="chip-btn" style="color:var(--negative);" onclick="clearPlayerCompare()">비교 해제</button>
           </div>
+          <div id="player-summary-wrap"></div>
           <div id="player-detail-wrap"></div>
         </div>
       </div>
@@ -793,8 +800,10 @@
       <!-- ============ SCHEDULE ============ -->
       <div class="screen" id="screen-schedule">
         <div class="subtabs">
+          <!-- 편성 궁합 분석 숨김
           <div class="subtab active" data-parent="schedule" data-tab="matching">궁합 분석</div>
-          <div class="subtab" data-parent="schedule" data-tab="adjacency">리드인/리드아웃 분석</div>
+          -->
+          <div class="subtab active" data-parent="schedule" data-tab="adjacency">리드인/리드아웃 분석</div>
           <div class="subtab" data-parent="schedule" data-tab="counterfactual">가상 편성 시나리오</div>
           <div class="subtab" data-parent="schedule" data-tab="weekly">주간 편성안 추천</div>
           <div class="subtab" data-parent="schedule" data-tab="competitor">일별 경쟁 채널 분석</div>
@@ -803,6 +812,7 @@
           -->
         </div>
 
+        <!-- 편성 궁합 분석 화면 숨김 처리
         <div class="subscreen active" data-parent="schedule" id="schedule-matching">
           <div class="filter-row">
             <button class="chip-btn active" data-match-type="전체">전체</button>
@@ -841,9 +851,10 @@
               </div>
             </div>
           </div>
+        -->
         </div>
 
-        <div class="subscreen" data-parent="schedule" id="schedule-adjacency" style="display:none;">
+        <div class="subscreen" data-parent="schedule" id="schedule-adjacency" style="display:block;">
           <div class="filter-row">
             <button class="chip-btn active" data-adj-mode="in">앞에 올 프로그램 (리드인)</button>
             <button class="chip-btn" data-adj-mode="out">뒤에 올 프로그램 (리드아웃)</button>
@@ -1038,10 +1049,12 @@
           <div class="bento-grid">
             <div class="bento-card col-6">
               <div class="card-label">시작 직전~직후 광고시간 시청률 변화</div>
+              <div id="reg-start-insight" style="font-size:13px; font-weight:700; margin:6px 0 10px;"></div>
               <div class="chart-wrap"><canvas id="chart-regression-start"></canvas></div>
             </div>
             <div class="bento-card col-6">
               <div class="card-label">종료 직전~직후 광고시간 시청률 변화</div>
+              <div id="reg-end-insight" style="font-size:13px; font-weight:700; margin:6px 0 10px;"></div>
               <div class="chart-wrap"><canvas id="chart-regression-end"></canvas></div>
             </div>
           </div>
@@ -1365,6 +1378,10 @@ function formatDateNavLabel(){
 }
 async function applyDateMode(){
   document.querySelectorAll('.date-mode-btn').forEach(b=>b.classList.toggle('active', b.id === `mode-${dateMode}`));
+  const isCustom = dateMode === 'custom';
+  document.getElementById('date-nav-controls').style.display = isCustom ? 'none' : 'flex';
+  document.getElementById('date-range-controls').style.display = isCustom ? 'flex' : 'none';
+  if (isCustom) return; // 직접설정은 date-from/date-to를 사용자가 직접 골라서 넣고, 그 change 이벤트로 알아서 반영됨
   const { from, to } = computeRangeForMode();
   document.getElementById('date-from').value = from;
   document.getElementById('date-to').value = to;
@@ -1604,6 +1621,30 @@ const titleMap = {
   update:{t:'업데이트 예정', s:'앞으로 추가될 분석 기능 미리보기'}
 };
 
+function saveNavState(){
+  const activeScreen = document.querySelector('.nav-item.active');
+  const activeSub = document.querySelector('.nav-sub.active');
+  const activeSubtab = document.querySelector('.subtab.active');
+  localStorage.setItem('baduk-last-screen', activeScreen ? activeScreen.dataset.screen : '');
+  localStorage.setItem('baduk-last-sub', activeSub ? activeSub.dataset.sub : (activeSubtab ? activeSubtab.dataset.tab : ''));
+}
+function restoreNavState(){
+  const screenId = localStorage.getItem('baduk-last-screen');
+  if (!screenId || !titleMap[screenId]) return;
+  const navItem = document.querySelector('.nav-item[data-screen="'+screenId+'"]');
+  const screenEl = document.getElementById('screen-'+screenId);
+  if (!navItem || !screenEl) return;
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  navItem.classList.add('active');
+  document.querySelectorAll('.nav-group').forEach(g=>{ if(g.dataset.group === screenId) g.classList.add('open'); });
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  screenEl.classList.add('active');
+  document.getElementById('topbar-title').textContent = titleMap[screenId].t;
+  document.getElementById('topbar-sub').textContent = titleMap[screenId].s;
+  const subId = localStorage.getItem('baduk-last-sub');
+  if (subId) switchSubtab(screenId, subId);
+}
+
 document.querySelectorAll('.nav-item[data-screen]').forEach(item=>{
   item.addEventListener('click', ()=>{
     if (typeof hideRecommendPanel === 'function') hideRecommendPanel();
@@ -1617,6 +1658,7 @@ document.querySelectorAll('.nav-item[data-screen]').forEach(item=>{
     document.getElementById('screen-'+screenId).classList.add('active');
     document.getElementById('topbar-title').textContent = titleMap[screenId].t;
     document.getElementById('topbar-sub').textContent = titleMap[screenId].s;
+    saveNavState();
   });
 });
 
@@ -1633,6 +1675,7 @@ document.querySelectorAll('.nav-sub').forEach(item=>{
     document.getElementById('topbar-title').textContent = titleMap[screenId].t;
     document.getElementById('topbar-sub').textContent = titleMap[screenId].s;
     switchSubtab(screenId, sub);
+    saveNavState();
   });
 });
 
@@ -1640,6 +1683,7 @@ document.querySelectorAll('.subtab').forEach(t=>{
   t.addEventListener('click', ()=>{
     if (typeof hideRecommendPanel === 'function') hideRecommendPanel();
     switchSubtab(t.dataset.parent, t.dataset.tab);
+    saveNavState();
   });
 });
 
@@ -1772,7 +1816,7 @@ function renderDashboard(){
         sourceTag = '프로그램';
       }
       const achieveTxt = hasTarget
-        ? `${ratio >= 100 ? `<span class="delta-up">▲ ${ratio.toFixed(0)}%</span>` : `<span class="delta-down">▼ ${ratio.toFixed(0)}%</span>`} <span style="font-size:9px; color:var(--text-tertiary);">(${sourceTag})</span>`
+        ? `${ratio >= 100 ? `<span class="delta-up">${ratio.toFixed(0)}%</span>` : `<span class="delta-down">${ratio.toFixed(0)}%</span>`} <span style="font-size:9px; color:var(--text-tertiary);">(${sourceTag})</span>`
         : `<span style="color:var(--text-tertiary);">목표 미설정</span>`;
       const badge = p.type==='생방' ? '<span class="badge live">생방</span>' : p.type==='본방' ? '<span class="badge live">본방</span>' : (p.type==='재방' ? '<span class="badge rerun">재방</span>' : '<span class="badge rerun">혼합</span>');
       const timeLabel = isSingleDay ? `${p.start}–${p.end}` : `${p.date} / ${p.start}`;
@@ -2163,6 +2207,7 @@ function renderPlayerTab(){
       btn.classList.add('active');
       playerTypeFilter = btn.dataset.playerType;
       drawPlayerDetail();
+      renderPlayerSummaryTable();
     };
   });
 
@@ -2186,6 +2231,67 @@ function renderPlayerTab(){
   if (selectedPlayerNameB && !playerIndexCache[selectedPlayerNameB]) selectedPlayerNameB = null;
   inputA.value = selectedPlayerName || '';
   inputB.value = selectedPlayerNameB || '';
+  drawPlayerDetail();
+  renderPlayerSummaryTable();
+}
+
+let playerSummarySortKey = 'avgRating';
+let playerSummarySortDir = -1; // -1: 내림차순, 1: 오름차순
+function renderPlayerSummaryTable(){
+  const filterFn = (instances) => playerTypeFilter === '전체' ? instances : instances.filter(p=>p.type===playerTypeFilter);
+  const rows = Object.entries(playerIndexCache).map(([name, instances])=>{
+    const filtered = filterFn(instances);
+    if (filtered.length === 0) return null;
+    return {
+      name, count: filtered.length,
+      avgRating: filtered.reduce((a,p)=>a+p.rating,0)/filtered.length,
+      peak: Math.max(...filtered.map(p=>p.rating)),
+      avgView: filtered.reduce((a,p)=>a+(p.avgView||0),0)/filtered.length,
+    };
+  }).filter(Boolean);
+
+  rows.sort((a,b)=>(a[playerSummarySortKey]-b[playerSummarySortKey])*playerSummarySortDir);
+  const top = rows.slice(0, 10);
+
+  const cols = [
+    { key:'count', label:'출연 횟수', fmt:v=>`${v}회` },
+    { key:'avgRating', label:'평균 시청률', fmt:v=>`${v.toFixed(3)}%` },
+    { key:'peak', label:'최고 기록', fmt:v=>`${v.toFixed(3)}%` },
+    { key:'avgView', label:'평균 시청지속시간', fmt:v=>`${v.toFixed(1)}분` },
+  ];
+
+  const arrow = (key) => key === playerSummarySortKey ? (playerSummarySortDir === -1 ? ' ▼' : ' ▲') : '';
+  const wrap = document.getElementById('player-summary-wrap');
+  if (top.length === 0) { wrap.innerHTML = ''; return; }
+  wrap.innerHTML = `
+    <div class="bento-grid" style="margin-bottom:16px;">
+      <div class="bento-card col-12">
+        <div class="card-label">대국자 요약 (선택 기간 · ${playerTypeFilter}) — 열 제목을 클릭하면 그 기준으로 정렬돼요</div>
+        <div style="overflow-x:auto;">
+          <table class="data-table" style="width:100%;">
+            <tr>
+              <th>대국자</th>
+              ${cols.map(c=>`<th style="cursor:pointer;" onclick="setPlayerSummarySort('${c.key}')">${c.label}${arrow(c.key)}</th>`).join('')}
+            </tr>
+            ${top.map(r=>`
+              <tr style="cursor:pointer;" onclick="jumpToPlayerFromSummary('${r.name.replace(/'/g,"\\'")}')">
+                <td style="font-weight:700;">${r.name}</td>
+                ${cols.map(c=>`<td>${c.fmt(r[c.key])}</td>`).join('')}
+              </tr>
+            `).join('')}
+          </table>
+        </div>
+      </div>
+    </div>`;
+}
+function setPlayerSummarySort(key){
+  if (playerSummarySortKey === key) playerSummarySortDir *= -1;
+  else { playerSummarySortKey = key; playerSummarySortDir = -1; }
+  renderPlayerSummaryTable();
+}
+function jumpToPlayerFromSummary(name){
+  selectedPlayerName = name;
+  document.getElementById('player-search').value = name;
   drawPlayerDetail();
 }
 
@@ -4116,6 +4222,19 @@ function renderRegression(){
     endTitleEl.textContent = next
       ? `"${p.name}" → 다음 방송 "${next.name}" 종료 경계`
       : `종료 경계 (이 방송이 당일 마지막 방송이라 다음 방송 없음)`;
+
+    // 경계 전후 평균을 비교해서 "직전 대비 몇% 하락/상승" 한 줄 요약 (그래프 해석을 못 하시는 분들도 결론부터 바로 보이게)
+    const avg = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : null;
+    function setInsight(elId, beforeArr, afterArr, beforeLabel, afterLabel){
+      const el = document.getElementById(elId);
+      const beforeAvg = avg(beforeArr), afterAvg = avg(afterArr);
+      if (beforeAvg == null || afterAvg == null || beforeAvg === 0) { el.textContent = ''; return; }
+      const pct = (afterAvg - beforeAvg) / beforeAvg * 100;
+      const color = pct >= 0 ? 'var(--positive)' : 'var(--negative)';
+      el.innerHTML = `<span style="color:${color};">${beforeLabel}(${beforeAvg.toFixed(3)}%) 대비 ${afterLabel}이 ${pct>=0?'+':''}${pct.toFixed(0)}% ${pct>=0?'상승':'하락'}</span> (${afterAvg.toFixed(3)}%)`;
+    }
+    setInsight('reg-start-insight', prevTail.map(m=>m.rating_pct), ownHead.map(m=>m.rating_pct), '직전 방송 끝자락', '이 방송 시작자락');
+    setInsight('reg-end-insight', ownTail.map(m=>m.rating_pct), nextHead.map(m=>m.rating_pct), '이 방송 끝자락', '다음 방송 시작자락');
   }
   refreshPrograms();
 }
@@ -4519,6 +4638,7 @@ window.addEventListener('afterprint', ()=>{
   renderRegression();
   // renderSankey(); // 공사중: 시청자 이동 지도 임시 비활성화 (관련 마크업도 함께 주석처리됨)
   renderFatigue();
+  restoreNavState(); // 새로고침 전 마지막으로 보던 화면으로 복원 (저장된 게 없으면 기본 Dashboard 그대로)
 })();
 </script>
 </body>
