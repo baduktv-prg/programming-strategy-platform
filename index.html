@@ -2250,8 +2250,9 @@ function renderPlayerSummaryTable(){
     };
   }).filter(Boolean);
 
-  rows.sort((a,b)=>(a[playerSummarySortKey]-b[playerSummarySortKey])*playerSummarySortDir);
-  const top = rows.slice(0, 5);
+  const eligible = rows.filter(r => r.count >= 2); // 1회짜리는 "평균"의 의미가 없어서 순위 대상에서 제외(표본 부족)
+  eligible.sort((a,b)=>(a[playerSummarySortKey]-b[playerSummarySortKey])*playerSummarySortDir);
+  const top = eligible.slice(0, 5);
 
   const cols = [
     { key:'count', label:'출연 횟수', fmt:v=>`${v}회` },
@@ -2267,6 +2268,7 @@ function renderPlayerSummaryTable(){
     <div class="bento-grid" style="margin-bottom:16px;">
       <div class="bento-card col-12">
         <div class="card-label">대국자 TOP5 요약 (선택 기간 · ${playerTypeFilter}) — 열 제목을 클릭하면 그 기준으로 정렬돼요</div>
+        <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:8px;">출연 2회 이상인 대국자만 대상으로 해요 (1회짜리는 표본이 너무 적어서 제외).</div>
         <div style="overflow-x:auto;">
           <table class="data-table" style="width:100%;">
             <tr>
