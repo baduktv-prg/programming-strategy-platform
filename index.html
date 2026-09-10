@@ -1881,23 +1881,41 @@ async function drawCompetitorChart(){
     if (!chRow) continue;
 
     const byHour = {};
-    const programByHour = {}; // 프로그램명 매칭 — 바둑TV/K바둑은 우리 fact_schedule에 있어서 가능, 나머지 경쟁채널은 아직 데이터 없음
+    const programByHour = {}; // 프로그램명 매칭 — 바둑TV/K바둑/빌리어즈TV는 우리 fact_schedule에 있어서 가능, GOLF&PBA/브레인TV는 크롤링한 fact_competitor_schedule에서 가능
+    const usesOwnScheduleTable = ['바둑TV','K바둑','빌리어즈TV'].includes(chName); // 편성정보(프로그램명) 출처
+    const usesOwnMinuteTable = ['바둑TV','K바둑'].includes(chName); // 시청률 출처: fact_rating_minute(schedule_id 기반) vs fact_competitor_minute_rating(clock_time 기반)
 
-    if (chName === '바둑TV' || chName === 'K바둑') {
-      // 자사 방식과 동일하게 fact_schedule(스케줄 시작시각) + fact_rating_minute(schedule_id 기준 분단위)를 조합
-      const { data: scheds } = await sb.from('fact_schedule')
+    // 1) 편성정보(프로그램명) — 자사 방식 채널(바둑TV/K바둑/빌리어즈TV)이면 fact_schedule에서
+    let scheds = [];
+    if (usesOwnScheduleTable) {
+      const { data } = await sb.from('fact_schedule')
         .select('schedule_id, start_time, end_time, dim_program!fact_schedule_program_id_fkey(program_name)')
         .eq('channel_id', chRow.channel_id).eq('date_key', dateKey);
-      const startMap = {}, nameMap = {};
-      (scheds||[]).forEach(s=>{
-        startMap[s.schedule_id] = hhmmToMin(s.start_time.slice(0,5));
-        nameMap[s.schedule_id] = s.dim_program?.program_name || '(프로그램명 없음)';
+      scheds = data || [];
+      scheds.forEach(s=>{
+        const name = s.dim_program?.program_name || '(프로그램명 없음)';
         let sh = Number(s.start_time.slice(0,2));
         let eh = Number(s.end_time.slice(0,2));
         if (eh <= sh) eh += 24; // 자정 넘김 보정
-        for (let h = sh; h <= eh; h++) programByHour[toBucket(h)] = nameMap[s.schedule_id]; // 방영 시작~종료 모든 시간대에 프로그램명 표시
+        for (let h = sh; h <= eh; h++) programByHour[toBucket(h)] = name; // 방영 시작~종료 모든 시간대에 프로그램명 표시
       });
-      const scheduleIds = (scheds||[]).map(s=>s.schedule_id);
+    } else {
+      const { data } = await sb.from('fact_competitor_schedule')
+        .select('start_time, end_time, program_name, broadcast_type').eq('channel_id', chRow.channel_id).eq('date_key', dateKey);
+      (data||[]).forEach(s=>{
+        const label = s.broadcast_type ? `[${s.broadcast_type}] ${s.program_name}` : s.program_name;
+        let sh = Number(s.start_time.slice(0,2));
+        let eh = s.end_time ? Number(s.end_time.slice(0,2)) : sh;
+        if (eh <= sh) eh += 24;
+        for (let h = sh; h <= eh; h++) programByHour[toBucket(h)] = label;
+      });
+    }
+
+    // 2) 시청률 — 자사 분단위(fact_rating_minute, schedule_id 기반) vs 경쟁채널 분단위(fact_competitor_minute_rating, clock_time 기반)
+    if (usesOwnMinuteTable) {
+      const startMap = {};
+      scheds.forEach(s=>{ startMap[s.schedule_id] = hhmmToMin(s.start_time.slice(0,5)); });
+      const scheduleIds = scheds.map(s=>s.schedule_id);
       if (scheduleIds.length) {
         // Supabase 서버 기본 상한(보통 1000건)에 걸려 뒷부분이 잘리는 걸 방지 — 페이지네이션으로 끝까지 다 가져옴
         let allRows = [], page = 0;
@@ -1924,16 +1942,6 @@ async function drawCompetitorChart(){
       (rows||[]).forEach(r=>{
         const h = Number(r.clock_time.slice(0,2));
         (byHour[toBucket(h)] = byHour[toBucket(h)] || []).push(r.rating_pct);
-      });
-      // 새로 크롤링한 편성표(fact_competitor_schedule)가 있으면 프로그램명도 매칭
-      const { data: scheds } = await sb.from('fact_competitor_schedule')
-        .select('start_time, end_time, program_name, broadcast_type').eq('channel_id', chRow.channel_id).eq('date_key', dateKey);
-      (scheds||[]).forEach(s=>{
-        const label = s.broadcast_type ? `[${s.broadcast_type}] ${s.program_name}` : s.program_name;
-        let sh = Number(s.start_time.slice(0,2));
-        let eh = s.end_time ? Number(s.end_time.slice(0,2)) : sh;
-        if (eh <= sh) eh += 24; // 자정 넘김 보정
-        for (let h = sh; h <= eh; h++) programByHour[toBucket(h)] = label; // 방영 시작~종료 모든 시간대에 프로그램명 표시
       });
     }
 
