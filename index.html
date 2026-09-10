@@ -1250,7 +1250,8 @@ function aggregateByProgramAndPlayers(list){
   const map = {};
   list.forEach(p=>{
     const playersKey = (p.players && p.players !== '-') ? p.players : '(대국자 정보없음)';
-    const key = p.program_id + '_' + p.type + '_' + playersKey;
+    const playersNorm = normalizePlayersKey(playersKey); // "A vs B"와 "B vs A"를 같은 매치업으로 취급
+    const key = p.program_id + '_' + p.type + '_' + playersNorm;
     if (!map[key]) map[key] = { program_id: p.program_id, name: p.name, type: p.type, players: playersKey, instances: [] };
     map[key].instances.push(p);
   });
@@ -2686,6 +2687,13 @@ function extractPlayerNames(playersStr){
   if (!playersStr) return [];
   return playersStr.split(/vs/i).map(s=>s.trim()).filter(Boolean);
 }
+// "신진서vs카타고"와 "카타고vs신진서"를 같은 매치업으로 인식시키기 위한 그룹핑용 정규화 키(표시용 아님, 순서 안 가림)
+function normalizePlayersKey(playersStr){
+  if (!playersStr || playersStr === '-') return playersStr;
+  const names = extractPlayerNames(playersStr);
+  if (names.length === 0) return playersStr;
+  return names.slice().sort().join('_vs_');
+}
 function mostCommon(arr){
   if (!arr.length) return null;
   const counts = {};
@@ -3423,23 +3431,25 @@ function computeRecommendationCandidates(day, startIdx, endIdx, all, usedSet, op
   const noRoundItems = [];
   all.forEach(p=>{
     const playersKey = (p.players && p.players !== '-') ? p.players : '(대국자 정보없음)';
+    const playersNorm = normalizePlayersKey(playersKey); // "A vs B"와 "B vs A"를 같은 매치업으로 취급
     // 사람이 직접 입력한 실제대회연도가 있으면 최우선(제일 정확함) — 없으면 프로그램명에 박힌 연도 — 그것도 없으면 방영일자로 추정(한계 있음)
     const nameYearMatch = p.name.match(/^(19|20)\d{2}/);
     const yearKey = p.actual_tournament_year || (nameYearMatch ? nameYearMatch[0] : p.date.slice(0,4));
     const roundOrTopic = p.round_stage || p.segment_topic; // 일반 대회는 라운드, 코너쇼는 다룬 대회명 — 둘 중 하나만 채워짐
     if (!roundOrTopic) { noRoundItems.push({ ...p, playersKey, yearKey }); return; }
-    const key = p.program_id + '::' + playersKey + '::' + roundOrTopic + '::' + yearKey;
+    const key = p.program_id + '::' + playersNorm + '::' + roundOrTopic + '::' + yearKey;
     (byEpisode[key] = byEpisode[key] || { program_id: p.program_id, name: p.name, players: playersKey, round: roundOrTopic, year: yearKey, items: [] }).items.push(p);
   });
   // 2단계: 라운드가 비어있는 회차는, 같은 프로그램+대국자+연도로 이미 라운드가 채워진 그룹이 "딱 하나"만 있으면 거기 병합
   // (예: 신진서vs양카이원 16강이 최근 회차엔 라운드값이 안 채워진 경우, 예전에 채워진 같은 대진 그룹으로 합쳐줌)
   noRoundItems.forEach(p=>{
-    const matchingKeys = Object.keys(byEpisode).filter(k => k.startsWith(p.program_id + '::' + p.playersKey + '::') && k.endsWith('::' + p.yearKey));
+    const playersNorm = normalizePlayersKey(p.playersKey);
+    const matchingKeys = Object.keys(byEpisode).filter(k => k.startsWith(p.program_id + '::' + playersNorm + '::') && k.endsWith('::' + p.yearKey));
     if (matchingKeys.length === 1) {
       byEpisode[matchingKeys[0]].items.push(p);
     } else {
       // 매칭되는 라운드 그룹이 없거나(0개) 여러 개라 특정 못 지으면(2개 이상) 별도의 "라운드 없음" 그룹으로
-      const key = p.program_id + '::' + p.playersKey + '::' + '' + '::' + p.yearKey;
+      const key = p.program_id + '::' + playersNorm + '::' + '' + '::' + p.yearKey;
       (byEpisode[key] = byEpisode[key] || { program_id: p.program_id, name: p.name, players: p.playersKey, round: '', year: p.yearKey, items: [] }).items.push(p);
     }
   });
@@ -4156,7 +4166,8 @@ function buildFatigueCandidates(){
     const roundKey = p.round_stage || p.segment_topic || '';
     const nameYearMatch = p.name.match(/^(19|20)\d{2}/);
     const yearKey = p.actual_tournament_year || (nameYearMatch ? nameYearMatch[0] : p.date.slice(0,4));
-    const key = p.program_id + '_' + p.players + '_' + roundKey + '_' + yearKey; // 대국자·라운드 같아도 연도 다르면 별개 콘텐츠로 취급
+    const playersNorm = normalizePlayersKey(p.players); // "A vs B"와 "B vs A"를 같은 매치업으로 취급
+    const key = p.program_id + '_' + playersNorm + '_' + roundKey + '_' + yearKey; // 대국자·라운드 같아도 연도 다르면 별개 콘텐츠로 취급
     if (!map[key]) map[key] = { program_id: p.program_id, name: p.name, players: p.players, round: roundKey, year: yearKey, instances: [] };
     map[key].instances.push(p);
   });
