@@ -3479,17 +3479,19 @@ async function sendThemeChatMessage(){
       return;
     }
 
-    // Workers AI 응답 형식은 모델/버전에 따라 필드명이 조금씩 다를 수 있어서 여러 경우를 다 확인
+    // Workers AI 응답 형식은 표준 OpenAI 형식(choices[0].message)과, 편의상 최상위(response/tool_calls) 둘 다로 옴 — 둘 다 확인
     const result = data.result || data;
-    const toolCalls = result.tool_calls || result.response?.tool_calls || [];
-    if (!result && !toolCalls.length) {
+    const message = result.choices?.[0]?.message;
+    const toolCalls = message?.tool_calls || result.tool_calls || [];
+    const textReplyRaw = message?.content || result.response || null;
+    if (!result || (!toolCalls.length && !textReplyRaw && data.error)) {
       themeChatHistory.push({ role: 'assistant', content: `⚠ 응답을 받지 못했어요. (${data.error || data.errors?.[0]?.message || '알 수 없는 오류'}) 다시 시도해주세요.` });
       renderThemeChatMessages();
       return;
     }
 
     if (toolCalls.length > 0) {
-      themeChatHistory.push({ role: 'assistant', content: result.response || null, tool_calls: toolCalls });
+      themeChatHistory.push({ role: 'assistant', content: textReplyRaw, tool_calls: toolCalls });
       for (const call of toolCalls) {
         const fnName = call.name || call.function?.name;
         let fnArgs = call.arguments || call.function?.arguments || {};
@@ -3500,8 +3502,7 @@ async function sendThemeChatMessage(){
       continue; // 다음 턴에서 이어서 판단하도록 루프 계속
     }
 
-    const textReply = result.response || (typeof result === 'string' ? result : null);
-    themeChatHistory.push({ role: 'assistant', content: textReply || '(응답이 비어있어요)' });
+    themeChatHistory.push({ role: 'assistant', content: textReplyRaw || '(응답이 비어있어요)' });
     renderThemeChatMessages();
     return;
   }
