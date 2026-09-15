@@ -3451,16 +3451,21 @@ async function sendThemeChatMessage(){
     turns++;
     let data;
     try {
-      const res = await fetch(THEME_CHAT_WORKER_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: themeChatHistory,
-          tools: [{ functionDeclarations: THEME_AI_TOOLS }],
-          systemInstruction: { parts: [{ text: THEME_AI_SYSTEM_PROMPT }] },
-        }),
+      const payload = JSON.stringify({
+        contents: themeChatHistory,
+        tools: [{ functionDeclarations: THEME_AI_TOOLS }],
+        systemInstruction: { parts: [{ text: THEME_AI_SYSTEM_PROMPT }] },
       });
-      data = await res.json();
+      // Cloudflare Worker가 실행되는 위치에 따라 가끔 "지역 차단"으로 실패할 수 있어서, 이 경우만 자동으로 몇 번 재시도
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        const res = await fetch(THEME_CHAT_WORKER_URL, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload,
+        });
+        data = await res.json();
+        const isLocationBlocked = data.error?.message?.includes('location is not supported');
+        if (!isLocationBlocked || attempt === 3) break;
+        await new Promise(r => setTimeout(r, 500));
+      }
     } catch (e) {
       themeChatHistory.push({ role: 'model', parts: [{ text: `⚠ 통신 오류가 났어요: ${e.message}. 다시 시도해주세요.` }] });
       renderThemeChatMessages();
