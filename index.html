@@ -3483,7 +3483,7 @@ async function sendThemeChatMessage(){
         const result = await executeThemeAiTool(fc.functionCall.name, fc.functionCall.args || {});
         responseParts.push({ functionResponse: { name: fc.functionCall.name, response: result } });
       }
-      themeChatHistory.push({ role: 'function', parts: responseParts });
+      themeChatHistory.push({ role: 'user', parts: responseParts }); // 이 모델은 함수응답 턴에 'function' role을 지원 안 하고 'user'를 요구함
       continue; // 다음 턴에서 이어서 판단하도록 루프 계속
     }
 
