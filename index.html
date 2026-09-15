@@ -3491,7 +3491,7 @@ async function sendThemeChatMessage(){
     }
 
     if (toolCalls.length > 0) {
-      themeChatHistory.push({ role: 'assistant', content: textReplyRaw, tool_calls: toolCalls });
+      themeChatHistory.push({ role: 'assistant', content: textReplyRaw || '', tool_calls: toolCalls });
       for (const call of toolCalls) {
         const fnName = call.name || call.function?.name;
         let fnArgs = call.arguments || call.function?.arguments || {};
