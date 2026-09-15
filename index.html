@@ -4632,7 +4632,7 @@ window.addEventListener('afterprint', ()=>{
   renderMinuteTab();
   renderPlayerTab();
   renderCompetitorTab();
-  renderMatching();
+  // renderMatching(); // 편성궁합분석 탭 숨김 처리로 비활성화 (호출 시 존재하지 않는 DOM을 참조해서 에러 나며 이후 초기화 전체가 중단되던 버그 수정)
   renderAdjacency();
   renderCounterfactual();
   renderWeekly();
