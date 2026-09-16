@@ -537,6 +537,7 @@
           <div class="nav-sub" data-screen="program" data-sub="compare">프로그램 비교 분석</div>
           <div class="nav-sub" data-screen="program" data-sub="minute">프로그램별 분단위 시청률</div>
           <div class="nav-sub" data-screen="program" data-sub="player">기사별 분석</div>
+          <div class="nav-sub" data-screen="program" data-sub="host">해설/진행 분석</div>
         </div>
       </div>
 
@@ -665,6 +666,7 @@
           <div class="subtab" data-parent="program" data-tab="compare">비교 분석</div>
           <div class="subtab" data-parent="program" data-tab="minute">분단위 시청률</div>
           <div class="subtab" data-parent="program" data-tab="player">기사별 분석</div>
+          <div class="subtab" data-parent="program" data-tab="host">해설/진행 분석</div>
         </div>
 
         <div class="subscreen active" data-parent="program" id="program-value-map">
@@ -795,7 +797,30 @@
           <div id="player-detail-wrap"></div>
           <div id="player-summary-wrap"></div>
         </div>
+
+        <div class="subscreen" data-parent="program" id="program-host" style="display:none;">
+          <div class="filter-row">
+            <button class="chip-btn active" data-host-type="전체">전체</button>
+            <button class="chip-btn" data-host-type="생방">생방</button>
+            <button class="chip-btn" data-host-type="본방">본방</button>
+            <button class="chip-btn" data-host-type="재방">재방</button>
+          </div>
+          <div class="filter-row">
+            <button class="chip-btn active" data-host-role="전체">전체(해설+진행)</button>
+            <button class="chip-btn" data-host-role="해설">해설만</button>
+            <button class="chip-btn" data-host-role="진행">진행만</button>
+          </div>
+          <div class="filter-row">
+            <div class="searchable-wrap" style="min-width:220px;">
+              <input class="mini-filter" id="host-search" placeholder="해설/진행자 이름 검색 또는 클릭" autocomplete="off">
+              <div class="searchable-dropdown-list" id="host-search-dropdown"></div>
+            </div>
+          </div>
+          <div id="host-detail-wrap"></div>
+          <div id="host-summary-wrap"></div>
+        </div>
       </div>
+
 
       <!-- ============ SCHEDULE ============ -->
       <div class="screen" id="screen-schedule">
@@ -1766,6 +1791,7 @@ async function reloadAllForPeriod(){
   renderCompare();
   renderMinuteTab();
   renderPlayerTab();
+  renderHostTab();
   renderRegression();
   renderCounterfactual();
   renderFatigue();
@@ -2214,6 +2240,155 @@ let selectedPlayerName = null;
 let selectedPlayerNameB = null;
 let playerIndexCache = {};
 let playerTypeFilter = '전체';
+
+/* ============ 해설/진행 분석 ============ */
+function buildHostIndex(){
+  const map = {}; // name -> [{...program, hostRole:'해설'|'진행'}]
+  PROGRAMS.forEach(p=>{
+    if (!p.commentator_host) return;
+    const { commentator, host } = parseCommentatorHost(p.commentator_host);
+    if (commentator) (map[commentator] = map[commentator] || []).push({ ...p, hostRole: '해설' });
+    if (host) (map[host] = map[host] || []).push({ ...p, hostRole: '진행' });
+  });
+  return map;
+}
+let selectedHostName = null;
+let hostIndexCache = {};
+let hostTypeFilter = '전체'; // 생방/본방/재방
+let hostRoleFilter = '전체'; // 해설/진행
+
+function renderHostTab(){
+  hostIndexCache = buildHostIndex();
+  const names = Object.keys(hostIndexCache).sort((a,b)=>hostIndexCache[b].length-hostIndexCache[a].length);
+
+  document.querySelectorAll('#program-host .chip-btn[data-host-type]').forEach(btn=>{
+    btn.onclick = () => {
+      document.querySelectorAll('#program-host .chip-btn[data-host-type]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      hostTypeFilter = btn.dataset.hostType;
+      drawHostDetail(); renderHostSummaryTable();
+    };
+  });
+  document.querySelectorAll('#program-host .chip-btn[data-host-role]').forEach(btn=>{
+    btn.onclick = () => {
+      document.querySelectorAll('#program-host .chip-btn[data-host-role]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      hostRoleFilter = btn.dataset.hostRole;
+      drawHostDetail(); renderHostSummaryTable();
+    };
+  });
+
+  const input = document.getElementById('host-search');
+  const dropdown = document.getElementById('host-search-dropdown');
+  attachSearchableDropdown(input, dropdown, names, n=>n, (name)=>{
+    input.value = name;
+    selectedHostName = name;
+    drawHostDetail();
+  });
+
+  if (selectedHostName && !hostIndexCache[selectedHostName]) selectedHostName = null;
+  input.value = selectedHostName || '';
+  drawHostDetail();
+  renderHostSummaryTable();
+}
+
+function filterHostInstances(instances){
+  return instances.filter(p =>
+    (hostTypeFilter === '전체' || p.type === hostTypeFilter) &&
+    (hostRoleFilter === '전체' || p.hostRole === hostRoleFilter)
+  );
+}
+
+function drawHostDetail(){
+  const wrap = document.getElementById('host-detail-wrap');
+  if (!selectedHostName) { wrap.innerHTML = ''; return; }
+  const all = filterHostInstances(hostIndexCache[selectedHostName] || []);
+  if (all.length === 0) {
+    wrap.innerHTML = `<div class="bento-grid"><div class="bento-card col-12" style="text-align:center; color:var(--text-tertiary); padding:30px;">이 조건에 맞는 방영 이력이 없어요.</div></div>`;
+    return;
+  }
+  const avgRating = all.reduce((a,p)=>a+p.rating,0)/all.length;
+  const peak = Math.max(...all.map(p=>p.rating));
+  const asCommentator = all.filter(p=>p.hostRole==='해설').length;
+  const asHost = all.filter(p=>p.hostRole==='진행').length;
+
+  wrap.innerHTML = `
+    <div class="bento-grid" style="margin-bottom:16px;">
+      <div class="bento-card col-3"><div class="card-label">출연 횟수</div><div class="kpi-value">${all.length}회</div><div style="font-size:11px; color:var(--text-tertiary);">해설 ${asCommentator} · 진행 ${asHost}</div></div>
+      <div class="bento-card col-3"><div class="card-label">평균 시청률</div><div class="kpi-value">${avgRating.toFixed(3)}%</div></div>
+      <div class="bento-card col-3"><div class="card-label">최고 기록</div><div class="kpi-value">${peak.toFixed(3)}%</div></div>
+      <div class="bento-card col-3"><div class="card-label">최근 출연</div><div class="kpi-value" style="font-size:16px;">${all.slice().sort((a,b)=>b.date.localeCompare(a.date))[0]?.date || '-'}</div></div>
+    </div>
+    <div class="bento-grid">
+      <div class="bento-card col-12">
+        <div class="card-label">출연 이력</div>
+        <div style="overflow-x:auto;">
+          <table class="data-table" style="width:100%;">
+            <tr><th>날짜</th><th>프로그램</th><th>역할</th><th>구분</th><th>시청률</th></tr>
+            ${all.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,30).map(p=>`
+              <tr><td>${p.date}</td><td>${p.name}</td><td>${p.hostRole}</td><td>${p.type}</td><td>${p.rating.toFixed(3)}%</td></tr>
+            `).join('')}
+          </table>
+        </div>
+        ${all.length > 30 ? `<div style="font-size:11px; color:var(--text-tertiary); margin-top:6px;">최근 30건만 표시했어요 (전체 ${all.length}건)</div>` : ''}
+      </div>
+    </div>`;
+}
+
+let hostSummarySortKey = 'avgRating';
+let hostSummarySortDir = -1;
+function renderHostSummaryTable(){
+  const rows = Object.entries(hostIndexCache).map(([name, instances])=>{
+    const filtered = filterHostInstances(instances);
+    if (filtered.length === 0) return null;
+    return {
+      name, count: filtered.length,
+      avgRating: filtered.reduce((a,p)=>a+p.rating,0)/filtered.length,
+      peak: Math.max(...filtered.map(p=>p.rating)),
+    };
+  }).filter(Boolean);
+
+  const eligible = rows.filter(r => r.count >= 2); // 1회짜리는 표본 부족으로 제외
+  eligible.sort((a,b)=>(a[hostSummarySortKey]-b[hostSummarySortKey])*hostSummarySortDir);
+  const top = eligible.slice(0, 5);
+
+  const cols = [
+    { key:'count', label:'출연 횟수', fmt:v=>`${v}회` },
+    { key:'avgRating', label:'평균 시청률', fmt:v=>`${v.toFixed(3)}%` },
+    { key:'peak', label:'최고 기록', fmt:v=>`${v.toFixed(3)}%` },
+  ];
+  const arrow = (key) => key === hostSummarySortKey ? (hostSummarySortDir === -1 ? ' ▼' : ' ▲') : '';
+  const wrap = document.getElementById('host-summary-wrap');
+  if (top.length === 0) { wrap.innerHTML = ''; return; }
+  wrap.innerHTML = `
+    <div class="bento-grid" style="margin-top:16px;">
+      <div class="bento-card col-12">
+        <div class="card-label">해설/진행 TOP5 요약 (선택 기간 · ${hostTypeFilter} · ${hostRoleFilter}) — 열 제목을 클릭하면 그 기준으로 정렬돼요</div>
+        <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:8px;">출연 2회 이상인 사람만 대상으로 해요 (1회짜리는 표본이 너무 적어서 제외).</div>
+        <div style="overflow-x:auto;">
+          <table class="data-table" style="width:100%;">
+            <tr><th>이름</th>${cols.map(c=>`<th style="cursor:pointer;" onclick="setHostSummarySort('${c.key}')">${c.label}${arrow(c.key)}</th>`).join('')}</tr>
+            ${top.map(r=>`
+              <tr style="cursor:pointer;" onclick="jumpToHostFromSummary('${r.name.replace(/'/g,"\\'")}')">
+                <td style="font-weight:700;">${r.name}</td>
+                ${cols.map(c=>`<td>${c.fmt(r[c.key])}</td>`).join('')}
+              </tr>
+            `).join('')}
+          </table>
+        </div>
+      </div>
+    </div>`;
+}
+function setHostSummarySort(key){
+  if (hostSummarySortKey === key) hostSummarySortDir *= -1;
+  else { hostSummarySortKey = key; hostSummarySortDir = -1; }
+  renderHostSummaryTable();
+}
+function jumpToHostFromSummary(name){
+  selectedHostName = name;
+  document.getElementById('host-search').value = name;
+  drawHostDetail();
+}
 
 function renderPlayerTab(){
   playerIndexCache = buildPlayerIndex();
@@ -4894,6 +5069,7 @@ window.addEventListener('afterprint', ()=>{
   renderCompare();
   renderMinuteTab();
   renderPlayerTab();
+  renderHostTab();
   renderCompetitorTab();
   // renderMatching(); // 편성궁합분석 탭 숨김 처리로 비활성화 (호출 시 존재하지 않는 DOM을 참조해서 에러 나며 이후 초기화 전체가 중단되던 버그 수정)
   renderAdjacency();
