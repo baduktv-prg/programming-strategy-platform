@@ -536,8 +536,14 @@
           <div class="nav-sub" data-screen="program" data-sub="dna">프로그램 DNA 분석</div>
           <div class="nav-sub" data-screen="program" data-sub="compare">프로그램 비교 분석</div>
           <div class="nav-sub" data-screen="program" data-sub="minute">프로그램별 분단위 시청률</div>
-          <div class="nav-sub" data-screen="program" data-sub="player">기사별 분석</div>
-          <div class="nav-sub" data-screen="program" data-sub="host">해설/진행 분석</div>
+        </div>
+      </div>
+
+      <div class="nav-group" data-group="people">
+        <div class="nav-item" data-screen="people"><span>인물 분석</span><span class="nav-caret">▸</span></div>
+        <div class="nav-sub-wrap">
+          <div class="nav-sub active" data-screen="people" data-sub="player">기사별 분석</div>
+          <div class="nav-sub" data-screen="people" data-sub="host">해설/진행 분석</div>
         </div>
       </div>
 
@@ -665,8 +671,6 @@
           <div class="subtab" data-parent="program" data-tab="dna">DNA 분석</div>
           <div class="subtab" data-parent="program" data-tab="compare">비교 분석</div>
           <div class="subtab" data-parent="program" data-tab="minute">분단위 시청률</div>
-          <div class="subtab" data-parent="program" data-tab="player">기사별 분석</div>
-          <div class="subtab" data-parent="program" data-tab="host">해설/진행 분석</div>
         </div>
 
         <div class="subscreen active" data-parent="program" id="program-value-map">
@@ -775,12 +779,21 @@
           </div>
         </div>
 
-        <div class="subscreen" data-parent="program" id="program-player" style="display:none;">
+      </div>
+
+
+      <!-- ============ PEOPLE (인물 분석) ============ -->
+      <div class="screen" id="screen-people">
+        <div class="subtabs">
+          <div class="subtab active" data-parent="people" data-tab="player">기사별 분석</div>
+          <div class="subtab" data-parent="people" data-tab="host">해설/진행 분석</div>
+        </div>
+
+        <div class="subscreen active" data-parent="people" id="people-player">
           <div class="filter-row">
-            <button class="chip-btn active" data-player-type="전체">전체</button>
+            <button class="chip-btn active" data-player-type="전체">전체(생방+본방)</button>
             <button class="chip-btn" data-player-type="생방">생방</button>
             <button class="chip-btn" data-player-type="본방">본방</button>
-            <button class="chip-btn" data-player-type="재방">재방</button>
           </div>
           <div class="filter-row">
             <div class="searchable-wrap" style="min-width:220px;">
@@ -794,11 +807,12 @@
             </div>
             <button class="chip-btn" style="color:var(--negative);" onclick="clearPlayerCompare()">비교 해제</button>
           </div>
+          <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:8px;">⚠ 재방은 편성 슬롯 사정으로 시청률이 좌우돼서 대국자의 흥행력을 보기엔 왜곡이 있을 수 있어, 생방·본방만 집계해요.</div>
           <div id="player-detail-wrap"></div>
           <div id="player-summary-wrap"></div>
         </div>
 
-        <div class="subscreen" data-parent="program" id="program-host" style="display:none;">
+        <div class="subscreen" data-parent="people" id="people-host" style="display:none;">
           <div class="filter-row">
             <button class="chip-btn active" data-host-type="전체">전체</button>
             <button class="chip-btn" data-host-type="생방">생방</button>
@@ -817,6 +831,7 @@
             </div>
           </div>
           <div id="host-detail-wrap"></div>
+          <div id="host-combo-wrap"></div>
           <div id="host-summary-wrap"></div>
         </div>
       </div>
@@ -1662,6 +1677,7 @@ function attachSearchableDropdown(input, listEl, items, labelFn, onSelect){
 const titleMap = {
   dashboard:{t:'Dashboard', s:'채널 전체 성과와 주요 편성 이슈 요약'},
   program:{t:'프로그램 분석', s:'프로그램별 콘텐츠 특성과 전략적 가치 분석'},
+  people:{t:'인물 분석', s:'대국자·해설·진행자별 성적 분석'},
   schedule:{t:'편성 분석', s:'프로그램-시간대 적합도 및 편성 시나리오 분석'},
   audience:{t:'시청자 분석', s:'시청 흐름과 반복 편성에 따른 시청자 행동 분석'},
   update:{t:'업데이트 예정', s:'앞으로 추가될 분석 기능 미리보기'}
@@ -2234,6 +2250,7 @@ function buildPlayerIndex(){
   const map = {};
   PROGRAMS.forEach(p=>{
     if (!p.players || p.players === '-') return;
+    if (p.type === '재방') return; // 재방은 편성 슬롯 사정으로 시청률이 좌우돼서, 대국자 흥행력을 보는 지표로는 왜곡이 있어 제외
     extractPlayerNames(p.players).forEach(name=>{
       (map[name] = map[name] || []).push(p);
     });
@@ -2266,17 +2283,17 @@ function renderHostTab(){
   hostIndexCache = buildHostIndex();
   const names = Object.keys(hostIndexCache).sort((a,b)=>hostIndexCache[b].length-hostIndexCache[a].length);
 
-  document.querySelectorAll('#program-host .chip-btn[data-host-type]').forEach(btn=>{
+  document.querySelectorAll('#people-host .chip-btn[data-host-type]').forEach(btn=>{
     btn.onclick = () => {
-      document.querySelectorAll('#program-host .chip-btn[data-host-type]').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('#people-host .chip-btn[data-host-type]').forEach(b=>b.classList.remove('active'));
       btn.classList.add('active');
       hostTypeFilter = btn.dataset.hostType;
       drawHostDetail(); renderHostSummaryTable();
     };
   });
-  document.querySelectorAll('#program-host .chip-btn[data-host-role]').forEach(btn=>{
+  document.querySelectorAll('#people-host .chip-btn[data-host-role]').forEach(btn=>{
     btn.onclick = () => {
-      document.querySelectorAll('#program-host .chip-btn[data-host-role]').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('#people-host .chip-btn[data-host-role]').forEach(b=>b.classList.remove('active'));
       btn.classList.add('active');
       hostRoleFilter = btn.dataset.hostRole;
       drawHostDetail(); renderHostSummaryTable();
@@ -2340,53 +2357,94 @@ function drawHostDetail(){
     </div>`;
 }
 
-let hostSummarySortKey = 'avgRating';
-let hostSummarySortDir = -1;
-function renderHostSummaryTable(){
-  const rows = Object.entries(hostIndexCache).map(([name, instances])=>{
-    const filtered = filterHostInstances(instances);
+function buildHostRankRows(role){
+  return Object.entries(hostIndexCache).map(([name, instances])=>{
+    const filtered = instances.filter(p => p.hostRole === role && (hostTypeFilter === '전체' || p.type === hostTypeFilter));
     if (filtered.length === 0) return null;
     return {
       name, count: filtered.length,
       avgRating: filtered.reduce((a,p)=>a+p.rating,0)/filtered.length,
       peak: Math.max(...filtered.map(p=>p.rating)),
     };
-  }).filter(Boolean);
-
-  const eligible = rows.filter(r => r.count >= 2); // 1회짜리는 표본 부족으로 제외
-  eligible.sort((a,b)=>(a[hostSummarySortKey]-b[hostSummarySortKey])*hostSummarySortDir);
-  const top = eligible.slice(0, 5);
-
+  }).filter(Boolean).filter(r => r.count >= 2); // 1회짜리는 표본 부족으로 제외
+}
+function renderRankTable(role, sortKey, sortDir){
   const cols = [
     { key:'count', label:'출연 횟수', fmt:v=>`${v}회` },
     { key:'avgRating', label:'평균 시청률', fmt:v=>`${v.toFixed(3)}%` },
     { key:'peak', label:'최고 기록', fmt:v=>`${v.toFixed(3)}%` },
   ];
-  const arrow = (key) => key === hostSummarySortKey ? (hostSummarySortDir === -1 ? ' ▼' : ' ▲') : '';
-  const wrap = document.getElementById('host-summary-wrap');
-  if (top.length === 0) { wrap.innerHTML = ''; return; }
+  const rows = buildHostRankRows(role).sort((a,b)=>(a[sortKey]-b[sortKey])*sortDir).slice(0,5);
+  const arrow = (key) => key === sortKey ? (sortDir === -1 ? ' ▼' : ' ▲') : '';
+  if (rows.length === 0) return `<div style="color:var(--text-tertiary); font-size:12px; padding:10px;">2회 이상 출연한 ${role} 데이터가 없어요.</div>`;
+  return `<table class="data-table" style="width:100%;">
+    <tr><th>이름</th>${cols.map(c=>`<th style="cursor:pointer;" onclick="setHostSummarySort('${role}','${c.key}')">${c.label}${arrow(c.key)}</th>`).join('')}</tr>
+    ${rows.map(r=>`
+      <tr style="cursor:pointer;" onclick="jumpToHostFromSummary('${r.name.replace(/'/g,"\\'")}')">
+        <td style="font-weight:700;">${r.name}</td>
+        ${cols.map(c=>`<td>${c.fmt(r[c.key])}</td>`).join('')}
+      </tr>
+    `).join('')}
+  </table>`;
+}
+// "좋은 조합" — 해설+진행이 같이 나온 방송을 짝으로 묶어서, 그 조합의 평균 시청률이 좋은 순으로 추천
+function buildHostComboRows(){
+  const map = {};
+  PROGRAMS.forEach(p=>{
+    if (!p.commentator_host) return;
+    if (hostTypeFilter !== '전체' && p.type !== hostTypeFilter) return;
+    const { commentator, host } = parseCommentatorHost(p.commentator_host);
+    if (!commentator || !host) return; // 둘 다 있어야 "조합"으로 의미가 있음
+    const key = commentator + '_&_' + host;
+    (map[key] = map[key] || { commentator, host, items: [] }).items.push(p);
+  });
+  return Object.values(map)
+    .filter(g => g.items.length >= 2) // 표본 부족 제외
+    .map(g => ({ ...g, count: g.items.length, avgRating: g.items.reduce((a,p)=>a+p.rating,0)/g.items.length }))
+    .sort((a,b)=>b.avgRating-a.avgRating)
+    .slice(0, 5);
+}
+function renderHostComboSuggestion(){
+  const wrap = document.getElementById('host-combo-wrap');
+  const combos = buildHostComboRows();
+  if (combos.length === 0) { wrap.innerHTML = ''; return; }
   wrap.innerHTML = `
     <div class="bento-grid" style="margin-top:16px;">
       <div class="bento-card col-12">
-        <div class="card-label">해설/진행 TOP5 요약 (선택 기간 · ${hostTypeFilter} · ${hostRoleFilter}) — 열 제목을 클릭하면 그 기준으로 정렬돼요</div>
-        <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:8px;">출연 2회 이상인 사람만 대상으로 해요 (1회짜리는 표본이 너무 적어서 제외).</div>
+        <div class="card-label">해설·진행 조합 추천 (선택 기간 · ${hostTypeFilter})</div>
+        <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:8px;">둘이 같이 방송한 이력이 2회 이상 있는 조합 중, 평균 시청률이 높은 순으로 보여줘요.</div>
         <div style="overflow-x:auto;">
           <table class="data-table" style="width:100%;">
-            <tr><th>이름</th>${cols.map(c=>`<th style="cursor:pointer;" onclick="setHostSummarySort('${c.key}')">${c.label}${arrow(c.key)}</th>`).join('')}</tr>
-            ${top.map(r=>`
-              <tr style="cursor:pointer;" onclick="jumpToHostFromSummary('${r.name.replace(/'/g,"\\'")}')">
-                <td style="font-weight:700;">${r.name}</td>
-                ${cols.map(c=>`<td>${c.fmt(r[c.key])}</td>`).join('')}
-              </tr>
-            `).join('')}
+            <tr><th>해설</th><th>진행</th><th>같이 방영 횟수</th><th>평균 시청률</th></tr>
+            ${combos.map(c=>`<tr><td style="font-weight:700;">${c.commentator}</td><td style="font-weight:700;">${c.host}</td><td>${c.count}회</td><td>${c.avgRating.toFixed(3)}%</td></tr>`).join('')}
           </table>
         </div>
       </div>
     </div>`;
 }
-function setHostSummarySort(key){
-  if (hostSummarySortKey === key) hostSummarySortDir *= -1;
-  else { hostSummarySortKey = key; hostSummarySortDir = -1; }
+
+let hostSummarySortState = { 해설: { key:'avgRating', dir:-1 }, 진행: { key:'avgRating', dir:-1 } };
+function renderHostSummaryTable(){
+  const wrap = document.getElementById('host-summary-wrap');
+  wrap.innerHTML = `
+    <div class="bento-grid" style="margin-top:16px;">
+      <div class="bento-card col-6">
+        <div class="card-label">해설 TOP5 (선택 기간 · ${hostTypeFilter})</div>
+        <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:8px;">출연 2회 이상만 대상 — 열 제목 클릭하면 정렬 기준 변경</div>
+        <div id="host-rank-해설" style="overflow-x:auto;">${renderRankTable('해설', hostSummarySortState.해설.key, hostSummarySortState.해설.dir)}</div>
+      </div>
+      <div class="bento-card col-6">
+        <div class="card-label">진행 TOP5 (선택 기간 · ${hostTypeFilter})</div>
+        <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:8px;">출연 2회 이상만 대상 — 열 제목 클릭하면 정렬 기준 변경</div>
+        <div id="host-rank-진행" style="overflow-x:auto;">${renderRankTable('진행', hostSummarySortState.진행.key, hostSummarySortState.진행.dir)}</div>
+      </div>
+    </div>`;
+  renderHostComboSuggestion();
+}
+function setHostSummarySort(role, key){
+  const state = hostSummarySortState[role];
+  if (state.key === key) state.dir *= -1;
+  else { state.key = key; state.dir = -1; }
   renderHostSummaryTable();
 }
 function jumpToHostFromSummary(name){
@@ -2399,9 +2457,9 @@ function renderPlayerTab(){
   playerIndexCache = buildPlayerIndex();
   const names = Object.keys(playerIndexCache).sort((a,b)=>playerIndexCache[b].length-playerIndexCache[a].length);
 
-  document.querySelectorAll('#program-player .chip-btn[data-player-type]').forEach(btn=>{
+  document.querySelectorAll('#people-player .chip-btn[data-player-type]').forEach(btn=>{
     btn.onclick = () => {
-      document.querySelectorAll('#program-player .chip-btn[data-player-type]').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('#people-player .chip-btn[data-player-type]').forEach(b=>b.classList.remove('active'));
       btn.classList.add('active');
       playerTypeFilter = btn.dataset.playerType;
       drawPlayerDetail();
