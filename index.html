@@ -1280,8 +1280,10 @@ function getRelatedProgramIds(programId, all){
 function aggregateByProgram(list){
   const map = {};
   list.forEach(p=>{
-    const key = p.program_id + '_' + p.type; // 생방/재방 따로 그룹핑 (섞지 않음)
-    if (!map[key]) map[key] = { program_id: p.program_id, name: p.name, type: p.type, instances: [] };
+    const nameYearMatch = p.name.match(/^(19|20)\d{2}/);
+    const yearKey = p.actual_tournament_year || (nameYearMatch ? nameYearMatch[0] : p.date.slice(0,4));
+    const key = p.program_id + '_' + p.type + '_' + yearKey; // 생방/재방 따로, 기수(AF)도 다르면 따로 그룹핑
+    if (!map[key]) map[key] = { program_id: p.program_id, name: p.name, type: p.type, yearKey, instances: [] };
     map[key].instances.push(p);
   });
   return Object.values(map).map(g=>{
@@ -1305,8 +1307,10 @@ function aggregateByProgramAndPlayers(list){
   list.forEach(p=>{
     const playersKey = (p.players && p.players !== '-') ? p.players : '(대국자 정보없음)';
     const playersNorm = normalizePlayersKey(playersKey); // "A vs B"와 "B vs A"를 같은 매치업으로 취급
-    const key = p.program_id + '_' + p.type + '_' + playersNorm;
-    if (!map[key]) map[key] = { program_id: p.program_id, name: p.name, type: p.type, players: playersKey, instances: [] };
+    const nameYearMatch = p.name.match(/^(19|20)\d{2}/);
+    const yearKey = p.actual_tournament_year || (nameYearMatch ? nameYearMatch[0] : p.date.slice(0,4));
+    const key = p.program_id + '_' + p.type + '_' + playersNorm + '_' + yearKey; // 기수(AF)도 다르면 따로 그룹핑
+    if (!map[key]) map[key] = { program_id: p.program_id, name: p.name, type: p.type, players: playersKey, yearKey, instances: [] };
     map[key].instances.push(p);
   });
   return Object.values(map).map(g=>{
@@ -2074,7 +2078,7 @@ function jumpToRelatedProgram(name){
   dnaTypeFilter = '전체';
   window.__dnaFiltered = window.__dnaGrouped;
   const sel = document.getElementById('dna-select');
-  fillSelect(sel, window.__dnaFiltered, null, g => `${g.name} · ${g.type}`);
+  fillSelect(sel, window.__dnaFiltered, null, g => `${g.name} · ${g.type} · ${g.yearKey}년`);
   const idx = window.__dnaFiltered.findIndex(g => g.name === name);
   if (idx >= 0) {
     sel.value = idx;
@@ -2097,7 +2101,7 @@ function renderDNA(){
       if (dnaChart) { dnaChart.destroy(); dnaChart = null; }
       return;
     }
-    fillSelect(sel, filtered, null, g=> dnaTypeFilter==='전체' ? `${g.name} · ${g.type}` : g.name);
+    fillSelect(sel, filtered, null, g=> dnaTypeFilter==='전체' ? `${g.name} · ${g.type} · ${g.yearKey}년` : `${g.name} · ${g.yearKey}년`);
     sel.value = 0;
     drawDNA(filtered[0]);
   }
@@ -2784,7 +2788,7 @@ function createCompareSlot(slotId, allGrouped, onChange){
   function refreshPlayers(){
     const progName = state.programNames[programSel.value];
     state.playersGroups = typeFiltered().filter(g=>g.name===progName);
-    playersSel.innerHTML = state.playersGroups.map((g,i)=>`<option value="${i}">${g.players}${g.count>1?` (${g.count}회 평균)`:''}</option>`).join('') || '<option>없음</option>';
+    playersSel.innerHTML = state.playersGroups.map((g,i)=>`<option value="${i}">${g.players} · ${g.yearKey}년${g.count>1?` (${g.count}회 평균)`:''}</option>`).join('') || '<option>없음</option>';
     playersSel.value = 0;
     state.selected = state.playersGroups[0] || null;
     onChange();
