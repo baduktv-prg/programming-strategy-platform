@@ -1209,7 +1209,7 @@ function mergeParts(list){
   const merged = [];
   sorted.forEach(p=>{
     const prev = merged[merged.length-1];
-    if (prev && prev.program_id === p.program_id){
+    if (prev && prev.program_id === p.program_id && prev.type === p.type){
       const gap = p._absStart - prev._absEnd;
       if (gap >= -5 && gap <= 30){
         const totalDur = prev.duration + p.duration;
@@ -1845,7 +1845,7 @@ function renderDashboard(){
   }
 
   const tbl = document.getElementById('dashboard-table');
-  tbl.innerHTML = `<tr><th>프로그램</th><th>${isSingleDay?'시간대':'날짜/시간대'}</th><th>구분</th><th>시청률</th><th>목표 대비</th></tr>` +
+  tbl.innerHTML = `<tr><th>프로그램</th><th>대국자</th><th>${isSingleDay?'시간대':'날짜/시간대'}</th><th>구분</th><th>시청률</th><th>목표 대비</th></tr>` +
     displayPrograms.map(p=>{
       const isRerunType = p.type === '재방';
       let ratio, hasTarget, sourceTag;
@@ -1865,7 +1865,8 @@ function renderDashboard(){
       const badge = p.type==='생방' ? '<span class="badge live">생방</span>' : p.type==='본방' ? '<span class="badge live">본방</span>' : (p.type==='재방' ? '<span class="badge rerun">재방</span>' : '<span class="badge rerun">혼합</span>');
       const timeLabel = isSingleDay ? `${p.start}–${p.end}` : `${p.date} / ${p.start}`;
       const partsNote = p._parts > 1 ? ` <span style="font-size:10px; color:var(--text-tertiary);">(${p._parts}부 통합)</span>` : '';
-      return `<tr><td><b>${p.name}</b>${partsNote}</td><td>${timeLabel}</td><td>${badge}</td><td>${p.rating.toFixed(3)}%</td><td>${achieveTxt}</td></tr>`;
+      const playersTxt = (p.players && p.players !== '-') ? p.players : '<span style="color:var(--text-tertiary);">-</span>';
+      return `<tr><td><b>${p.name}</b>${partsNote}</td><td>${playersTxt}</td><td>${timeLabel}</td><td>${badge}</td><td>${p.rating.toFixed(3)}%</td><td>${achieveTxt}</td></tr>`;
     }).join('');
 }
 
