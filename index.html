@@ -4117,7 +4117,11 @@ function computeRecommendationCandidates(day, startIdx, endIdx, all, usedSet, op
     const effectiveLen = r.avgDurationMin + durationBufferMin;
     return effectiveLen <= targetDurationMin && effectiveLen > durationMinThreshold;
   });
-  const isUsed = (r) => usedSet.has(r[usedCheckField]);
+  // episodeKey 끝의 연도(기수) 부분만 빼고 비교하는 "느슨한" 매칭용 — AF(기수)를 나중에 채워서
+  // episodeKey 포맷이 바뀌어도(예: "2026"→"제9기") 같은 회차를 다른 걸로 착각하지 않게 함
+  const stripYearFromKey = (key) => typeof key === 'string' ? key.split('::').slice(0, -1).join('::') : key;
+  const usedSetLoose = new Set([...usedSet].map(stripYearFromKey));
+  const isUsed = (r) => usedSet.has(r[usedCheckField]) || (usedCheckField === 'episodeKey' && usedSetLoose.has(stripYearFromKey(r[usedCheckField])));
   const sortWithUsedLast = (arr) => {
     const base = hardExclude ? arr.filter(r => !isUsed(r)) : arr;
     return base.sort((a,b) => {
