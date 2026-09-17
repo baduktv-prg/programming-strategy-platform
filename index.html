@@ -3063,9 +3063,13 @@ function parseCommentatorHost(str){
 // "신진서vs카타고"와 "카타고vs신진서"를 같은 매치업으로 인식시키기 위한 그룹핑용 정규화 키(표시용 아님, 순서 안 가림)
 function normalizePlayersKey(playersStr){
   if (!playersStr || playersStr === '-') return playersStr;
-  const names = extractPlayerNames(playersStr);
-  if (names.length === 0) return playersStr;
-  return names.slice().sort().join('_vs_');
+  // "A vs B, C vs D"처럼 쉼표로 여러 대국이 묶인 경우, 각 쉼표 구간을 독립된 단위로 보고 그 안에서만 이름 순서를 정렬
+  const pairs = playersStr.split(',').map(p => p.trim()).filter(Boolean);
+  const normalizedPairs = pairs.map(pair => {
+    const names = extractPlayerNames(pair);
+    return names.length > 0 ? names.slice().sort().join('_vs_') : pair;
+  });
+  return normalizedPairs.sort().join(', ');
 }
 function mostCommon(arr){
   if (!arr.length) return null;
