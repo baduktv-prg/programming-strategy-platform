@@ -2094,7 +2094,7 @@ function jumpToRelatedProgram(name){
   dnaTypeFilter = '전체';
   window.__dnaFiltered = window.__dnaGrouped;
   const sel = document.getElementById('dna-select');
-  fillSelect(sel, window.__dnaFiltered, null, g => `${g.name} · ${g.type} · ${g.yearKey}년`);
+  fillSelect(sel, window.__dnaFiltered, null, g => `${g.name} · ${g.type} · ${g.yearKey}`);
   const idx = window.__dnaFiltered.findIndex(g => g.name === name);
   if (idx >= 0) {
     sel.value = idx;
@@ -2117,7 +2117,7 @@ function renderDNA(){
       if (dnaChart) { dnaChart.destroy(); dnaChart = null; }
       return;
     }
-    fillSelect(sel, filtered, null, g=> dnaTypeFilter==='전체' ? `${g.name} · ${g.type} · ${g.yearKey}년` : `${g.name} · ${g.yearKey}년`);
+    fillSelect(sel, filtered, null, g=> dnaTypeFilter==='전체' ? `${g.name} · ${g.type} · ${g.yearKey}` : `${g.name} · ${g.yearKey}`);
     sel.value = 0;
     drawDNA(filtered[0]);
   }
@@ -2846,7 +2846,7 @@ function createCompareSlot(slotId, allGrouped, onChange){
   function refreshPlayers(){
     const progName = state.programNames[programSel.value];
     state.playersGroups = typeFiltered().filter(g=>g.name===progName);
-    playersSel.innerHTML = state.playersGroups.map((g,i)=>`<option value="${i}">${g.players} · ${g.yearKey}년${g.count>1?` (${g.count}회 평균)`:''}</option>`).join('') || '<option>없음</option>';
+    playersSel.innerHTML = state.playersGroups.map((g,i)=>`<option value="${i}">${g.players} · ${g.yearKey}${g.count>1?` (${g.count}회 평균)`:''}</option>`).join('') || '<option>없음</option>';
     playersSel.value = 0;
     state.selected = state.playersGroups[0] || null;
     onChange();
@@ -4080,7 +4080,7 @@ function computeRecommendationCandidates(day, startIdx, endIdx, all, usedSet, op
   const withType = [], withoutType = [];
   Object.entries(byEpisode).forEach(([key, g])=>{
     const typeItems = g.items.filter(x=>x.type===WS_REC_TYPE);
-    const repPlayers = g.players + (g.round ? ' · '+g.round : '') + ' · ' + g.year + '년';
+    const repPlayers = g.players + (g.round ? ' · '+g.round : '') + ' · ' + g.year;
     const penalty = recencyPenalty(g.items);
     const boost = themeBoost(g);
     if (typeItems.length >= 2) {
