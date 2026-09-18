@@ -1224,7 +1224,8 @@ function mergeParts(list){
   const merged = [];
   sorted.forEach(p=>{
     const prev = merged[merged.length-1];
-    if (prev && prev.program_id === p.program_id && prev.type === p.type){
+    const samePlayers = (prev && prev.players || '-') === (p.players || '-'); // 대국자가 다르면 같은 프로그램이어도 별개 회차 — 절대 합치면 안 됨
+    if (prev && prev.program_id === p.program_id && prev.type === p.type && samePlayers){
       const gap = p._absStart - prev._absEnd;
       if (gap >= -5 && gap <= 30){
         const totalDur = prev.duration + p.duration;
