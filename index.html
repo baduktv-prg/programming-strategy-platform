@@ -2575,7 +2575,7 @@ function buildPlayerBlockHtml(name, instances, colClass){
     const h = Number(p.start.split(':')[0]);
     const realH = h < 2 ? h + 24 : h;
     const key = `${dLabel}_${realH}`;
-    (byCell[key] = byCell[key] || []).push(p.rating);
+    (byCell[key] = byCell[key] || []).push(p);
   });
 
   let heatmapHtml = '<div style="overflow-x:auto;"><div style="display:grid; grid-template-columns:48px repeat(7,1fr); gap:4px; font-size:11px; min-width:500px;">';
@@ -2583,14 +2583,19 @@ function buildPlayerBlockHtml(name, instances, colClass){
   times.forEach(h=>{
     heatmapHtml += `<div style="color:var(--text-secondary); font-weight:700; display:flex; align-items:center; font-size:10px;">${h}시</div>`;
     days.forEach(d=>{
-      const cellRatings = byCell[`${d}_${h}`];
-      if (!cellRatings || cellRatings.length === 0) {
+      const cellInstances = byCell[`${d}_${h}`];
+      if (!cellInstances || cellInstances.length === 0) {
         heatmapHtml += `<div style="height:26px; border-radius:6px; background:var(--bg-subtle);"></div>`;
         return;
       }
-      const cellAvg = cellRatings.reduce((a,b)=>a+b,0) / cellRatings.length;
+      const cellAvg = cellInstances.reduce((a,p)=>a+p.rating,0) / cellInstances.length;
       const score = peak > 0 ? Math.min(100, Math.round(100 * cellAvg / peak)) : 50;
-      heatmapHtml += `<div title="${d}요일 ${h}시 · 평균 ${cellAvg.toFixed(3)}% (${cellRatings.length}건)" style="height:26px; border-radius:6px; background:${heatColor(score)}; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:9.5px; text-shadow:0 1px 2px rgba(0,0,0,0.3);">${cellAvg.toFixed(3)}</div>`;
+      // 같은 프로그램이 여러 번이면 "프로그램명 x N건"으로 묶어서 표시 (다 나열하면 너무 길어짐)
+      const progCounts = {};
+      cellInstances.forEach(p=>{ progCounts[p.name] = (progCounts[p.name]||0) + 1; });
+      const progList = Object.entries(progCounts).map(([name,c])=> c>1 ? `${name} x${c}` : name).join(', ');
+      const tooltip = `${d}요일 ${h}시 · 평균 ${cellAvg.toFixed(3)}% (${cellInstances.length}건)\n${progList}`;
+      heatmapHtml += `<div title="${tooltip.replace(/"/g,'&quot;')}" style="height:26px; border-radius:6px; background:${heatColor(score)}; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:9.5px; text-shadow:0 1px 2px rgba(0,0,0,0.3);">${cellAvg.toFixed(3)}</div>`;
     });
   });
   heatmapHtml += '</div></div>';
