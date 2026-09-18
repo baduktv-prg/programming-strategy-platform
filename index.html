@@ -791,9 +791,10 @@
 
         <div class="subscreen active" data-parent="people" id="people-player">
           <div class="filter-row">
-            <button class="chip-btn active" data-player-type="전체">전체(생방+본방)</button>
+            <button class="chip-btn active" data-player-type="전체">전체</button>
             <button class="chip-btn" data-player-type="생방">생방</button>
             <button class="chip-btn" data-player-type="본방">본방</button>
+            <button class="chip-btn" data-player-type="재방">재방</button>
           </div>
           <div class="filter-row">
             <div class="searchable-wrap" style="min-width:220px;">
@@ -807,17 +808,15 @@
             </div>
             <button class="chip-btn" style="color:var(--negative);" onclick="clearPlayerCompare()">비교 해제</button>
           </div>
-          <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:8px;">⚠ 재방은 편성 슬롯 사정으로 시청률이 좌우돼서 대국자의 흥행력을 보기엔 왜곡이 있을 수 있어, 생방·본방만 집계해요.</div>
           <div id="player-detail-wrap"></div>
           <div id="player-summary-wrap"></div>
         </div>
 
         <div class="subscreen" data-parent="people" id="people-host" style="display:none;">
           <div class="filter-row">
-            <button class="chip-btn active" data-host-type="전체">전체</button>
+            <button class="chip-btn active" data-host-type="전체">전체(생방+본방)</button>
             <button class="chip-btn" data-host-type="생방">생방</button>
             <button class="chip-btn" data-host-type="본방">본방</button>
-            <button class="chip-btn" data-host-type="재방">재방</button>
           </div>
           <div class="filter-row">
             <button class="chip-btn active" data-host-role="전체">전체(해설+진행)</button>
@@ -830,6 +829,7 @@
               <div class="searchable-dropdown-list" id="host-search-dropdown"></div>
             </div>
           </div>
+          <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:8px;">⚠ 재방은 편성 슬롯 사정으로 시청률이 좌우돼서 해설/진행의 흥행력을 보기엔 왜곡이 있을 수 있어, 생방·본방만 집계해요.</div>
           <div id="host-detail-wrap"></div>
           <div id="host-combo-wrap"></div>
           <div id="host-summary-wrap"></div>
@@ -2253,7 +2253,6 @@ function buildPlayerIndex(){
   const map = {};
   PROGRAMS.forEach(p=>{
     if (!p.players || p.players === '-') return;
-    if (p.type === '재방') return; // 재방은 편성 슬롯 사정으로 시청률이 좌우돼서, 대국자 흥행력을 보는 지표로는 왜곡이 있어 제외
     extractPlayerNames(p.players).forEach(name=>{
       (map[name] = map[name] || []).push(p);
     });
@@ -2271,6 +2270,7 @@ function buildHostIndex(){
   const map = {}; // name -> [{...program, hostRole:'해설'|'진행'}]
   PROGRAMS.forEach(p=>{
     if (!p.commentator_host) return;
+    if (p.type === '재방') return; // 재방은 편성 슬롯 사정으로 시청률이 좌우돼서, 해설/진행 흥행력을 보는 지표로는 왜곡이 있어 제외
     const { commentator, host } = parseCommentatorHost(p.commentator_host);
     if (commentator) (map[commentator] = map[commentator] || []).push({ ...p, hostRole: '해설' });
     if (host) (map[host] = map[host] || []).push({ ...p, hostRole: '진행' });
