@@ -4124,11 +4124,19 @@ function computeRecommendationCandidates(day, startIdx, endIdx, all, usedSet, op
     const effectiveLen = r.avgDurationMin + durationBufferMin;
     return effectiveLen <= targetDurationMin && effectiveLen > durationMinThreshold;
   });
-  // episodeKey 끝의 연도(기수) 부분만 빼고 비교하는 "느슨한" 매칭용 — AF(기수)를 나중에 채워서
-  // episodeKey 포맷이 바뀌어도(예: "2026"→"제9기") 같은 회차를 다른 걸로 착각하지 않게 함
-  const stripYearFromKey = (key) => typeof key === 'string' ? key.split('::').slice(0, -1).join('::') : key;
-  const usedSetLoose = new Set([...usedSet].map(stripYearFromKey));
-  const isUsed = (r) => usedSet.has(r[usedCheckField]) || (usedCheckField === 'episodeKey' && usedSetLoose.has(stripYearFromKey(r[usedCheckField])));
+  // 연도(기수) 무시 + 대국자 표기를 지금 기준으로 재정규화해서 비교하는 "느슨한" 매칭용.
+  // AF(기수) 백필 전/후로 연도 표기("2026"→"제9기")뿐 아니라 대국자 표기 형식 자체가 달라진 옛 템플릿(예: "신진서vs판팅위, 박정환vs자오천위")도
+  // 지금 형식("박정환_vs_자오천위, 신진서_vs_판팅위")과 같은 회차로 인식하게 함 — 안 그러면 "지난주 방지"가 안 먹힘
+  const canonicalizeEpisodeKeyLoose = (key) => {
+    if (typeof key !== 'string') return key;
+    const parts = key.split('::');
+    if (parts.length < 3) return key;
+    const [programId, playersPart, round] = parts; // 마지막 세그먼트(연도)는 버림
+    const renormalizedPlayers = normalizePlayersKey(playersPart.replace(/_/g, '')); // "_vs_"든 "vs"든 통일해서 지금 로직으로 재정규화
+    return `${programId}::${renormalizedPlayers}::${round}`;
+  };
+  const usedSetLoose = new Set([...usedSet].map(canonicalizeEpisodeKeyLoose));
+  const isUsed = (r) => usedSet.has(r[usedCheckField]) || (usedCheckField === 'episodeKey' && usedSetLoose.has(canonicalizeEpisodeKeyLoose(r[usedCheckField])));
   const sortWithUsedLast = (arr) => {
     const base = hardExclude ? arr.filter(r => !isUsed(r)) : arr;
     return base.sort((a,b) => {
