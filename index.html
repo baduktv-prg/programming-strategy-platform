@@ -699,10 +699,6 @@
 
         <div class="subscreen" data-parent="program" id="program-dna" style="display:none;">
           <div class="filter-row">
-            <button class="chip-btn active" data-dna-type="전체">전체</button>
-            <button class="chip-btn" data-dna-type="생방">생방</button>
-            <button class="chip-btn" data-dna-type="본방">본방</button>
-            <button class="chip-btn" data-dna-type="재방">재방</button>
             <select class="mini-filter" id="dna-select"></select>
           </div>
           <div class="bento-grid">
@@ -1316,6 +1312,29 @@ function aggregateByProgram(list){
     };
   });
 }
+// 프로그램 DNA 분석 전용 — 생방/본방/재방, 기수(연도) 구분 없이 프로그램(program_id) 하나로만 통합.
+// (aggregateByProgram은 분단위 시청률 탭 등 다른 곳에서 생방/본방/재방별로 따로 봐야 해서 그대로 두고, 이건 별도 함수로 분리)
+function aggregateProgramFull(list){
+  const map = {};
+  list.forEach(p=>{
+    const key = p.program_id;
+    if (!map[key]) map[key] = { program_id: p.program_id, name: p.name, instances: [] };
+    map[key].instances.push(p);
+  });
+  return Object.values(map).map(g=>{
+    const n = g.instances.length;
+    const sum = k => g.instances.reduce((a,x)=>a+(x[k]||0),0);
+    const players = [...new Set(g.instances.map(x=>x.players).filter(x=>x && x!=='-'))];
+    return {
+      ...g,
+      rating: sum('rating')/n, share: sum('share')/n, reach: sum('reach')/n,
+      avgView: sum('avgView')/n, duration: sum('duration')/n,
+      start: g.instances[0].start, end: g.instances[0].end,
+      players, count: n,
+      schedule_ids: g.instances.flatMap(x=>x.schedule_ids || [x.schedule_id]),
+    };
+  });
+}
 // 프로그램명+생재구분+대국자까지 그룹핑 (비교분석용) — 대국자까지 같으면 그 회차들 평균
 function aggregateByProgramAndPlayers(list){
   const map = {};
@@ -1401,19 +1420,14 @@ async function loadData() {
   const today = window.__latestDate;
   document.getElementById('date-from').max = today;
   document.getElementById('date-to').max = today;
-  // 이전에 보고 있던 날짜(일간/주간/월간/직접설정 + 조회기간)가 저장돼 있으면 그걸로 복원,
-  // 없으면 기존 기본값(오늘 기준 이번 달)으로.
+  // 이전에 보고 있던 날짜(일간/주간/월간 + 조회기간)가 저장돼 있으면 그걸로 복원,
+  // 없으면(또는 직접설정이었으면) 기존 기본값(오늘 기준 이번 달)으로.
   const restoredDate = restoreDateStateIfAny();
   if (!restoredDate) {
     dateAnchor = new Date(today + 'T00:00:00');
     dateMode = 'monthly';
   }
   await applyDateMode();
-  // applyDateMode()는 직접설정(custom) 모드일 땐 date-from/date-to를 사용자가 이미 넣었다고 보고
-  // reloadAllForPeriod()를 안 부르고 그냥 리턴하니까, 복원된 직접설정 값은 여기서 한 번 더 명시적으로 반영.
-  if (restoredDate && dateMode === 'custom') {
-    await reloadAllForPeriod();
-  }
 }
 
 let dateMode = 'monthly'; // 'daily' | 'weekly' | 'monthly'
@@ -1718,28 +1732,27 @@ function restoreNavState(){
   if (subId) switchSubtab(screenId, subId);
 }
 
-// nav 위치랑 똑같은 이유로, 선택했던 날짜(일간/주간/월간/직접설정 모드 + 실제 조회 기간)도
+// nav 위치랑 똑같은 이유로, 선택했던 날짜(일간/주간/월간 모드 + 실제 조회 기간)도
 // 새로고침하면 날아가던 문제 — localStorage에 저장해뒀다가 로딩 시 복원.
+// 단, "직접설정(custom)"은 그때그때 필요해서 한 번 보는 임시 조회인 경우가 많아서 일부러 저장 대상에서 제외 —
+// 직접설정으로 날짜 잡아놓고 새로고침하면 항상 기본값(오늘 기준 이번 달)으로 풀리는 게 자연스러움.
 function saveDateState(mode, from, to){
+  if (mode === 'custom') return;
   try {
     localStorage.setItem('baduk-date-state', JSON.stringify({ mode, from, to }));
   } catch(e) { /* 시크릿모드 등으로 저장 실패해도 그냥 무시 */ }
 }
-// 저장된 날짜 상태가 있으면 dateMode/dateAnchor(또는 date-from/date-to)에 반영하고 true 리턴.
-// 없거나 파싱 실패하면 false 리턴해서 호출 쪽에서 기본값(오늘 기준 이번 달)을 쓰게 함.
+// 저장된 날짜 상태가 있으면 dateMode/dateAnchor에 반영하고 true 리턴.
+// 없거나 파싱 실패하면, 혹은 (예전 버전에서 저장된) custom 상태라면 false 리턴해서 호출 쪽에서 기본값을 쓰게 함.
 function restoreDateStateIfAny(){
   try {
     const raw = localStorage.getItem('baduk-date-state');
     if (!raw) return false;
     const saved = JSON.parse(raw);
     if (!saved || !saved.mode || !saved.from || !saved.to) return false;
+    if (saved.mode === 'custom') return false; // 직접설정은 저장 대상이 아니니 혹시 남아있는 옛날 값이어도 무시
     dateMode = saved.mode;
-    if (saved.mode === 'custom') {
-      document.getElementById('date-from').value = saved.from;
-      document.getElementById('date-to').value = saved.to;
-    } else {
-      dateAnchor = new Date(saved.from + 'T00:00:00');
-    }
+    dateAnchor = new Date(saved.from + 'T00:00:00');
     return true;
   } catch(e) { return false; }
 }
@@ -2127,11 +2140,9 @@ async function drawCompetitorChart(){
 }
 
 function jumpToRelatedProgram(name){
-  document.querySelectorAll('#program-dna .chip-btn').forEach(b=>b.classList.toggle('active', b.dataset.dnaType==='전체'));
-  dnaTypeFilter = '전체';
   window.__dnaFiltered = window.__dnaGrouped;
   const sel = document.getElementById('dna-select');
-  fillSelect(sel, window.__dnaFiltered, null, g => `${g.name} · ${g.type} · ${g.yearKey}`);
+  fillSelect(sel, window.__dnaFiltered, null, g => g.name);
   const idx = window.__dnaFiltered.findIndex(g => g.name === name);
   if (idx >= 0) {
     sel.value = idx;
@@ -2143,33 +2154,21 @@ function jumpToRelatedProgram(name){
 
 function renderDNA(){
   const sel = document.getElementById('dna-select');
-  window.__dnaGrouped = aggregateByProgram(PROGRAMS).sort((a,b)=>a.name.localeCompare(b.name));
+  // 생방/본방/재방, 기수(연도) 구분 없이 프로그램 하나로 통합해서 목록에 한 줄씩만 보여줌
+  // (목표 대비 실적 등 구체적인 계산은 drawDNA 안에서 재방/생방·본방을 다시 나눠 각자 기준으로 처리)
+  window.__dnaGrouped = aggregateProgramFull(PROGRAMS).sort((a,b)=>a.name.localeCompare(b.name));
+  window.__dnaFiltered = window.__dnaGrouped;
 
-  function refreshList(){
-    const filtered = dnaTypeFilter === '전체' ? window.__dnaGrouped : window.__dnaGrouped.filter(g=>g.type===dnaTypeFilter);
-    window.__dnaFiltered = filtered;
-    if (filtered.length === 0) {
-      sel.innerHTML = '<option>해당하는 프로그램 없음</option>';
-      document.getElementById('dna-detail').innerHTML = '';
-      if (dnaChart) { dnaChart.destroy(); dnaChart = null; }
-      return;
-    }
-    fillSelect(sel, filtered, null, g=> dnaTypeFilter==='전체' ? `${g.name} · ${g.type} · ${g.yearKey}` : `${g.name} · ${g.yearKey}`);
-    sel.value = 0;
-    drawDNA(filtered[0]);
+  if (window.__dnaGrouped.length === 0) {
+    sel.innerHTML = '<option>해당하는 프로그램 없음</option>';
+    document.getElementById('dna-detail').innerHTML = '';
+    if (dnaChart) { dnaChart.destroy(); dnaChart = null; }
+    return;
   }
+  fillSelect(sel, window.__dnaGrouped, null, g => g.name);
+  sel.value = 0;
   sel.onchange = () => drawDNA(window.__dnaFiltered[sel.value]);
-
-  document.querySelectorAll('#program-dna .chip-btn').forEach(btn=>{
-    btn.onclick = () => {
-      document.querySelectorAll('#program-dna .chip-btn').forEach(b=>b.classList.remove('active'));
-      btn.classList.add('active');
-      dnaTypeFilter = btn.dataset.dnaType;
-      refreshList();
-    };
-  });
-
-  refreshList();
+  drawDNA(window.__dnaGrouped[0]);
 }
 let dnaChart;
 // 여러 schedule_id의 연령대별 시청률을 평균내서 반환
@@ -2186,42 +2185,49 @@ async function fetchAudience(scheduleIds){
   return Object.values(byKey).map(x=>({ gender:x.gender, age_group:x.age_group, rating_pct:x.sum/x.n }));
 }
 async function drawDNA(g){
-  // 재방은 프로그램마스터 목표가 아니라 "시간대 목표"로 비교 (대시보드와 동일 기준)
-  let targetLabel, targetValue, achieveValue, hasTarget;
-  if (g.type === '재방') {
-    const hourlyTargets = g.instances.map(inst => getHourlyTargetAvg(inst.start, inst.end)).filter(v => v != null);
-    hasTarget = hourlyTargets.length > 0;
-    targetValue = hasTarget ? hourlyTargets.reduce((a,b)=>a+b,0)/hourlyTargets.length : 0;
-    achieveValue = hasTarget ? (g.rating / targetValue) * 100 : 0;
-    targetLabel = '시간대 목표';
-  } else {
-    hasTarget = g.target > 0;
-    targetValue = g.target;
-    achieveValue = g.achievement;
-    targetLabel = '목표 시청률';
-  }
+  // 프로그램 하나로 통합됐지만, 목표 대비 실적 계산 기준은 여전히 생방/본방(프로그램 목표)과 재방(시간대 목표)이 달라야 해서
+  // g.instances 안에서 재방/생방·본방을 나눠 각자 맞는 기준으로 따로 계산한 뒤, 상세 카드에 필요한 만큼만 같이 보여줌.
+  function avg(arr, key){ return arr.length ? arr.reduce((a,x)=>a+(x[key]||0),0)/arr.length : 0; }
 
-  // 재방인데 같은 프로그램의 생방 기록이 선택 기간 안에 있으면 "생방 대비 유지율" 계산, 없으면 "구작 재방" 태그
-  let liveCompareLine = '';
-  let isOldRerun = false;
-  if (g.type === '재방') {
-    const liveGroup = (window.__dnaGrouped || []).find(x => x.program_id === g.program_id && x.type !== '재방');
-    if (liveGroup) {
-      const retention = (g.rating / liveGroup.rating) * 100;
-      liveCompareLine = `<li><b>생방 대비 유지율:</b> ${retention.toFixed(0)}% (생방 평균 ${liveGroup.rating.toFixed(3)}%)</li>`;
-    } else {
-      isOldRerun = true;
-    }
+  const rerunInstances = g.instances.filter(inst => inst.type === '재방');
+  const liveInstances = g.instances.filter(inst => inst.type !== '재방'); // 생방+본방
+
+  let rerunPart = null;
+  if (rerunInstances.length > 0) {
+    const hourlyTargets = rerunInstances.map(inst => getHourlyTargetAvg(inst.start, inst.end)).filter(v => v != null);
+    const hasTarget = hourlyTargets.length > 0;
+    const targetValue = hasTarget ? hourlyTargets.reduce((a,b)=>a+b,0)/hourlyTargets.length : 0;
+    const ratingAvg = avg(rerunInstances, 'rating');
+    rerunPart = { count: rerunInstances.length, ratingAvg, hasTarget, targetValue,
+      achieveValue: hasTarget ? (ratingAvg/targetValue)*100 : 0, chartLabel: '재방 · 시간대 목표' };
   }
+  let livePart = null;
+  if (liveInstances.length > 0) {
+    const targetValue = avg(liveInstances, 'target');
+    const hasTarget = targetValue > 0;
+    const ratingAvg = avg(liveInstances, 'rating');
+    livePart = { count: liveInstances.length, ratingAvg, hasTarget, targetValue,
+      achieveValue: hasTarget ? (ratingAvg/targetValue)*100 : 0, chartLabel: '생방·본방 · 프로그램 목표' };
+  }
+  // 차트엔 하나만 그려야 해서, 재방/생방·본방 둘 다 있으면 회차 수 많은 쪽을 대표로
+  const chartPart = (rerunPart && livePart) ? (rerunPart.count >= livePart.count ? rerunPart : livePart) : (rerunPart || livePart);
 
   if(dnaChart) dnaChart.destroy();
-  dnaChart = new Chart(document.getElementById('chart-dna'), {
-    type:'bar',
-    data:{ labels:[targetLabel,'실제 시청률'], datasets:[{
-      data:[targetValue, g.rating], backgroundColor:[ '#e5e5ea', ACCENT_COLOR ], borderRadius: 8
-    }]},
-    options:{ responsive: true, maintainAspectRatio: false, plugins:{legend:{display:false}}, scales:{ y:{ beginAtZero:true, grid:{color:'rgba(0,0,0,0.04)'} }, x:{grid:{display:false}} } }
-  });
+  if (chartPart) {
+    dnaChart = new Chart(document.getElementById('chart-dna'), {
+      type:'bar',
+      data:{ labels:[chartPart.chartLabel,'실제 시청률'], datasets:[{
+        data:[chartPart.targetValue, chartPart.ratingAvg], backgroundColor:[ '#e5e5ea', ACCENT_COLOR ], borderRadius: 8
+      }]},
+      options:{ responsive: true, maintainAspectRatio: false, plugins:{legend:{display:false}}, scales:{ y:{ beginAtZero:true, grid:{color:'rgba(0,0,0,0.04)'} }, x:{grid:{display:false}} } }
+    });
+  }
+
+  // 재방·생방·본방 둘 다 기록이 있으면, 재방이 생방·본방 대비 어느 정도 시청률을 유지하는지도 같이 보여줌
+  const liveCompareLine = (rerunPart && livePart && livePart.ratingAvg > 0)
+    ? `<li><b>재방 시청률(생방·본방 대비):</b> ${((rerunPart.ratingAvg/livePart.ratingAvg)*100).toFixed(0)}% (생방·본방 평균 ${livePart.ratingAvg.toFixed(3)}%)</li>`
+    : '';
+  const isOldRerun = !!(rerunPart && !livePart); // 재방 기록만 있고 생방·본방 기록은 이 기간에 없는 경우
 
   const playersTxt = g.count > 1
     ? `출연 기사: ${g.players.length ? g.players.join(', ') : '정보 없음'}`
@@ -2235,6 +2241,11 @@ async function drawDNA(g){
       </div>`
     : '';
 
+  const achievementLines = [
+    livePart ? `<li><b>생방·본방 목표 대비 실적:</b> ${livePart.hasTarget ? livePart.achieveValue.toFixed(0)+'%' : '목표 미설정'} (${livePart.count}회)</li>` : '',
+    rerunPart ? `<li><b>재방 시간대 목표 대비 실적:</b> ${rerunPart.hasTarget ? rerunPart.achieveValue.toFixed(0)+'%' : '목표 미설정'} (${rerunPart.count}회)</li>` : '',
+  ].join('');
+
   document.getElementById('dna-detail').innerHTML = `
     <div class="card-label">구조화 분석 결과 ${g.count>1 ? `<span style="font-weight:400; color:var(--text-tertiary); font-size:11px;">(평균)</span>` : ''}</div>
     ${relatedHtml}
@@ -2242,7 +2253,7 @@ async function drawDNA(g){
     <ul class="factor-list">
       <li><b>대진:</b> ${playersTxt}</li>
       <li><b>평균 시청지속시간:</b> ${g.avgView.toFixed(1)}분</li>
-      <li><b>${targetLabel} 대비 실적:</b> ${hasTarget ? achieveValue.toFixed(0)+'%' : '목표 미설정'}</li>
+      ${achievementLines}
       ${liveCompareLine}
     </ul>
     <div class="card-label" style="margin-top:14px;">성·연령대별 시청률 ${g.count>1?'(평균)':''}</div>
@@ -2250,11 +2261,10 @@ async function drawDNA(g){
   `;
 
   const tags = [];
-  if(g.type==='재방') tags.push('재방 강세형');
-  if(isOldRerun) tags.push('구작 재방 (생방 기록 없음)');
-  // (3단계로 정확히 분리된 이후로는 '생방+재방' 혼합 그룹 자체가 안 생김)
+  if(rerunPart && rerunPart.hasTarget && rerunPart.achieveValue>110) tags.push('재방 강세형');
+  if(isOldRerun) tags.push('재방 전용 편성 (생방·본방 기록 없음)');
   if(g.duration>200) tags.push('장시간 편성');
-  if(hasTarget && achieveValue>120) tags.push('목표 초과 달성');
+  if(livePart && livePart.hasTarget && livePart.achieveValue>120) tags.push('목표 초과 달성');
   if(g.start>='22:00'||g.start<'06:00') tags.push('심야·새벽 시간대');
 
   const audience = await fetchAudience(g.schedule_ids);
@@ -2871,24 +2881,34 @@ async function renderMinuteComparisons(){
 }
 
 function createCompareSlot(slotId, allGrouped, onChange){
-  const state = { typeFilter: '전체', programNames: [], playersGroups: [], selected: null };
+  const state = { typeFilter: '전체', programGroups: [], playersGroups: [], selected: null };
   const programSel = document.getElementById(`cmp-${slotId}-program`);
   const playersSel = document.getElementById(`cmp-${slotId}-players`);
 
   function typeFiltered(){
     return state.typeFilter === '전체' ? allGrouped : allGrouped.filter(g=>g.type===state.typeFilter);
   }
+  // 1단계: 프로그램명뿐 아니라 생재구분·기수(연도)까지 묶어서 한번에 고를 수 있게
+  // (예: "란커배세계바둑오픈전 · 재방 · 2025" 처럼) — 대국자(대진)만 2단계에서 고르면 됨
   function refreshPrograms(){
     const pool = typeFiltered();
-    state.programNames = [...new Set(pool.map(g=>g.name))].sort((a,b)=>a.localeCompare(b));
-    programSel.innerHTML = state.programNames.map((n,i)=>`<option value="${i}">${n}</option>`).join('') || '<option>없음</option>';
+    const seen = new Set();
+    state.programGroups = [];
+    pool.forEach(g=>{
+      const key = g.name+'_'+g.type+'_'+g.yearKey;
+      if (seen.has(key)) return;
+      seen.add(key);
+      state.programGroups.push({ name: g.name, type: g.type, yearKey: g.yearKey });
+    });
+    state.programGroups.sort((a,b)=> a.name.localeCompare(b.name) || String(a.yearKey).localeCompare(String(b.yearKey)));
+    programSel.innerHTML = state.programGroups.map((pg,i)=>`<option value="${i}">${pg.name} · ${pg.type} · ${pg.yearKey}</option>`).join('') || '<option>없음</option>';
     programSel.value = 0;
     refreshPlayers();
   }
   function refreshPlayers(){
-    const progName = state.programNames[programSel.value];
-    state.playersGroups = typeFiltered().filter(g=>g.name===progName);
-    playersSel.innerHTML = state.playersGroups.map((g,i)=>`<option value="${i}">${g.players} · ${g.yearKey}${g.count>1?` (${g.count}회 평균)`:''}</option>`).join('') || '<option>없음</option>';
+    const pg = state.programGroups[programSel.value];
+    state.playersGroups = pg ? typeFiltered().filter(g=>g.name===pg.name && g.type===pg.type && g.yearKey===pg.yearKey) : [];
+    playersSel.innerHTML = state.playersGroups.map((g,i)=>`<option value="${i}">${g.players}${g.count>1?` (${g.count}회 평균)`:''}</option>`).join('') || '<option>없음</option>';
     playersSel.value = 0;
     state.selected = state.playersGroups[0] || null;
     onChange();
