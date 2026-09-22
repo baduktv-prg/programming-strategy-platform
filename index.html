@@ -1401,9 +1401,19 @@ async function loadData() {
   const today = window.__latestDate;
   document.getElementById('date-from').max = today;
   document.getElementById('date-to').max = today;
-  dateAnchor = new Date(today + 'T00:00:00');
-  dateMode = 'monthly';
+  // 이전에 보고 있던 날짜(일간/주간/월간/직접설정 + 조회기간)가 저장돼 있으면 그걸로 복원,
+  // 없으면 기존 기본값(오늘 기준 이번 달)으로.
+  const restoredDate = restoreDateStateIfAny();
+  if (!restoredDate) {
+    dateAnchor = new Date(today + 'T00:00:00');
+    dateMode = 'monthly';
+  }
   await applyDateMode();
+  // applyDateMode()는 직접설정(custom) 모드일 땐 date-from/date-to를 사용자가 이미 넣었다고 보고
+  // reloadAllForPeriod()를 안 부르고 그냥 리턴하니까, 복원된 직접설정 값은 여기서 한 번 더 명시적으로 반영.
+  if (restoredDate && dateMode === 'custom') {
+    await reloadAllForPeriod();
+  }
 }
 
 let dateMode = 'monthly'; // 'daily' | 'weekly' | 'monthly'
@@ -1708,6 +1718,32 @@ function restoreNavState(){
   if (subId) switchSubtab(screenId, subId);
 }
 
+// nav 위치랑 똑같은 이유로, 선택했던 날짜(일간/주간/월간/직접설정 모드 + 실제 조회 기간)도
+// 새로고침하면 날아가던 문제 — localStorage에 저장해뒀다가 로딩 시 복원.
+function saveDateState(mode, from, to){
+  try {
+    localStorage.setItem('baduk-date-state', JSON.stringify({ mode, from, to }));
+  } catch(e) { /* 시크릿모드 등으로 저장 실패해도 그냥 무시 */ }
+}
+// 저장된 날짜 상태가 있으면 dateMode/dateAnchor(또는 date-from/date-to)에 반영하고 true 리턴.
+// 없거나 파싱 실패하면 false 리턴해서 호출 쪽에서 기본값(오늘 기준 이번 달)을 쓰게 함.
+function restoreDateStateIfAny(){
+  try {
+    const raw = localStorage.getItem('baduk-date-state');
+    if (!raw) return false;
+    const saved = JSON.parse(raw);
+    if (!saved || !saved.mode || !saved.from || !saved.to) return false;
+    dateMode = saved.mode;
+    if (saved.mode === 'custom') {
+      document.getElementById('date-from').value = saved.from;
+      document.getElementById('date-to').value = saved.to;
+    } else {
+      dateAnchor = new Date(saved.from + 'T00:00:00');
+    }
+    return true;
+  } catch(e) { return false; }
+}
+
 document.querySelectorAll('.nav-item[data-screen]').forEach(item=>{
   item.addEventListener('click', ()=>{
     if (typeof hideRecommendPanel === 'function') hideRecommendPanel();
@@ -1801,6 +1837,7 @@ async function reloadAllForPeriod(){
   const from = document.getElementById('date-from').value;
   const to = document.getElementById('date-to').value;
   if (!from || !to || from > to) return;
+  saveDateState(dateMode, from, to); // 일간/주간/월간/직접설정 어느 경로로 오든 여기로 다 모이니까 여기 한 곳에서 저장
   document.querySelector('.content').style.opacity = '0.4';
   await loadPrograms(from, to);
   await loadTrend(from, to);
@@ -5162,29 +5199,35 @@ window.addEventListener('afterprint', ()=>{
 
 /* ============ INIT ============ */
 (async function init(){
+  // 데이터 로딩(3~4초) 끝날 때까지 기다리지 않고 화면 위치부터 먼저 복원.
+  // 화면 전환 자체(어느 메뉴/탭이 보이는지)는 데이터 내용과 무관한 DOM class 토글이라 미리 해도 안전하고,
+  // 이렇게 해야 "새로고침하면 대시보드로 잠깐 튀었다가 원래 화면으로 돌아오는" 깜빡임이 없어짐.
+  restoreNavState();
   await loadData();
   if (PROGRAMS.length === 0) {
     document.querySelector('.content').insertAdjacentHTML('afterbegin',
       '<div style="padding:16px; background:#fff3cd; border-radius:8px; margin-bottom:16px; font-size:13px;">⚠ 데이터를 불러오지 못했어요. SUPABASE_URL/ANON_KEY 설정을 확인해주세요 (콘솔 로그 참고).</div>');
     return;
   }
-  renderDashboard();
-  renderValueMap();
-  renderDNA();
-  renderCompare();
-  renderMinuteTab();
-  renderPlayerTab();
-  renderHostTab();
-  renderCompetitorTab();
+  // 렌더 함수 하나가 에러를 던지더라도 나머지 탭들은 계속 렌더링되도록 개별 방어.
+  // (예전에 renderMatching()이 존재하지 않는 DOM을 참조해서 에러를 던지며 이 아래 초기화 전체가 멈춘 적이 있었음 — 그런 케이스의 재발 방지)
+  const safeRender = (name, fn) => { try { fn(); } catch (e) { console.error(`[init] ${name} 렌더링 실패`, e); } };
+  safeRender('renderDashboard', renderDashboard);
+  safeRender('renderValueMap', renderValueMap);
+  safeRender('renderDNA', renderDNA);
+  safeRender('renderCompare', renderCompare);
+  safeRender('renderMinuteTab', renderMinuteTab);
+  safeRender('renderPlayerTab', renderPlayerTab);
+  safeRender('renderHostTab', renderHostTab);
+  safeRender('renderCompetitorTab', renderCompetitorTab);
   // renderMatching(); // 편성궁합분석 탭 숨김 처리로 비활성화 (호출 시 존재하지 않는 DOM을 참조해서 에러 나며 이후 초기화 전체가 중단되던 버그 수정)
-  renderAdjacency();
-  renderCounterfactual();
-  renderWeekly();
+  safeRender('renderAdjacency', renderAdjacency);
+  safeRender('renderCounterfactual', renderCounterfactual);
+  safeRender('renderWeekly', renderWeekly);
   // renderAutoFillTab(); // 자동편성 테스트 탭 숨김 처리로 비활성화
-  renderRegression();
+  safeRender('renderRegression', renderRegression);
   // renderSankey(); // 공사중: 시청자 이동 지도 임시 비활성화 (관련 마크업도 함께 주석처리됨)
-  renderFatigue();
-  restoreNavState(); // 새로고침 전 마지막으로 보던 화면으로 복원 (저장된 게 없으면 기본 Dashboard 그대로)
+  safeRender('renderFatigue', renderFatigue);
 })();
 </script>
 </body>
