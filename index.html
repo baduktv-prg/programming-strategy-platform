@@ -700,7 +700,12 @@
         <div class="subscreen" data-parent="program" id="program-dna" style="display:none;">
           <div class="filter-row">
             <select class="mini-filter" id="dna-select"></select>
+            <button class="chip-btn active" data-dna-type="전체">전체</button>
+            <button class="chip-btn" data-dna-type="생방">생방</button>
+            <button class="chip-btn" data-dna-type="본방">본방</button>
+            <button class="chip-btn" data-dna-type="재방">재방</button>
           </div>
+          <div style="font-size:11px; color:var(--text-tertiary); margin:-6px 0 10px;">프로그램은 위에서 하나만 고르고, 여기서는 그 프로그램의 생방/본방/재방 중 어떤 효율을 볼지만 고르면 돼요.</div>
           <div class="bento-grid">
             <div class="bento-card col-7">
               <div class="card-label">목표 달성률</div>
@@ -1334,6 +1339,21 @@ function aggregateProgramFull(list){
       schedule_ids: g.instances.flatMap(x=>x.schedule_ids || [x.schedule_id]),
     };
   });
+}
+// 회차 목록(instances) 하나를 받아서 평균낸 요약 객체로 — DNA 분석에서 전체/생방/본방/재방 필터에 따라
+// 매번 다른 부분집합으로 이 요약을 다시 만들어서 씀
+function summarizeInstances(program_id, name, instances){
+  const n = instances.length;
+  const sum = k => instances.reduce((a,x)=>a+(x[k]||0),0);
+  const players = [...new Set(instances.map(x=>x.players).filter(x=>x && x!=='-'))];
+  return {
+    program_id, name, instances,
+    rating: sum('rating')/n, share: sum('share')/n, reach: sum('reach')/n,
+    avgView: sum('avgView')/n, duration: sum('duration')/n,
+    start: instances[0].start, end: instances[0].end,
+    players, count: n,
+    schedule_ids: instances.flatMap(x=>x.schedule_ids || [x.schedule_id]),
+  };
 }
 // 프로그램명+생재구분+대국자까지 그룹핑 (비교분석용) — 대국자까지 같으면 그 회차들 평균
 function aggregateByProgramAndPlayers(list){
@@ -2141,6 +2161,8 @@ async function drawCompetitorChart(){
 
 function jumpToRelatedProgram(name){
   window.__dnaFiltered = window.__dnaGrouped;
+  document.querySelectorAll('#program-dna .chip-btn[data-dna-type]').forEach(b=>b.classList.toggle('active', b.dataset.dnaType==='전체'));
+  dnaTypeFilter = '전체';
   const sel = document.getElementById('dna-select');
   fillSelect(sel, window.__dnaFiltered, null, g => g.name);
   const idx = window.__dnaFiltered.findIndex(g => g.name === name);
@@ -2154,10 +2176,13 @@ function jumpToRelatedProgram(name){
 
 function renderDNA(){
   const sel = document.getElementById('dna-select');
-  // 생방/본방/재방, 기수(연도) 구분 없이 프로그램 하나로 통합해서 목록에 한 줄씩만 보여줌
-  // (목표 대비 실적 등 구체적인 계산은 drawDNA 안에서 재방/생방·본방을 다시 나눠 각자 기준으로 처리)
+  // 생방/본방/재방, 기수(연도) 구분 없이 프로그램 하나로 통합해서 목록에 한 줄씩만 보여줌.
+  // "생방/본방/재방 중 어떤 효율을 볼지"는 목록이 아니라 옆의 필터 칩으로 고르고, drawDNA 안에서
+  // 선택된 타입에 맞는 회차들만 추려서 다시 요약(summarizeInstances)해 보여줌.
   window.__dnaGrouped = aggregateProgramFull(PROGRAMS).sort((a,b)=>a.name.localeCompare(b.name));
   window.__dnaFiltered = window.__dnaGrouped;
+  dnaTypeFilter = '전체';
+  document.querySelectorAll('#program-dna .chip-btn[data-dna-type]').forEach(b=>b.classList.toggle('active', b.dataset.dnaType==='전체'));
 
   if (window.__dnaGrouped.length === 0) {
     sel.innerHTML = '<option>해당하는 프로그램 없음</option>';
@@ -2168,6 +2193,16 @@ function renderDNA(){
   fillSelect(sel, window.__dnaGrouped, null, g => g.name);
   sel.value = 0;
   sel.onchange = () => drawDNA(window.__dnaFiltered[sel.value]);
+
+  document.querySelectorAll('#program-dna .chip-btn[data-dna-type]').forEach(btn=>{
+    btn.onclick = () => {
+      document.querySelectorAll('#program-dna .chip-btn[data-dna-type]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      dnaTypeFilter = btn.dataset.dnaType;
+      drawDNA(window.__dnaFiltered[sel.value]);
+    };
+  });
+
   drawDNA(window.__dnaGrouped[0]);
 }
 let dnaChart;
@@ -2185,12 +2220,23 @@ async function fetchAudience(scheduleIds){
   return Object.values(byKey).map(x=>({ gender:x.gender, age_group:x.age_group, rating_pct:x.sum/x.n }));
 }
 async function drawDNA(g){
-  // 프로그램 하나로 통합됐지만, 목표 대비 실적 계산 기준은 여전히 생방/본방(프로그램 목표)과 재방(시간대 목표)이 달라야 해서
-  // g.instances 안에서 재방/생방·본방을 나눠 각자 맞는 기준으로 따로 계산한 뒤, 상세 카드에 필요한 만큼만 같이 보여줌.
   function avg(arr, key){ return arr.length ? arr.reduce((a,x)=>a+(x[key]||0),0)/arr.length : 0; }
 
-  const rerunInstances = g.instances.filter(inst => inst.type === '재방');
-  const liveInstances = g.instances.filter(inst => inst.type !== '재방'); // 생방+본방
+  // 목록(g)은 항상 프로그램 통합이지만, 옆 필터 칩(전체/생방/본방/재방)으로 그 프로그램 안에서
+  // 어떤 회차들만 볼지 추려서 다시 요약(view) — "센코컵 재방만" / "센코컵 생방만" 같은 걸 볼 수 있게.
+  const scopedInstances = dnaTypeFilter === '전체' ? g.instances : g.instances.filter(inst => inst.type === dnaTypeFilter);
+  if (scopedInstances.length === 0) {
+    if (dnaChart) { dnaChart.destroy(); dnaChart = null; }
+    document.getElementById('dna-detail').innerHTML = `<div style="color:var(--text-tertiary); font-size:13px; padding:12px 0;">"${g.name}"의 ${dnaTypeFilter} 방영 기록이 선택된 기간엔 없어요.</div>`;
+    document.getElementById('dna-tags').innerHTML = '';
+    return;
+  }
+  const g_ = summarizeInstances(g.program_id, g.name, scopedInstances);
+
+  // 목표 대비 실적 계산 기준은 여전히 생방/본방(프로그램 목표)과 재방(시간대 목표)이 달라야 해서
+  // g_.instances 안에서 재방/생방·본방을 나눠 각자 맞는 기준으로 따로 계산한 뒤, 상세 카드에 필요한 만큼만 같이 보여줌.
+  const rerunInstances = g_.instances.filter(inst => inst.type === '재방');
+  const liveInstances = g_.instances.filter(inst => inst.type !== '재방'); // 생방+본방
 
   let rerunPart = null;
   if (rerunInstances.length > 0) {
@@ -2229,11 +2275,11 @@ async function drawDNA(g){
     : '';
   const isOldRerun = !!(rerunPart && !livePart); // 재방 기록만 있고 생방·본방 기록은 이 기간에 없는 경우
 
-  const playersTxt = g.count > 1
-    ? `출연 기사: ${g.players.length ? g.players.join(', ') : '정보 없음'}`
-    : (g.players[0] || '-');
+  const playersTxt = g_.count > 1
+    ? `출연 기사: ${g_.players.length ? g_.players.join(', ') : '정보 없음'}`
+    : (g_.players[0] || '-');
 
-  const related = getRelatedPrograms(g.name);
+  const related = getRelatedPrograms(g_.name);
   const relatedHtml = related.length > 0
     ? `<div style="margin-bottom:10px;">
         <span style="font-size:11px; color:var(--text-tertiary); margin-right:6px;">🔗 관련 프로그램(대회방식이 달라 별도 집계):</span>
@@ -2247,27 +2293,27 @@ async function drawDNA(g){
   ].join('');
 
   document.getElementById('dna-detail').innerHTML = `
-    <div class="card-label">구조화 분석 결과 ${g.count>1 ? `<span style="font-weight:400; color:var(--text-tertiary); font-size:11px;">(평균)</span>` : ''}</div>
+    <div class="card-label">구조화 분석 결과 ${g_.count>1 ? `<span style="font-weight:400; color:var(--text-tertiary); font-size:11px;">(평균)</span>` : ''}</div>
     ${relatedHtml}
     <div id="dna-tags">불러오는 중...</div>
     <ul class="factor-list">
       <li><b>대진:</b> ${playersTxt}</li>
-      <li><b>평균 시청지속시간:</b> ${g.avgView.toFixed(1)}분</li>
+      <li><b>평균 시청지속시간:</b> ${g_.avgView.toFixed(1)}분</li>
       ${achievementLines}
       ${liveCompareLine}
     </ul>
-    <div class="card-label" style="margin-top:14px;">성·연령대별 시청률 ${g.count>1?'(평균)':''}</div>
+    <div class="card-label" style="margin-top:14px;">성·연령대별 시청률 ${g_.count>1?'(평균)':''}</div>
     <div id="dna-audience">불러오는 중...</div>
   `;
 
   const tags = [];
   if(rerunPart && rerunPart.hasTarget && rerunPart.achieveValue>110) tags.push('재방 강세형');
   if(isOldRerun) tags.push('재방 전용 편성 (생방·본방 기록 없음)');
-  if(g.duration>200) tags.push('장시간 편성');
+  if(g_.duration>200) tags.push('장시간 편성');
   if(livePart && livePart.hasTarget && livePart.achieveValue>120) tags.push('목표 초과 달성');
-  if(g.start>='22:00'||g.start<'06:00') tags.push('심야·새벽 시간대');
+  if(g_.start>='22:00'||g_.start<'06:00') tags.push('심야·새벽 시간대');
 
-  const audience = await fetchAudience(g.schedule_ids);
+  const audience = await fetchAudience(g_.schedule_ids);
   if (audience.length > 0) {
     const top = [...audience].sort((a,b)=>b.rating_pct-a.rating_pct)[0];
     if (top && top.rating_pct > 0) tags.push(`${top.age_group} ${top.gender==='남'?'남성':'여성'} 시청층 집중`);
@@ -2901,7 +2947,8 @@ function createCompareSlot(slotId, allGrouped, onChange){
       state.programGroups.push({ name: g.name, type: g.type, yearKey: g.yearKey });
     });
     state.programGroups.sort((a,b)=> a.name.localeCompare(b.name) || String(a.yearKey).localeCompare(String(b.yearKey)));
-    programSel.innerHTML = state.programGroups.map((pg,i)=>`<option value="${i}">${pg.name} · ${pg.type} · ${pg.yearKey}</option>`).join('') || '<option>없음</option>';
+    // 생방/본방/재방은 위 칩 버튼으로 이미 필터링되니까, 목록 텍스트엔 굳이 다시 안 보여줌
+    programSel.innerHTML = state.programGroups.map((pg,i)=>`<option value="${i}">${pg.name} · ${pg.yearKey}</option>`).join('') || '<option>없음</option>';
     programSel.value = 0;
     refreshPlayers();
   }
