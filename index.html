@@ -2926,6 +2926,16 @@ async function renderMinuteComparisons(){
   });
 }
 
+// 이 프로그램들은 "기수"가 프로그램 자체의 시즌이 아니라 그 회차가 다룬 대회의 기수를 뜻해서
+// (예: 빅매치승부처가 그날 다룬 매치가 몇 회 대회인지) — 프로그램 고르는 1단계 말고
+// 대국자(회차) 고르는 2단계에서 기수를 같이 보여줌. 그 외 프로그램은 기존대로 1단계에 기수 표시.
+// (앱스크립트 ETL의 CORNER_SHOW_NAMES와 같은 "코너쇼" 목록 — 데이터 적재 단계에서 쓰는 목록과
+// 이건 화면 표시용이라 파일은 다르지만, 개념이 같아서 목록을 맞춰둠. 코너쇼가 추가되면 양쪽 다 갱신 필요)
+const CMP_YEARKEY_AT_PLAYERS_STAGE = new Set([
+  'EASYGO초점국', '체크명승부', '기보탐구', '굿초이스K바둑초점국4', 'BEST초점국', '고요한반상',
+  '빅매치승부처', '세상친절한바둑', '세계바둑클래식', 'EASYGO명국쉽게보기', '현대바둑80년명국선조남철에서신진서까지'
+]);
+
 function createCompareSlot(slotId, allGrouped, onChange){
   const state = { typeFilter: '전체', programGroups: [], playersGroups: [], selected: null };
   const programSel = document.getElementById(`cmp-${slotId}-program`);
@@ -2934,28 +2944,32 @@ function createCompareSlot(slotId, allGrouped, onChange){
   function typeFiltered(){
     return state.typeFilter === '전체' ? allGrouped : allGrouped.filter(g=>g.type===state.typeFilter);
   }
-  // 1단계: 프로그램명뿐 아니라 생재구분·기수(연도)까지 묶어서 한번에 고를 수 있게
-  // (예: "란커배세계바둑오픈전 · 재방 · 2025" 처럼) — 대국자(대진)만 2단계에서 고르면 됨
   function refreshPrograms(){
     const pool = typeFiltered();
     const seen = new Set();
     state.programGroups = [];
     pool.forEach(g=>{
-      const key = g.name+'_'+g.type+'_'+g.yearKey;
+      const mergeYear = CMP_YEARKEY_AT_PLAYERS_STAGE.has(g.name);
+      const key = mergeYear ? (g.name+'_'+g.type) : (g.name+'_'+g.type+'_'+g.yearKey);
       if (seen.has(key)) return;
       seen.add(key);
-      state.programGroups.push({ name: g.name, type: g.type, yearKey: g.yearKey });
+      state.programGroups.push({ name: g.name, type: g.type, yearKey: mergeYear ? null : g.yearKey, mergeYear });
     });
-    state.programGroups.sort((a,b)=> a.name.localeCompare(b.name) || String(a.yearKey).localeCompare(String(b.yearKey)));
+    state.programGroups.sort((a,b)=> a.name.localeCompare(b.name) || String(a.yearKey||'').localeCompare(String(b.yearKey||'')));
     // 생방/본방/재방은 위 칩 버튼으로 이미 필터링되니까, 목록 텍스트엔 굳이 다시 안 보여줌
-    programSel.innerHTML = state.programGroups.map((pg,i)=>`<option value="${i}">${pg.name} · ${pg.yearKey}</option>`).join('') || '<option>없음</option>';
+    programSel.innerHTML = state.programGroups.map((pg,i)=>`<option value="${i}">${pg.name}${pg.mergeYear ? '' : ' · '+pg.yearKey}</option>`).join('') || '<option>없음</option>';
     programSel.value = 0;
     refreshPlayers();
   }
   function refreshPlayers(){
     const pg = state.programGroups[programSel.value];
-    state.playersGroups = pg ? typeFiltered().filter(g=>g.name===pg.name && g.type===pg.type && g.yearKey===pg.yearKey) : [];
-    playersSel.innerHTML = state.playersGroups.map((g,i)=>`<option value="${i}">${g.players}${g.count>1?` (${g.count}회 평균)`:''}</option>`).join('') || '<option>없음</option>';
+    state.playersGroups = pg
+      ? typeFiltered().filter(g=>g.name===pg.name && g.type===pg.type && (pg.mergeYear || g.yearKey===pg.yearKey))
+      : [];
+    playersSel.innerHTML = state.playersGroups.map((g,i)=>{
+      const label = (pg && pg.mergeYear) ? `${g.players} · ${g.yearKey}` : g.players;
+      return `<option value="${i}">${label}${g.count>1?` (${g.count}회 평균)`:''}</option>`;
+    }).join('') || '<option>없음</option>';
     playersSel.value = 0;
     state.selected = state.playersGroups[0] || null;
     onChange();
