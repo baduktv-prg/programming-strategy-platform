@@ -1761,11 +1761,14 @@ function restoreNavState(){
 function saveDateState(mode, from, to){
   if (mode === 'custom') return;
   try {
-    localStorage.setItem('baduk-date-state', JSON.stringify({ mode, from, to }));
+    // savedOn: 저장 시점의 "오늘" 날짜(로컬 기준). 다음날 접속 시 리셋 판단에 사용.
+    localStorage.setItem('baduk-date-state', JSON.stringify({ mode, from, to, savedOn: toDateStr(new Date()) }));
   } catch(e) { /* 시크릿모드 등으로 저장 실패해도 그냥 무시 */ }
 }
 // 저장된 날짜 상태가 있으면 dateMode/dateAnchor에 반영하고 true 리턴.
-// 없거나 파싱 실패하면, 혹은 (예전 버전에서 저장된) custom 상태라면 false 리턴해서 호출 쪽에서 기본값을 쓰게 함.
+// 없거나 파싱 실패하면, (예전 버전에서 저장된) custom 상태라면, 혹은 저장된 날짜가 "오늘"이 아니라면
+// false 리턴해서 호출 쪽에서 기본값(최근 방송일 기준 이번 달)을 쓰게 함.
+// → 하루가 지나면 자동으로 리셋되고, 같은 날 안에서 새로고침/재접속할 때만 복원됨.
 function restoreDateStateIfAny(){
   try {
     const raw = localStorage.getItem('baduk-date-state');
@@ -1773,6 +1776,7 @@ function restoreDateStateIfAny(){
     const saved = JSON.parse(raw);
     if (!saved || !saved.mode || !saved.from || !saved.to) return false;
     if (saved.mode === 'custom') return false; // 직접설정은 저장 대상이 아니니 혹시 남아있는 옛날 값이어도 무시
+    if (saved.savedOn !== toDateStr(new Date())) return false; // 저장된 날짜가 오늘이 아니면 리셋
     dateMode = saved.mode;
     dateAnchor = new Date(saved.from + 'T00:00:00');
     return true;
