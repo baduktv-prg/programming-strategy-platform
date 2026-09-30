@@ -3640,9 +3640,19 @@ async function initWeeklyFixedProgramSearch(){
   input.__searchInit = true;
   const dropdown = document.getElementById('ws-fixed-program-dropdown');
   const all = await loadFullHistory();
-  const uniquePrograms = Object.values(
-    all.reduce((acc, p) => { acc[p.program_id] = { program_id: p.program_id, name: p.name }; return acc; }, {})
-  ).sort((a,b)=>a.name.localeCompare(b.name));
+  // 프로그램명만으로 묶으면 같은 코너쇼의 서로 다른 기수가 하나로 뭉개져서 구분이 안 되니,
+  // 다른 화면(DNA/비교분석)과 동일한 규칙으로 기수(actual_tournament_year)까지 묶음 키에 포함.
+  // 기수가 비어있으면 프로그램명 앞의 연도(예: "2026청풍명월...") 또는 방영연도로 대체.
+  const grouped = {};
+  all.forEach(p => {
+    const nameYearMatch = p.name.match(/^(19|20)\d{2}/);
+    const yearKey = p.actual_tournament_year || (nameYearMatch ? nameYearMatch[0] : p.date.slice(0,4));
+    const key = p.program_id + '_' + yearKey;
+    if (!grouped[key]) grouped[key] = { program_id: p.program_id, baseName: p.name, yearKey };
+  });
+  const uniquePrograms = Object.values(grouped)
+    .map(g => ({ program_id: g.program_id, name: g.yearKey ? `${g.baseName} · ${g.yearKey}` : g.baseName }))
+    .sort((a,b)=>a.name.localeCompare(b.name));
 
   attachSearchableDropdown(input, dropdown, uniquePrograms, p=>p.name, (picked)=>{
     wsLinkedProgramId = picked.program_id;
