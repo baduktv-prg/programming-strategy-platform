@@ -1137,7 +1137,7 @@
           <div class="bento-grid">
             <div class="bento-card col-7">
               <div class="card-label" id="fatigue-title">누적 방영 순번별 시간대 대비 비율(%)</div>
-              <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:6px;">같은 대진(동일 콘텐츠)이 생방·본방·재방 상관없이 몇 번째로 방영됐는지 기준. 100% = 그 시간대 평균 수준.</div>
+              <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:6px;">같은 대진(동일 콘텐츠)의 재방송이 몇 번째인지 기준 (생방·본방은 의무 편성이라 제외). 100% = 그 시간대 평균 수준.</div>
               <div id="fatigue-insight" style="font-size:13px; font-weight:700; margin-bottom:8px; padding:8px 12px; background:var(--accent-light); border-radius:8px; color:var(--accent);"></div>
               <div class="chart-wrap"><canvas id="chart-fatigue"></canvas></div>
             </div>
@@ -4966,9 +4966,12 @@ function renderSankey(){
 let fatigueChart;
 
 // 프로그램+대국자(=같은 콘텐츠)로 묶고, 생방/본방/재방 상관없이 시간순으로 누적 방영 이력을 구성
+// 프로그램+대국자(=같은 콘텐츠)로 묶고, 재방만 시간순으로 누적 반복편성 이력을 구성
+// (생방/본방은 의무 편성이라 "반복해서 트는 횟수"에 포함하면 안 됨 — 재방만 편성 선택의 결과)
 function buildFatigueCandidates(){
   const map = {};
   PROGRAMS.forEach(p=>{
+    if (p.type !== '재방') return; // 생방/본방 제외, 재방만 집계
     if (!p.players || p.players === '-') return; // 대국자 정보 없으면 "같은 콘텐츠" 식별이 안 되니 제외
     const roundKey = p.round_stage || p.segment_topic || '';
     const nameYearMatch = p.name.match(/^(19|20)\d{2}/);
