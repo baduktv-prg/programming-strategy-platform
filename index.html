@@ -1777,8 +1777,15 @@ function restoreDateStateIfAny(){
     if (!saved || !saved.mode || !saved.from || !saved.to) return false;
     if (saved.mode === 'custom') return false; // 직접설정은 저장 대상이 아니니 혹시 남아있는 옛날 값이어도 무시
     if (saved.savedOn !== toDateStr(new Date())) return false; // 저장된 날짜가 오늘이 아니면 리셋
+
+    // 깨진 값(1969년 등)이나 데이터 범위를 벗어난 값은 버리고 기본값으로
+    const a = new Date(saved.from + 'T00:00:00');
+    if (isNaN(a) || a.getFullYear() < 2020 || saved.from > window.__latestDate) {
+      localStorage.removeItem('baduk-date-state');
+      return false;
+    }
     dateMode = saved.mode;
-    dateAnchor = new Date(saved.from + 'T00:00:00');
+    dateAnchor = a;
     return true;
   } catch(e) { return false; }
 }
@@ -1875,7 +1882,7 @@ function renderTrendKpiAndChart(){
 async function reloadAllForPeriod(){
   const from = document.getElementById('date-from').value;
   const to = document.getElementById('date-to').value;
-  if (!from || !to || from > to) return;
+   if (!from || from < '2020-01-01') return;
   saveDateState(dateMode, from, to); // 일간/주간/월간/직접설정 어느 경로로 오든 여기로 다 모이니까 여기 한 곳에서 저장
   document.querySelector('.content').style.opacity = '0.4';
   await loadPrograms(from, to);
