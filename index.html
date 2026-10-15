@@ -3722,6 +3722,7 @@ async function runWeeklyAutoFill(){
 const THEME_CHAT_WORKER_URL = 'https://baduktv-strategy-assistant.ojh-baduk.workers.dev/';
 let themeChatHistory = [];
 window.__themePrefs = null;
+window.__scoringFilter = null;
 
 function timeStrToSlotIdx(timeStr){
   let [h, m] = String(timeStr).split(':').map(Number);
@@ -3789,6 +3790,24 @@ const THEME_AI_TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'setScoringFilter',
+      description: '추천 점수를 계산할 때 참고하는 과거 방송 데이터의 범위를 제한한다. 특정 연도/기간/프로그램을 점수 계산에서 빼거나, 특정 연도/기간만 쓰고 싶을 때 사용. 필터를 모두 해제하려면 reset:true. 이후 runAutoFill을 호출해야 실제로 반영된다.',
+      parameters: {
+        type: 'object',
+        properties: {
+          excludeYears: { type: 'array', items: { type: 'integer' }, description: '이 연도의 방송 데이터는 점수 계산에서 제외. 예: [2025]' },
+          includeYears: { type: 'array', items: { type: 'integer' }, description: '지정하면 이 연도의 데이터만 사용' },
+          dateFrom: { type: 'string', description: 'YYYY-MM-DD, 이 날짜 이후 데이터만 사용' },
+          dateTo: { type: 'string', description: 'YYYY-MM-DD, 이 날짜 이전 데이터만 사용' },
+          excludeProgramKeywords: { type: 'array', items: { type: 'string' }, description: '프로그램명에 이 단어가 들어간 방송은 점수 계산/후보에서 제외' },
+          reset: { type: 'boolean', description: 'true면 기존 필터를 모두 해제' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'runAutoFill',
       description: '지금 고정슬롯을 기준으로 빈 슬롯들을 AI 추천으로 자동으로 채운다. 사용자가 특정 요일/시간대만 채워달라고 하면 반드시 days/startTime/endTime을 지정해야 한다 — 지정 안 하면 편성표 전체의 모든 빈칸이 채워진다.',
       parameters: {
@@ -3803,7 +3822,7 @@ const THEME_AI_TOOLS = [
   },
 ];
 
-const THEME_AI_SYSTEM_PROMPT = `너는 바둑TV 편성팀의 "테마 편성 도우미"야. 사용자의 자유로운 편성 요청을 이해해서, 주어진 도구(tools)를 사용해 실제로 편성표를 조작해. 도구 호출 결과를 보고 다음 행동을 결정하고, 모든 작업이 끝나면 한국어로 무엇을 했는지 간결하게 요약해서 알려줘. 확신이 안 서면 먼저 getCurrentSchedule로 현재 상태를 확인해. 시간은 방송일 기준 2:00~25:30 범위로 다뤄(0~1시는 24~25시로 표현).
+const THEME_AI_SYSTEM_PROMPT = `너는 바둑TV 편성팀의 "테마 편성 도우미"야. 사용자의 자유로운 편성 요청을 이해해서, 주어진 도구(tools)를 사용해 실제로 편성표를 조작해. 도구 호출 결과를 보고 다음 행동을 결정하고, 모든 작업이 끝나면 한국어로 무엇을 했는지 간결하게 요약해서 알려줘. 항상 한국어로만 답해. 요청 중 일부를 도구로 할 수 없으면 거절하지 말고, 할 수 있는 부분은 먼저 실행한 뒤 못 하는 부분과 가능한 대안을 한국어로 설명해. 점수 계산에 쓸 과거 데이터 범위(특정 연도 제외 등)를 바꾸라는 요청은 setScoringFilter로 처리하고, 그 다음 runAutoFill을 호출해. 확신이 안 서면 먼저 getCurrentSchedule로 현재 상태를 확인해. 시간은 방송일 기준 2:00~25:30 범위로 다뤄(0~1시는 24~25시로 표현).
 
 setThemePreference의 preferredKeywords를 정할 때 중요한 규칙: 사용자가 "추석", "설날", "크리스마스" 같은 명절/시즌 이름이나 "가족 대상", "편하게 볼 수 있는" 같은 추상적인 분위기를 말해도, 그 단어 자체를 keyword로 넣으면 안 돼(프로그램명에 "추석"이라는 글자가 실제로 들어있는 경우는 거의 없어서 아무 효과가 없어). 대신 그 의도를 우리 바둑 방송 프로그램명에 실제로 쓰일 법한 단어로 바꿔서 넣어:
 - "추석/설날처럼 가족이 편하게 볼 콘텐츠" → "초청전", "이벤트", "친선", "여자"
@@ -3857,6 +3876,17 @@ async function executeThemeAiTool(name, args){
     if (name === 'setThemePreference') {
       window.__themePrefs = args;
       return { success: true, message: '선호도 설정 완료. runAutoFill을 호출해야 실제로 반영됩니다.' };
+    }
+    if (name === 'setScoringFilter') {
+      if (args.reset) { window.__scoringFilter = null; return { success: true, message: '점수 계산 필터를 모두 해제했어요.' }; }
+      window.__scoringFilter = {
+        excludeYears: (args.excludeYears || []).map(Number),
+        includeYears: (args.includeYears || []).map(Number),
+        dateFrom: args.dateFrom || null,
+        dateTo: args.dateTo || null,
+        excludeProgramKeywords: args.excludeProgramKeywords || [],
+      };
+      return { success: true, filter: window.__scoringFilter, message: '점수 계산 필터 설정 완료. runAutoFill을 호출해야 실제로 반영됩니다.' };
     }
     if (name === 'runAutoFill') {
       if (fixedPrograms.length === 0) return { error: '고정 편성이 없어서 자동채우기를 할 수 없어요. 먼저 고정 슬롯을 추가해주세요.' };
@@ -4196,6 +4226,19 @@ function initRecommendPanelDrag(){
 // 공용 후보 계산 함수 — 주간편성안 추천(수동 클릭)과 자동편성 테스트(자동채우기)가 같이 씀
 function computeRecommendationCandidates(day, startIdx, endIdx, all, usedSet, opts = {}){
   const { usedCheckField = 'program_id', hardExclude = false, durationBufferMin = 0, durationMinThreshold = 0 } = opts;
+  // 편성 AI가 설정한 점수 계산 데이터 범위 필터(없으면 영향 없음)
+  const sf = window.__scoringFilter;
+  if (sf) {
+    all = all.filter(p => {
+      const y = Number(p.date.slice(0,4));
+      if (sf.excludeYears?.includes(y)) return false;
+      if (sf.includeYears?.length && !sf.includeYears.includes(y)) return false;
+      if (sf.dateFrom && p.date < sf.dateFrom) return false;
+      if (sf.dateTo && p.date > sf.dateTo) return false;
+      if (sf.excludeProgramKeywords?.some(kw => p.name.includes(kw))) return false;
+      return true;
+    });
+  }
   const slot = WS_SLOTS[startIdx];
   const targetDurationMin = (endIdx - startIdx + 1) * 30;
 
