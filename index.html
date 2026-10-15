@@ -3925,6 +3925,8 @@ async function sendThemeChatMessage(){
   renderThemeChatMessages();
 
   let turns = 0;
+  let forceNoTools = false;      // true면 다음 요청에서 도구를 빼서 AI가 요약 답변만 하게 함
+  const seenCalls = new Set();   // 같은 도구+같은 인자 반복 호출 감지
   while (turns < 6) { // 무한루프 방지 안전장치
     turns++;
     let data;
@@ -3932,7 +3934,7 @@ async function sendThemeChatMessage(){
       const res = await fetch(THEME_CHAT_WORKER_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: themeChatHistory, tools: THEME_AI_TOOLS }),
+        body: JSON.stringify(forceNoTools ? { messages: themeChatHistory } : { messages: themeChatHistory, tools: THEME_AI_TOOLS }),
       });
       data = await res.json();
     } catch (e) {
@@ -3958,8 +3960,21 @@ async function sendThemeChatMessage(){
         const fnName = call.name || call.function?.name;
         let fnArgs = call.arguments || call.function?.arguments || {};
         if (typeof fnArgs === 'string') { try { fnArgs = JSON.parse(fnArgs); } catch { fnArgs = {}; } }
-        const toolResult = await executeThemeAiTool(fnName, fnArgs);
-        themeChatHistory.push({ role: 'tool', name: fnName, content: JSON.stringify(toolResult) });
+        const sig = fnName + '::' + JSON.stringify(fnArgs);
+        let toolResult;
+        if (seenCalls.has(sig)) {
+          // 같은 호출 반복 → 실행하지 않고, 다음 턴부터 도구를 빼서 요약 답변을 유도
+          toolResult = { error: '같은 호출을 이미 했어요. 더 호출하지 말고 지금까지의 결과를 한국어로 요약해서 답해줘.' };
+          forceNoTools = true;
+        } else {
+          seenCalls.add(sig);
+          toolResult = await executeThemeAiTool(fnName, fnArgs);
+          if (fnName === 'runAutoFill') forceNoTools = true; // 채우기가 끝났으면 요약만
+        }
+        console.log('[편성AI] 도구 호출', turns, fnName, fnArgs, toolResult);
+        const toolMsg = { role: 'tool', name: fnName, content: JSON.stringify(toolResult) };
+        if (call.id) toolMsg.tool_call_id = call.id;
+        themeChatHistory.push(toolMsg);
       }
       continue; // 다음 턴에서 이어서 판단하도록 루프 계속
     }
