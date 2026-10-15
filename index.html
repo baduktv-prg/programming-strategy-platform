@@ -953,13 +953,13 @@
             <select class="mini-filter" id="ws-lastweek-select" multiple size="1" style="max-width:200px; min-width:160px;" title="Ctrl(Mac은 Cmd)+클릭으로 여러 주를 한꺼번에 선택할 수 있어요. 최근 2~3주를 같이 선택하는 걸 권장해요 — 한 주만 피하면 2주 전이랑 똑같은 게 다시 추천돼요."></select>
             <span style="font-size:11px; color:var(--text-tertiary);">(Ctrl/Cmd+클릭으로 여러 주 선택 — 최근 2~3주 권장)</span>
             <button class="chip-btn" style="color:var(--negative);" onclick="clearAllFixed()">전체 초기화</button>
-            <button class="chip-btn" style="background:var(--accent); color:#fff;" onclick="toggleThemeChat()">🤖 테마 편성 AI</button>
+            <button class="chip-btn" style="background:var(--accent); color:#fff;" onclick="toggleThemeChat()">🤖 편성 도우미 AI</button>
           </div>
 
           <div id="theme-chat-panel" style="display:none; margin-bottom:16px;">
             <div class="bento-grid">
               <div class="bento-card col-12">
-                <div class="card-label">테마 편성 AI 도우미 — 자유롭게 요청해보세요 (예: "추석 연휴엔 가족 대상 콘텐츠 위주로 채워줘")</div>
+                <div class="card-label">편성 AI 도우미 — 자유롭게 요청해보세요 (예: "추석 연휴엔 가족 대상 콘텐츠 위주로 채워줘")</div>
                 <div id="theme-chat-messages" style="max-height:280px; overflow-y:auto; margin:10px 0; padding:10px; background:var(--bg-subtle); border-radius:var(--radius-sm); font-size:13px; line-height:1.6;"></div>
                 <div style="display:flex; gap:8px;">
                   <input type="text" id="theme-chat-input" class="mini-filter" style="flex:1;" placeholder="편성 요청을 입력하세요..." onkeydown="if(event.key==='Enter') sendThemeChatMessage()">
@@ -3718,7 +3718,7 @@ async function runWeeklyAutoFill(){
   }
 }
 
-/* ============ 테마 편성 AI 챗봇 (실험적 기능) ============ */
+/* ============ 편성 AI 챗봇 (실험적 기능) ============ */
 const THEME_CHAT_WORKER_URL = 'https://baduktv-strategy-assistant.ojh-baduk.workers.dev/';
 let themeChatHistory = [];
 window.__themePrefs = null;
