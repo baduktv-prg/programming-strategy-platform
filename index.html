@@ -3879,12 +3879,13 @@ async function executeThemeAiTool(name, args){
     }
     if (name === 'setScoringFilter') {
       if (args.reset) { window.__scoringFilter = null; return { success: true, message: '점수 계산 필터를 모두 해제했어요.' }; }
+      const toArr = (v) => Array.isArray(v) ? v : (v == null || v === '' ? [] : (() => { try { const j = JSON.parse(v); return Array.isArray(j) ? j : [j]; } catch { return String(v).split(/[\s,]+/).filter(Boolean); } })());
       window.__scoringFilter = {
-        excludeYears: (args.excludeYears || []).map(Number),
-        includeYears: (args.includeYears || []).map(Number),
+        excludeYears: toArr(args.excludeYears).map(Number),
+        includeYears: toArr(args.includeYears).map(Number),
         dateFrom: args.dateFrom || null,
         dateTo: args.dateTo || null,
-        excludeProgramKeywords: args.excludeProgramKeywords || [],
+        excludeProgramKeywords: toArr(args.excludeProgramKeywords),
       };
       return { success: true, filter: window.__scoringFilter, message: '점수 계산 필터 설정 완료. runAutoFill을 호출해야 실제로 반영됩니다.' };
     }
@@ -3911,6 +3912,33 @@ async function executeThemeAiTool(name, args){
   } catch (e) {
     return { error: e.message };
   }
+}
+
+// 모델이 도구 호출을 구조화된 형태가 아니라 "텍스트"로 써버린 경우를 구제:
+// 응답 글 안에서 {"name":"...","parameters":{...}} 모양의 JSON을 찾아 도구 호출로 변환
+function parseTextToolCalls(text){
+  if (!text || typeof text !== 'string') return [];
+  const names = THEME_AI_TOOLS.map(t => t.function.name);
+  const found = [];
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] !== '{') continue;
+    let depth = 0, inStr = false, esc = false, end = -1;
+    for (let j = i; j < text.length; j++) {
+      const c = text[j];
+      if (inStr) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === '"') inStr = false; continue; }
+      if (c === '"') inStr = true;
+      else if (c === '{') depth++;
+      else if (c === '}') { depth--; if (depth === 0) { end = j; break; } }
+    }
+    if (end < 0) continue;
+    try {
+      const obj = JSON.parse(text.slice(i, end + 1));
+      const name = obj.name || obj.function?.name;
+      const args = obj.parameters || obj.arguments || obj.function?.arguments || {};
+      if (names.includes(name)) { found.push({ name, arguments: args }); i = end; }
+    } catch {}
+  }
+  return found;
 }
 
 async function sendThemeChatMessage(){
@@ -3946,8 +3974,12 @@ async function sendThemeChatMessage(){
     // Workers AI 응답 형식은 표준 OpenAI 형식(choices[0].message)과, 편의상 최상위(response/tool_calls) 둘 다로 옴 — 둘 다 확인
     const result = data.result || data;
     const message = result.choices?.[0]?.message;
-    const toolCalls = message?.tool_calls || result.tool_calls || [];
-    const textReplyRaw = message?.content || result.response || null;
+    let toolCalls = message?.tool_calls || result.tool_calls || [];
+    let textReplyRaw = message?.content || result.response || null;
+    if (!toolCalls.length && !forceNoTools) {
+      const parsed = parseTextToolCalls(textReplyRaw);
+      if (parsed.length) { toolCalls = parsed; textReplyRaw = ''; console.log('[편성AI] 텍스트로 쓴 도구 호출을 변환', parsed); }
+    }
     if (!result || (!toolCalls.length && !textReplyRaw && data.error)) {
       themeChatHistory.push({ role: 'assistant', content: `⚠ 응답을 받지 못했어요. (${data.error || data.errors?.[0]?.message || '알 수 없는 오류'}) 다시 시도해주세요.` });
       renderThemeChatMessages();
