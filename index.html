@@ -1733,12 +1733,12 @@ function saveNavState(){
   const activeScreen = document.querySelector('.nav-item.active');
   const activeSub = document.querySelector('.nav-sub.active');
   const activeSubtab = document.querySelector('.subtab.active');
-  localStorage.setItem('baduk-last-screen', activeScreen ? activeScreen.dataset.screen : '');
-  localStorage.setItem('baduk-last-sub', activeSub ? activeSub.dataset.sub : (activeSubtab ? activeSubtab.dataset.tab : ''));
+  sessionStorage.setItem('baduk-last-screen', activeScreen ? activeScreen.dataset.screen : '');
+  sessionStorage.setItem('baduk-last-sub', activeSub ? activeSub.dataset.sub : (activeSubtab ? activeSubtab.dataset.tab : ''));
 }
 function restoreNavState(){
   if (typeof hideRecommendPanel === 'function') hideRecommendPanel(); // 새로고침 직전에 열려있던 추천후보 팝업이 화면 전환 후에도 남아있는 버그 방지
-  const screenId = localStorage.getItem('baduk-last-screen');
+  const screenId = sessionStorage.getItem('baduk-last-screen');
   if (!screenId || !titleMap[screenId]) return;
   const navItem = document.querySelector('.nav-item[data-screen="'+screenId+'"]');
   const screenEl = document.getElementById('screen-'+screenId);
@@ -1750,7 +1750,7 @@ function restoreNavState(){
   screenEl.classList.add('active');
   document.getElementById('topbar-title').textContent = titleMap[screenId].t;
   document.getElementById('topbar-sub').textContent = titleMap[screenId].s;
-  const subId = localStorage.getItem('baduk-last-sub');
+  const subId = sessionStorage.getItem('baduk-last-sub');
   if (subId) switchSubtab(screenId, subId);
 }
 
