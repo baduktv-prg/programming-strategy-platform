@@ -4346,7 +4346,9 @@ function computeRecommendationCandidates(day, startIdx, endIdx, all, usedSet, op
     if (daysSince <= 14) return 15;  // 최근 2주 이내 방영 — 중간 감점
     return 0;
   }
-  // 테마 편성 AI가 설정한 선호도(window.__themePrefs)를 점수에 반영 — 없으면 영향 없음(기존과 동일)
+  
+  function recencyPenalty0(items){ return items.length ? recencyPenalty(items) : 0; }
+  // 테마 편성 AI가 설정한 선호도(window.__themePrefs)를 점수에 반영 — 없으면 영향 없음(기존과 동일)\
   function themeBoost(g){
     const prefs = window.__themePrefs;
     if (!prefs) return 0;
@@ -4359,12 +4361,27 @@ function computeRecommendationCandidates(day, startIdx, endIdx, all, usedSet, op
     return boost;
   }
 
-  const withType = [], withoutType = [];
-  Object.entries(byEpisode).forEach(([key, g])=>{
-    const typeItems = g.items.filter(x=>x.type===WS_REC_TYPE);
-    const repPlayers = g.players + (g.round ? ' · '+g.round : '') + ' · ' + g.year;
-    const penalty = recencyPenalty(g.items);
-    const boost = themeBoost(g);
+  // 시의성: "세계 기전" 회차가 최근 TIMELY_DAYS일 안에 생방/본방으로 나갔고, 그 사이 재방이 2회 미만이면 가산점.
+    const TIMELY_DAYS = 7, TIMELY_BOOST = 25;
+    const daysAgo = (dateStr) => Math.round((new Date(window.__latestDate) - new Date(dateStr)) / 86400000);
+    function isTimely(g){
+    const genre = (g.items[0]?.tournament_type || '').replace(/\s/g, '');
+    if (genre !== '세계기전') return false;
+    const liveRecent = g.items.some(x => (x.type === '생방' || x.type === '본방') && daysAgo(x.date) <= TIMELY_DAYS);
+    if (!liveRecent) return false;
+    const rerunRecent = g.items.filter(x => x.type === '재방' && daysAgo(x.date) <= TIMELY_DAYS).length;
+    return rerunRecent < 2;
+  }
+ 
+    const withType = [], withoutType = [];
+    Object.entries(byEpisode).forEach(([key, g])=>{
+      const typeItems = g.items.filter(x=>x.type===WS_REC_TYPE);
+      const repPlayers = g.players + (g.round ? ' · '+g.round : '') + ' · ' + g.year;
+      const timely = isTimely(g);
+      // 시의성 회차는 최근 "생방/본방"이 감점 사유가 되면 안 됨 → 최근 재방만 기준으로 감점
+      const penalty = timely ? recencyPenalty0(g.items.filter(x => x.type === '재방')) : recencyPenalty(g.items);
+      const boost = themeBoost(g) + (timely ? TIMELY_BOOST : 0);
+ 
     if (typeItems.length >= 2) {
       const r = computeMatchScore(typeItems, day, slot.timeStr, all, WS_REC_TYPE, true);
       const score = Math.max(10, scoreVsEpisodeAvg(r.avgRating, typeItems) - penalty + boost);
@@ -4377,7 +4394,15 @@ function computeRecommendationCandidates(day, startIdx, endIdx, all, usedSet, op
       const avgDurationMin = g.items.reduce((a,x)=>a+(x._absEnd-x._absStart),0)/g.items.length;
       withoutType.push({ program_id: g.program_id, name: g.name, episodeKey: key, avgDurationMin, tournament_type: g.items[0]?.tournament_type || null, ...r, score, repPlayers });
     }
-  });
+      else if (timely && g.items.length === 1) {
+        // 예외: 최근 세계기전 생방/본방 1건뿐인 회차(아직 재방 없음)도 후보에 포함
+        const r = computeMatchScore(g.items, day, slot.timeStr, all, WS_REC_TYPE, true);
+        const score = Math.max(10, scoreVsEpisodeAvg(r.avgRating, g.items) - penalty + boost);
+        const avgDurationMin = g.items.reduce((a,x)=>a+(x._absEnd-x._absStart),0)/g.items.length;
+        const item = { program_id: g.program_id, name: g.name, episodeKey: key, avgDurationMin, tournament_type: g.items[0]?.tournament_type || null, ...r, score, repPlayers, timely: true };
+        if (r.basis === 'actual') withType.push(item); else withoutType.push(item);
+      }
+    });
 
   // 버킷 표 대신 단순 공식: (실제 평균 방영길이 + 여유시간)이 목표 슬롯 길이 이내이면서, durationMinThreshold(이전 버킷 크기)보다는 커야 함
   // 이게 없으면 60분짜리 프로그램이 300분 빈칸에서도 통과돼서 300분 전체를 잘못 차지해버리는 문제가 생김
