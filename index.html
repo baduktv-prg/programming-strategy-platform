@@ -4332,10 +4332,28 @@ function computeRecommendationCandidates(day, startIdx, endIdx, all, usedSet, op
     });
   });
 
-  function scoreVsEpisodeAvg(avgRating, items){
-    const episodeAvg = trimmedMean(items.map(x=>x.rating));
-    if (episodeAvg <= 0 || avgRating == null) return 50;
-    return Math.max(10, Math.round(100 * avgRating / episodeAvg));
+  // [점수 개편] 예전: "이 회차의 평소 평균 대비 이 슬롯 평균" → 인기 없는 회차도 100점이 나와 절대 시청률이 무시됐음.
+  // 지금: "이 슬롯의 평소 평균(같은 평일/주말 그룹+같은 시간대, 재방 우선) 대비 이 회차의 예상 시청률" 지수. 100 = 슬롯 평균, 200 = 2배.
+  // 그리고 표본 수·근거 신뢰도(실측 > 추정)에 따라 100쪽으로 수축시켜, 표본 1~2건 실측이나 약한 추정이 극단 점수를 못 받게 함.
+  // → 실측/추정을 같은 잣대로 비교할 수 있어 "실측이 하나라도 있으면 추정은 아예 안 봄" 문제도 해소(종합 순위 combined 참고).
+  const slotDowNum = DOW_INDEX[day[0]];
+  const isWkndD = (d) => d === 0 || d === 6;
+  const slotPoolAll = all.filter(p => p.rating != null && p.hour === slot.hour && isWkndD(p.dow) === isWkndD(slotDowNum));
+  const slotPoolType = slotPoolAll.filter(p => p.type === WS_REC_TYPE);
+  const globalPool = all.filter(p => p.rating != null && p.type === WS_REC_TYPE);
+  const baselineArr = (slotPoolType.length >= 5 ? slotPoolType
+                     : slotPoolAll.length >= 3 ? slotPoolAll
+                     : globalPool.length ? globalPool
+                     : all.filter(p => p.rating != null)).map(p => p.rating);
+  const slotBaseline = baselineArr.length ? trimmedMean(baselineArr) : 0;
+  const BASIS_TRUST = { actual: 1, similar_genre_players: 0.85, similar_players: 0.75, similar_genre: 0.65, similar_rt: 0.5, none: 0 };
+  const SHRINK_K = 2; // 표본 n건일 때 반영 비율 n/(n+K): 1건 33%, 2건 50%, 4건 67%, 10건 83%
+  function scoreVsSlot(r){
+    if (!(slotBaseline > 0) || r.avgRating == null || r.basis === 'none') return 50;
+    const raw = 100 * r.avgRating / slotBaseline;
+    const n = r.basisN || 0;
+    const w = (BASIS_TRUST[r.basis] ?? 0.5) * (n / (n + SHRINK_K));
+    return Math.max(10, Math.min(250, Math.round(100 + (raw - 100) * w)));
   }
 
   // 최근에 이미 방영된 회차는 점수를 깎음(완전 제외는 아님) — 계속 우려먹는 걸 방지, 근데 대안이 없으면 여전히 추천될 수 있게
@@ -4384,7 +4402,7 @@ function computeRecommendationCandidates(day, startIdx, endIdx, all, usedSet, op
  
        if (typeItems.length >= 2) {
       const r = computeMatchScore(typeItems, day, slot.timeStr, all, WS_REC_TYPE, true);
-      const score = Math.max(10, scoreVsEpisodeAvg(r.avgRating, typeItems) - penalty + boost);
+      const score = Math.max(10, scoreVsSlot(r) - penalty + boost);
       const avgDurationMin = typeItems.reduce((a,x)=>a+(x._absEnd-x._absStart),0)/typeItems.length;
       const item = { program_id: g.program_id, name: g.name, episodeKey: key, avgDurationMin, tournament_type: g.items[0]?.tournament_type || null, ...r, score, repPlayers };
       if (r.basis === 'actual') withType.push(item); else withoutType.push(item);
@@ -4399,7 +4417,7 @@ function computeRecommendationCandidates(day, startIdx, endIdx, all, usedSet, op
       withType.push({ program_id: g.program_id, name: g.name, episodeKey: key, avgDurationMin, tournament_type: g.items[0]?.tournament_type || null, ...r, score, repPlayers, timely: true });
     } else if (g.items.length >= 2) {
       const r = computeMatchScore(g.items, day, slot.timeStr, all, WS_REC_TYPE, true);
-      const score = Math.max(10, scoreVsEpisodeAvg(r.avgRating, g.items) - penalty + boost);
+      const score = Math.max(10, scoreVsSlot(r) - penalty + boost);
       const avgDurationMin = g.items.reduce((a,x)=>a+(x._absEnd-x._absStart),0)/g.items.length;
       withoutType.push({ program_id: g.program_id, name: g.name, episodeKey: key, avgDurationMin, tournament_type: g.items[0]?.tournament_type || null, ...r, score, repPlayers });
     }
@@ -4441,7 +4459,10 @@ function computeRecommendationCandidates(day, startIdx, endIdx, all, usedSet, op
     .map(basis => ({ basis, items: sortWithUsedLast(byBasisGroup[basis]||[]) }))
     .filter(g => g.items.length > 0);
 
-  return { targetDurationMin, topWithType, basisGroups };
+  // 종합 순위: 실측·추정을 한 줄로 세움(점수가 이미 표본 수·근거 신뢰도로 보정돼 있음)
+  const combined = sortWithUsedLast(applyDurationFilter([...withType, ...withoutType]));
+
+  return { targetDurationMin, topWithType, basisGroups, combined };
 }
 
 async function loadCellRecommendations(day, startIdx, endIdx){
@@ -4476,7 +4497,8 @@ async function loadCellRecommendations(day, startIdx, endIdx){
     const stats = await computeLeadInStats(fixedAfter.program_id, WS_REC_TYPE);
     if (stats.results.length > 0) adjInsights.push({ label: `"${fixedAfter.name.split('\n')[0]}" 바로 앞 슬롯이에요`, results: stats.results.slice(0,3) });
   }
-  const { targetDurationMin: targetDurMin, topWithType: topWithTypeAll, basisGroups: basisGroupsAll } = computeRecommendationCandidates(day, startIdx, endIdx, all, usedProgramIds);
+  const { targetDurationMin: targetDurMin, topWithType: topWithTypeAll, basisGroups: basisGroupsAll, combined: combinedAll } = computeRecommendationCandidates(day, startIdx, endIdx, all, usedProgramIds);
+  const combinedTop = combinedAll.slice(0, 6);
   const topWithType = topWithTypeAll.slice(0, 5);
   const basisGroups = basisGroupsAll.map(g => ({ basis: g.basis, items: g.items.slice(0, 3) }));
 
@@ -4541,6 +4563,12 @@ async function loadCellRecommendations(day, startIdx, endIdx){
   const sectionDivider = `<div style="border-top:1px solid var(--border); margin:14px 0;"></div>`;
 
   let html = '';
+  html += `<div style="font-size:13px; font-weight:700; margin-bottom:2px;">종합 추천</div>`;
+  html += `<div style="font-size:11px; color:var(--text-tertiary); margin-bottom:8px;">실측·추정을 한 줄로 세운 순위예요. 100점 = 이 슬롯의 평소 평균 시청률, 표본이 적거나 추정 근거가 약하면 100점 쪽으로 보정돼요.</div>`;
+  html += combinedTop.length
+    ? combinedTop.map(renderCandidateCard).join('')
+    : `<div style="color:var(--text-tertiary); font-size:12px;">추천 후보가 없습니다.</div>`;
+  html += sectionDivider;
   html += `<div style="font-size:13px; font-weight:700; margin-bottom:8px;">실측 데이터 후보</div>`;
   html += topWithType.length
     ? topWithType.map(renderCandidateCard).join('')
@@ -4721,10 +4749,10 @@ async function computeAutoFillBlocks(fixedList, preExcludedEpisodeKeys, alreadyO
           const nextSmallerRt = AUTOFILL_RT_ORDER[AUTOFILL_RT_ORDER.indexOf(rt) + 1] || 0;
           const slotsNeeded = rt / 30;
           const startIdx = pos, endIdx = pos + slotsNeeded - 1;
-          const { topWithType, basisGroups } = computeRecommendationCandidates(day, startIdx, endIdx, all, usedInThisRun, { usedCheckField: 'episodeKey', hardExclude: true, durationBufferMin: 30, durationMinThreshold: nextSmallerRt });
+          const { combined } = computeRecommendationCandidates(day, startIdx, endIdx, all, usedInThisRun, { usedCheckField: 'episodeKey', hardExclude: true, durationBufferMin: 30, durationMinThreshold: nextSmallerRt });
           const liftMap = await getAdjacencyLiftMap(day, startIdx, endIdx);
-          let best = applyAdjacencyBoost(topWithType, liftMap)[0] || null;
-          if (!best) { for (const g of basisGroups) { if (g.items.length > 0) { best = applyAdjacencyBoost(g.items, liftMap)[0]; break; } } }
+          // 실측/추정 구분 없이 종합 점수로 선택 (예전: 실측 후보가 하나라도 있으면 추정 후보는 보지 않았음)
+          const best = applyAdjacencyBoost(combined, liftMap)[0] || null;
           if (best) {
             // durationBufferMin:30으로 이미 "실제길이+30분 <= 이 RT버킷" 검증을 통과한 후보이므로,
             // RT버킷 크기 그대로 자리를 차지시킴 (버킷 자체가 길이별 여유폭을 담고 있어 이게 더 안정적)
