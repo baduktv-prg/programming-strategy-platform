@@ -2961,12 +2961,13 @@ function createCompareSlot(slotId, allGrouped, onChange){
     const pool = typeFiltered();
     const seen = new Set();
     state.programGroups = [];
+    const allMode = state.typeFilter === '전체';
     pool.forEach(g=>{
       const mergeYear = CMP_YEARKEY_AT_PLAYERS_STAGE.has(g.name);
-      const key = mergeYear ? (g.name+'_'+g.type) : (g.name+'_'+g.type+'_'+g.yearKey);
+      const key = (mergeYear ? g.name : g.name+'_'+g.yearKey) + (allMode ? '' : '_'+g.type);
       if (seen.has(key)) return;
       seen.add(key);
-      state.programGroups.push({ name: g.name, type: g.type, yearKey: mergeYear ? null : g.yearKey, mergeYear });
+      state.programGroups.push({ name: g.name, type: allMode ? null : g.type, yearKey: mergeYear ? null : g.yearKey, mergeYear });
     });
     state.programGroups.sort((a,b)=> a.name.localeCompare(b.name) || String(a.yearKey||'').localeCompare(String(b.yearKey||'')));
     // 생방/본방/재방은 위 칩 버튼으로 이미 필터링되니까, 목록 텍스트엔 굳이 다시 안 보여줌
@@ -2974,13 +2975,14 @@ function createCompareSlot(slotId, allGrouped, onChange){
     programSel.value = 0;
     refreshPlayers();
   }
-  function refreshPlayers(){
+   function refreshPlayers(){
     const pg = state.programGroups[programSel.value];
     state.playersGroups = pg
-      ? typeFiltered().filter(g=>g.name===pg.name && g.type===pg.type && (pg.mergeYear || g.yearKey===pg.yearKey))
+      ? typeFiltered().filter(g=>g.name===pg.name && (pg.type===null || g.type===pg.type) && (pg.mergeYear || g.yearKey===pg.yearKey))
       : [];
     playersSel.innerHTML = state.playersGroups.map((g,i)=>{
-      const label = (pg && pg.mergeYear) ? `${g.players} · ${g.yearKey}` : g.players;
+      const base = (pg && pg.mergeYear) ? `${g.players} · ${g.yearKey}` : g.players;
+      const label = (pg && pg.type===null) ? `[${g.type}] ${base}` : base;
       return `<option value="${i}">${label}${g.count>1?` (${g.count}회 평균)`:''}</option>`;
     }).join('') || '<option>없음</option>';
     playersSel.value = 0;
