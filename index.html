@@ -1184,6 +1184,27 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// 채널명 → channel_id. 예전엔 차트 그릴 때마다 dim_channel을 매번 다시 조회했음 —
+// 처음 한 번만 전체 채널 목록을 받아 기억해두고 이후엔 그걸 씀 (동시에 여러 번 불려도 요청은 1번만 나감)
+let __channelIdMapPromise = null;
+function getChannelMap(){
+  if (!__channelIdMapPromise) {
+    __channelIdMapPromise = sb.from('dim_channel').select('channel_id, channel_name').then(({ data, error }) => {
+      if (error) { __channelIdMapPromise = null; throw error; } // 실패하면 다음 호출 때 다시 시도
+      return new Map((data || []).map(r => [r.channel_name, r.channel_id]));
+    });
+  }
+  return __channelIdMapPromise;
+}
+function getChannelId(name){
+  return getChannelMap().then(map => map.get(name) ?? null);
+}
+
+// DB에서 온 문자열을 innerHTML에 넣을 때 태그로 해석되지 않고 글자 그대로 보이게 함
+function escapeHtml(s){
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
 let PROGRAMS = [];
 let TREND = [];
 let ALL_PROGRAMS = [];
@@ -1404,10 +1425,10 @@ function toggleTheme(){
 
 async function loadData() {
   // 1) 바둑TV 채널 ID 조회
-  const { data: channelRow, error: chErr } = await sb
-    .from('dim_channel').select('channel_id').eq('channel_name', '바둑TV').single();
-  if (chErr) { console.error('채널 조회 실패', chErr); return; }
-  window.__channelId = channelRow.channel_id;
+  let baduktvId = null;
+  try { baduktvId = await getChannelId('바둑TV'); } catch (chErr) { console.error('채널 조회 실패', chErr); return; }
+  if (baduktvId == null) { console.error('채널 조회 실패', '바둑TV 채널을 dim_channel에서 찾지 못함'); return; }
+  window.__channelId = baduktvId;
 
   // 2) 가장 최근 방송일 조회 (모든 기간 선택의 기준점)
   const { data: latestRow, error: dateErr } = await sb
@@ -2069,10 +2090,11 @@ async function drawCompetitorChart(){
   const toBucket = (h) => h < 2 ? h + 24 : h; // 0~1시는 전날 방송일의 24~25시로
   const hourLabels = []; for (let h=2; h<=25; h++) hourLabels.push(h);
 
-  const datasets = [];
-  for (const chName of checkedChannels) {
-    const { data: chRow } = await sb.from('dim_channel').select('channel_id').eq('channel_name', chName).single();
-    if (!chRow) continue;
+  // 채널별 조회를 하나씩 줄 세워 기다리지 않고 동시에 요청 — 결과는 체크한 순서 그대로 datasets에 담음(범례/색 순서 유지)
+  const channelDatasets = await Promise.all(checkedChannels.map(async (chName) => {
+    const chId = await getChannelId(chName);
+    if (chId == null) return null;
+    const chRow = { channel_id: chId };
 
     const byHour = {};
     const programByHour = {}; // 프로그램명 매칭 — 바둑TV/K바둑/빌리어즈TV는 우리 fact_schedule에 있어서 가능, GOLF&PBA/브레인TV는 크롤링한 fact_competitor_schedule에서 가능
@@ -2141,13 +2163,14 @@ async function drawCompetitorChart(){
 
     const values = hourLabels.map(h => byHour[h] && byHour[h].length ? byHour[h].reduce((a,b)=>a+b,0)/byHour[h].length : null);
     const isOwnChannel = chName === '바둑TV';
-    datasets.push({
+    return {
       label: chName, data: values, borderColor: COMPETITOR_COLORS[chName]||'#999', backgroundColor:'transparent',
       fill:false, tension:0.3, pointRadius: isOwnChannel ? 3 : 2, borderWidth: isOwnChannel ? 4 : 2, spanGaps:true,
       order: isOwnChannel ? 0 : 1, // 바둑TV를 맨 위에 그려서 다른 선에 안 가리게
       programByHour: hourLabels.map(h => programByHour[h] || null),
-    });
-  }
+    };
+  }));
+  const datasets = channelDatasets.filter(Boolean);
 
   if (competitorChart) competitorChart.destroy();
   competitorChart = new Chart(document.getElementById('chart-competitor'), {
@@ -2874,31 +2897,33 @@ async function renderMinuteComparisons(){
   const compColors = { 'GOLF & PBA':'#34c759', '브레인TV':'#af52de', '빌리어즈TV':'#ff2d55', 'K바둑':'#ff9500' };
 
   if (!episode.isAvg && checkedCompetitors.length > 0 && inst) {
-    for (const chName of checkedCompetitors) {
-      const { data: chRow } = await sb.from('dim_channel').select('channel_id').eq('channel_name', chName).single();
-      if (!chRow) continue;
+    // 경쟁채널들을 동시에 요청 — 결과는 체크한 순서 그대로 추가
+    const compDatasets = await Promise.all(checkedCompetitors.map(async (chName) => {
+      const chId = await getChannelId(chName);
+      if (chId == null) return null;
       const { data: compRows } = await sb.from('fact_competitor_minute_rating')
-        .select('clock_time, rating_pct').eq('channel_id', chRow.channel_id).eq('date_key', inst.date)
+        .select('clock_time, rating_pct').eq('channel_id', chId).eq('date_key', inst.date)
         .order('clock_time', { ascending:true }).limit(2000);
       const compPoints = (compRows||[]).map(r=>{
         const clockMin = hhmmToMin(r.clock_time.slice(0,5));
         return { x: clipToRange(clockMin - startMin), y: r.rating_pct };
       }).filter(p => p.x >= 0 && p.x <= maxMinute);
-      datasets.push({
+      return {
         label: chName, data: compPoints, borderColor: compColors[chName]||'#999', backgroundColor:'transparent',
         fill:false, tension:0.3, pointRadius:0, borderWidth:2, order:2, isChannelSeries:true
-      });
-    }
+      };
+    }));
+    compDatasets.filter(Boolean).forEach(d => datasets.push(d));
   }
 
   // K바둑 오버레이 — 자사 채널이라 저장 방식이 달라서(방송별 상대경과분) 별도 처리:
   // 그날 K바둑 스케줄들을 찾아 각 스케줄의 시작시각+경과분으로 시계시각을 복원한 뒤, 우리 방송 기준으로 재환산
   const kbadukChecked = document.getElementById('minute-comp-kbaduk')?.checked;
   if (!episode.isAvg && kbadukChecked && inst) {
-    const { data: kChannelRow } = await sb.from('dim_channel').select('channel_id').eq('channel_name', 'K바둑').single();
-    if (kChannelRow) {
+    const kChannelId = await getChannelId('K바둑');
+    if (kChannelId != null) {
       const { data: kSchedules } = await sb.from('fact_schedule')
-        .select('schedule_id, start_time').eq('channel_id', kChannelRow.channel_id).eq('date_key', inst.date);
+        .select('schedule_id, start_time').eq('channel_id', kChannelId).eq('date_key', inst.date);
       const kScheduleIds = (kSchedules||[]).map(s=>s.schedule_id);
       const kStartMap = {}; (kSchedules||[]).forEach(s=>{ kStartMap[s.schedule_id] = hhmmToMin(s.start_time.slice(0,5)); });
       if (kScheduleIds.length) {
@@ -4029,10 +4054,10 @@ async function refreshTemplateList(){
   const { data, error } = await sb.from('weekly_schedule_templates')
     .select('template_id, template_name').order('template_name', { ascending: true });
   if (error) { console.error('템플릿 목록 조회 실패', error); return; }
-  sel.innerHTML = '<option value="">템플릿 불러오기...</option>' + (data||[]).map(t=>`<option value="${t.template_id}">${t.template_name}</option>`).join('');
+  sel.innerHTML = '<option value="">템플릿 불러오기...</option>' + (data||[]).map(t=>`<option value="${escapeHtml(t.template_id)}">${escapeHtml(t.template_name)}</option>`).join('');
   if (lastWeekSel) {
     // multiple 선택 드롭다운이라 "선택 안 함" 플레이스홀더는 필요 없음(아무것도 안 고르면 그게 곧 "선택 안 함")
-    lastWeekSel.innerHTML = (data||[]).map(t=>`<option value="${t.template_id}">${t.template_name}</option>`).join('');
+    lastWeekSel.innerHTML = (data||[]).map(t=>`<option value="${escapeHtml(t.template_id)}">${escapeHtml(t.template_name)}</option>`).join('');
   }
 }
 
@@ -4499,10 +4524,39 @@ async function loadCellRecommendations(day, startIdx, endIdx){
 
   // 4) 경쟁채널 상황 — 이 요일+시간대에 경쟁채널들이 평소 얼마나 강한지 (분단위 데이터라 표본이 훨씬 촘촘함)
   const targetHourStr = String(slot.hour).padStart(2,'0');
-  const { data: compRows } = await sb.from('fact_competitor_minute_rating')
-    .select('date_key, channel_id, rating_pct, dim_channel(channel_name)')
-    .gte('clock_time', `${targetHourStr}:00:00`).lte('clock_time', `${targetHourStr}:59:59`)
-    .limit(100000);
+  // 상단에서 선택한 기간 안의 "해당 요일" 날짜만 골라서 조회.
+  // (예전엔 기간 조건 없이 이 시간대 전 기간 데이터를 요청 → 서버 상한 5만 건에서 임의로 잘려 일부만 반영됐음)
+  const compFrom = document.getElementById('date-from').value;
+  const compTo = document.getElementById('date-to').value;
+  const compDates = [];
+  if (compFrom && compTo) {
+    const d = new Date(compFrom + 'T00:00:00');
+    const end = new Date(compTo + 'T00:00:00');
+    while (d.getDay() !== targetDow) d.setDate(d.getDate() + 1);
+    for (; d <= end; d.setDate(d.getDate() + 7)) compDates.push(toDateStr(d));
+  }
+  const compRows = [];
+  let compFailed = false;
+  // 채널 조건을 같이 넣어야 DB의 (channel_id, date_key, clock_time) 색인을 타서 빠름 —
+  // 빼면 기간이 1년 이상일 때 3초 제한시간을 넘김 (2026-11-05 측정: 3.5초 실패 → 채널 조건 추가 시 1.7~2.5초)
+  let compChannelIds = [];
+  try { compChannelIds = [...(await getChannelMap()).values()]; } catch (e) { console.error('채널 목록 조회 실패', e); compFailed = true; }
+  if (compDates.length && compChannelIds.length) {
+    const PAGE = 50000; // 서버 상한 — 넘으면 끝까지 나눠 받음
+    for (let from = 0; ; from += PAGE) {
+      const { data: pageRows, error: compErr } = await sb.from('fact_competitor_minute_rating')
+        .select('date_key, channel_id, rating_pct, dim_channel(channel_name)')
+        .in('channel_id', compChannelIds)
+        .in('date_key', compDates)
+        .gte('clock_time', `${targetHourStr}:00:00`).lte('clock_time', `${targetHourStr}:59:59`)
+        .order('date_key', { ascending: true }).order('channel_id', { ascending: true }).order('clock_time', { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (compErr) { console.error('경쟁채널 시간대 조회 실패', compErr); compFailed = true; break; }
+      compRows.push(...(pageRows || []));
+      if (!pageRows || pageRows.length < PAGE) break;
+    }
+  }
+  const compDayCount = new Set(compRows.map(r => r.date_key)).size;
   const byCompChannel = {};
   (compRows||[]).forEach(r=>{
     const dow = new Date(r.date_key+'T00:00:00').getDay();
@@ -4584,13 +4638,22 @@ async function loadCellRecommendations(day, startIdx, endIdx){
     });
   }
 
+  // 선택 기간 기준임을 명시 — 기간에 해당 요일이 없거나 조회 실패 시에도 이유를 보여줌
+  const compPeriodLabel = (compFrom && compTo) ? `${compFrom} ~ ${compTo}` : '기간 미선택';
   if (compStats.length > 0) {
     html += sectionDivider;
     html += `<div style="font-size:13px; font-weight:700; margin-bottom:2px;">동시간대 경쟁채널 시청률</div>`;
-    html += `<div style="font-size:11px; color:var(--text-tertiary); margin-bottom:8px;">시청률이 낮은 시간대는 부담이 적고, 높은 시간대는 경쟁력 있는 콘텐츠 배치가 필요합니다.</div>`;
+    html += `<div style="font-size:11px; color:var(--text-tertiary); margin-bottom:8px;">상단 선택 기간(${compPeriodLabel}) 중 ${day} ${targetHourStr}시 · ${compDayCount}일 기준. 시청률이 낮은 시간대는 부담이 적고, 높은 시간대는 경쟁력 있는 콘텐츠 배치가 필요합니다.</div>`;
     html += `<div style="display:flex; flex-wrap:wrap; gap:8px;">
       ${compStats.map(c=>`<span style="display:inline-block; padding:6px 10px; border-radius:8px; font-size:11px; background:#e8f6ff; border:1px solid #8ecfff;">${c.name} · 평균 ${c.avgRating.toFixed(3)}%</span>`).join('')}
     </div>`;
+  } else {
+    const reason = compFailed ? '조회 시간이 초과됐어요. 기간을 줄여서 다시 시도해주세요.'
+      : compDates.length === 0 ? `선택 기간(${compPeriodLabel})에 ${day}이 없어요.`
+      : `선택 기간(${compPeriodLabel})에 경쟁채널 데이터가 없어요.`;
+    html += sectionDivider;
+    html += `<div style="font-size:13px; font-weight:700; margin-bottom:2px;">동시간대 경쟁채널 시청률</div>`;
+    html += `<div style="font-size:11px; color:var(--text-tertiary);">${reason}</div>`;
   }
 
   list.innerHTML = html;
@@ -4630,7 +4693,7 @@ async function refreshAutoFillTemplateList(){
   const { data, error } = await sb.from('weekly_schedule_templates')
     .select('template_id, template_name').order('template_name', { ascending: true });
   if (error) { console.error('템플릿 목록 조회 실패', error); return; }
-  sel.innerHTML = '<option value="">템플릿 불러오기...</option>' + (data||[]).map(t=>`<option value="${t.template_id}">${t.template_name}</option>`).join('');
+  sel.innerHTML = '<option value="">템플릿 불러오기...</option>' + (data||[]).map(t=>`<option value="${escapeHtml(t.template_id)}">${escapeHtml(t.template_name)}</option>`).join('');
 }
 async function loadAutoFillTemplate(){
   const sel = document.getElementById('af-template-select');
