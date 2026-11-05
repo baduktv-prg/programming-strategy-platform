@@ -3652,8 +3652,9 @@ async function initWeeklyFixedProgramSearch(){
   // 기수가 비어있으면 프로그램명 앞의 연도(예: "2026청풍명월...") 또는 방영연도로 대체.
   const grouped = {};
   all.forEach(p => {
+    const isCorner = CMP_YEARKEY_AT_PLAYERS_STAGE.has(p.name);
     const nameYearMatch = p.name.match(/^(19|20)\d{2}/);
-    const yearKey = p.actual_tournament_year || (nameYearMatch ? nameYearMatch[0] : p.date.slice(0,4));
+    const yearKey = isCorner ? '' : (p.actual_tournament_year || (nameYearMatch ? nameYearMatch[0] : p.date.slice(0,4)));
     const key = p.program_id + '_' + yearKey;
     if (!grouped[key]) grouped[key] = { program_id: p.program_id, baseName: p.name, yearKey };
   });
