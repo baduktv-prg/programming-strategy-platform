@@ -2789,7 +2789,7 @@ function renderMinuteTab(){
 
   function buildEpisodes(g){
     return [{ label: `전체 평균 (${g.count}회)`, schedule_ids: g.schedule_ids, isAvg: true },
-      ...g.instances.map(inst => ({ label: `${inst.date} ${(inst.players && inst.players!=='-') ? inst.players : '대국자 정보없음'}`, schedule_ids: inst.schedule_ids, partOffsets: inst.partOffsets, isAvg: false }))];
+      ...g.instances.map(inst => ({ label: `${inst.date} ${inst.segment_topic ? inst.segment_topic + ' ' : ''}${(inst.players && inst.players!=='-') ? inst.players : '대국자 정보없음'}`, schedule_ids: inst.schedule_ids, partOffsets: inst.partOffsets, isAvg: false }))];
   }
   function refreshEpisodes(){
     const g = window.__minuteFiltered[progSel.value];
