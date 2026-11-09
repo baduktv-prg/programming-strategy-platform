@@ -2768,7 +2768,24 @@ function drawPlayerDetail(){
 function renderMinuteTab(){
   const progSel = document.getElementById('minute-program-select');
   const epSel = document.getElementById('minute-episode-select');
-  const allGrouped = aggregateByProgram(PROGRAMS).sort((a,b)=>a.name.localeCompare(b.name));
+  const allGrouped = (() => {
+  const base = aggregateByProgram(PROGRAMS);
+  const out = [], merged = {};
+  base.forEach(g => {
+    if (!CMP_YEARKEY_AT_PLAYERS_STAGE.has(g.name)) { out.push(g); return; }
+    const k = g.program_id + '_' + g.type;
+    (merged[k] = merged[k] || { ...g, yearKey: null, instances: [] }).instances.push(...g.instances);
+  });
+  Object.values(merged).forEach(g => {
+    const n = g.instances.length;
+    g.count = n;
+    g.rating = g.instances.reduce((a,x)=>a+(x.rating||0),0)/n;
+    g.players = [...new Set(g.instances.map(x=>x.players).filter(x=>x && x!=='-'))];
+    g.schedule_ids = g.instances.flatMap(x=>x.schedule_ids || [x.schedule_id]);
+    out.push(g);
+  });
+  return out.sort((a,b)=>a.name.localeCompare(b.name) || String(a.yearKey||'').localeCompare(String(b.yearKey||'')));
+})();
 
   function buildEpisodes(g){
     return [{ label: `전체 평균 (${g.count}회)`, schedule_ids: g.schedule_ids, isAvg: true },
@@ -2791,7 +2808,10 @@ function renderMinuteTab(){
       document.getElementById('minute-meta').textContent = '';
       return;
     }
-    fillSelect(progSel, filtered, null, g=> minuteTypeFilter==='전체' ? `${g.name} · ${g.type}` : g.name);
+    fillSelect(progSel, filtered, null, g=> {
+      const yr = g.yearKey ? ` · ${g.yearKey}` : '';
+      return minuteTypeFilter==='전체' ? `${g.name}${yr} · ${g.type}` : `${g.name}${yr}`;
+    });
     progSel.value = 0;
     refreshEpisodes();
   }
