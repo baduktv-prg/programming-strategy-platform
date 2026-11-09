@@ -810,6 +810,22 @@
             </div>
             <button class="chip-btn" style="color:var(--negative);" onclick="clearPlayerCompare()">비교 해제</button>
           </div>
+          <div class="bento-card" style="margin-bottom:16px;">
+            <div class="card-label">방송 검색</div>
+            <div class="filter-row" style="margin-bottom:8px;">
+              <input class="mini-filter" id="pq-input" style="min-width:300px;flex:1"
+                placeholder='검색어 · "정확한문구" · -제외어 (예: 신진서 -하이라이트)' autocomplete="off">
+              <button class="chip-btn active" data-pq-target="players">대국자</button>
+              <button class="chip-btn" data-pq-target="name">프로그램명</button>
+              <button class="chip-btn" data-pq-target="both">둘 다</button>
+              <input type="date" id="pq-from" class="mini-filter"> ~
+              <input type="date" id="pq-to" class="mini-filter">
+              <button class="chip-btn" onclick="pqReset()">초기화</button>
+            </div>
+          <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:8px;">상단 생방/본방/재방 필터가 함께 적용됩니다. 행을 체크하면 선택한 방송만 따로 집계합니다.</div>
+          <div id="pq-kpi" style="display:flex;gap:10px;flex-wrap:wrap;"></div>
+          <div id="pq-results" style="overflow-x:auto;max-height:420px;overflow-y:auto;"></div>
+        </div>
           <div id="player-detail-wrap"></div>
           <div id="player-summary-wrap"></div>
         </div>
@@ -2581,6 +2597,87 @@ function jumpToHostFromSummary(name){
   document.getElementById('host-search').value = name;
   drawHostDetail();
 }
+let pqTarget='players', pqSortKey='date', pqSortDir=-1, pqHits=[], pqSel=new Set();
+
+function pqParse(q){
+  const exact=[], ex=[], inc=[];
+  (q.match(/"([^"]+)"/g)||[]).forEach(m=>exact.push(m.slice(1,-1).toLowerCase()));
+  q.replace(/"[^"]+"/g,'').trim().split(/\s+/).forEach(t=>{
+    if(!t) return;
+    if(t.startsWith('-')&&t.length>1) ex.push(t.slice(1).toLowerCase());
+    else inc.push(t.toLowerCase());
+  });
+  return {exact,ex,inc};
+}
+function pqMatch(text,{exact,ex,inc}){
+  if(!text) return false;
+  const t=text.toLowerCase();
+  if(ex.some(e=>t.includes(e))) return false;
+  if(exact.length&&!exact.every(e=>t.includes(e))) return false;
+  if(inc.length&&!inc.every(i=>t.includes(i))) return false;
+  return true;
+}
+function initPlayerQuery(){
+  const input=document.getElementById('pq-input');
+  input.oninput=runPlayerQuery;
+  document.getElementById('pq-from').onchange=runPlayerQuery;
+  document.getElementById('pq-to').onchange=runPlayerQuery;
+  document.querySelectorAll('[data-pq-target]').forEach(b=>b.onclick=()=>{
+    document.querySelectorAll('[data-pq-target]').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active'); pqTarget=b.dataset.pqTarget; runPlayerQuery();
+  });
+  runPlayerQuery();
+}
+function pqReset(){
+  ['pq-input','pq-from','pq-to'].forEach(id=>document.getElementById(id).value='');
+  runPlayerQuery();
+}
+function pqSetSort(k){ if(pqSortKey===k) pqSortDir*=-1; else {pqSortKey=k;pqSortDir=-1;} runPlayerQuery(true); }
+function pqToggle(i){ pqSel.has(i)?pqSel.delete(i):pqSel.add(i); pqDrawKpi(); }
+
+function pqKpiHtml(label, rows){
+  if(!rows.length) return '';
+  const avg=rows.reduce((a,p)=>a+p.rating,0)/rows.length;
+  const av=rows.reduce((a,p)=>a+(p.avgView||0),0)/rows.length;
+  const card=(l,v)=>`<div style="background:var(--bg-subtle);border-radius:8px;padding:8px 14px;min-width:110px">
+    <div style="font-size:10px;color:var(--text-tertiary)">${l}</div><div style="font-size:16px;font-weight:700">${v}</div></div>`;
+  return card(label,`${rows.length}편`)+card('평균 시청률',avg.toFixed(3)+'%')
+    +card('최고 시청률',Math.max(...rows.map(p=>p.rating)).toFixed(3)+'%')+card('평균 시청시간',av.toFixed(1)+'분');
+}
+function pqDrawKpi(){
+  const sel=[...pqSel].map(i=>pqHits[i]).filter(Boolean);
+  document.getElementById('pq-kpi').innerHTML =
+    pqKpiHtml('검색 결과',pqHits) + (sel.length?'<div style="width:1px;background:var(--border)"></div>'+pqKpiHtml('선택한 방송',sel):'');
+}
+function runPlayerQuery(keepSel){
+  const q=document.getElementById('pq-input').value.trim();
+  const el=document.getElementById('pq-results');
+  if(keepSel!==true) pqSel.clear();
+  if(q.length<2){ el.innerHTML='<div style="padding:20px;text-align:center;color:var(--text-tertiary)">검색어를 2글자 이상 입력하세요</div>'; document.getElementById('pq-kpi').innerHTML=''; pqHits=[]; return; }
+  const pq=pqParse(q), from=document.getElementById('pq-from').value, to=document.getElementById('pq-to').value;
+  pqHits=PROGRAMS.filter(p=>{
+    if(playerTypeFilter!=='전체'&&p.type!==playerTypeFilter) return false;
+    if(from&&p.date<from) return false;
+    if(to&&p.date>to) return false;
+    const nm=pqMatch(p.name+' '+(p.segment_topic||''),pq), pl=pqMatch(p.players,pq);
+    return pqTarget==='players'?pl:pqTarget==='name'?nm:(nm||pl);
+  }).sort((a,b)=>{
+    const va=pqSortKey==='date'?a.date+a.start:a.rating, vb=pqSortKey==='date'?b.date+b.start:b.rating;
+    return (va<vb?-1:va>vb?1:0)*pqSortDir;
+  });
+  const arr=k=>pqSortKey===k?(pqSortDir===-1?' ▼':' ▲'):'';
+  el.innerHTML = pqHits.length ? `<table class="data-table" style="width:100%">
+    <tr><th></th><th onclick="pqSetSort('date')">날짜${arr('date')}</th><th>프로그램</th><th>대국자</th><th>구분</th>
+    <th onclick="pqSetSort('rating')">시청률${arr('rating')}</th><th>시청시간</th></tr>
+    ${pqHits.map((p,i)=>`<tr style="cursor:pointer" onclick="pqToggle(${i});this.querySelector('input').checked=pqSel.has(${i})">
+      <td><input type="checkbox" ${pqSel.has(i)?'checked':''} onclick="event.stopPropagation();pqToggle(${i})"></td>
+      <td>${p.date.slice(5)} ${p.start}</td>
+      <td>${p.name}${p.segment_topic?' · '+p.segment_topic:''}</td>
+      <td>${p.players||''}</td><td>${p.type}</td>
+      <td>${p.rating.toFixed(3)}%</td><td>${(p.avgView||0).toFixed(1)}분</td></tr>`).join('')}
+  </table>` : '<div style="padding:20px;text-align:center;color:var(--text-tertiary)">검색 결과가 없습니다</div>';
+  pqDrawKpi();
+}
 
 function renderPlayerTab(){
   playerIndexCache = buildPlayerIndex();
@@ -2618,6 +2715,7 @@ function renderPlayerTab(){
   inputB.value = selectedPlayerNameB || '';
   drawPlayerDetail();
   renderPlayerSummaryTable();
+  initPlayerQuery();
 }
 
 let playerSummarySortKey = 'avgRating';
