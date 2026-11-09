@@ -2651,11 +2651,13 @@ function pqToggle(i){ pqSel.has(i)?pqSel.delete(i):pqSel.add(i); pqDrawKpi(); }
 
 function pqKpiHtml(label, rows){
   if(!rows.length) return '';
-  const avg=rows.reduce((a,p)=>a+p.rating,0)/rows.length;
+  const simple=rows.reduce((a,p)=>a+p.rating,0)/rows.length;
+  const totDur=rows.reduce((a,p)=>a+(p.duration||0),0);
+  const avg=totDur>0?rows.reduce((a,p)=>a+p.rating*(p.duration||0),0)/totDur:simple;
   const av=rows.reduce((a,p)=>a+(p.avgView||0),0)/rows.length;
   const card=(l,v)=>`<div style="background:var(--bg-subtle);border-radius:8px;padding:8px 14px;min-width:110px">
     <div style="font-size:10px;color:var(--text-tertiary)">${l}</div><div style="font-size:16px;font-weight:700">${v}</div></div>`;
-  return card(label,`${rows.length}편`)+card('평균 시청률',avg.toFixed(3)+'%')
+  return card(label,`${rows.length}편`)+card('평균 시청률(방영시간 가중)',avg.toFixed(3)+'%<span style="font-size:10px;font-weight:400;color:var(--text-tertiary);margin-left:6px">단순 '+simple.toFixed(3)+'%</span>')
     +card('최고 시청률',Math.max(...rows.map(p=>p.rating)).toFixed(3)+'%')+card('평균 시청시간',av.toFixed(1)+'분');
 }
 function pqDrawKpi(){
