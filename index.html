@@ -546,6 +546,7 @@
         <div class="nav-sub-wrap">
           <div class="nav-sub active" data-screen="people" data-sub="player">기사별 분석</div>
           <div class="nav-sub" data-screen="people" data-sub="host">해설/진행 분석</div>
+          <div class="nav-sub" data-screen="people" data-sub="search">방송 검색</div>
         </div>
       </div>
 
@@ -790,6 +791,7 @@
         <div class="subtabs">
           <div class="subtab active" data-parent="people" data-tab="player">기사별 분석</div>
           <div class="subtab" data-parent="people" data-tab="host">해설/진행 분석</div>
+          <div class="subtab" data-parent="people" data-tab="search">방송 검색</div>
         </div>
 
         <div class="subscreen active" data-parent="people" id="people-player">
@@ -810,9 +812,19 @@
             </div>
             <button class="chip-btn" style="color:var(--negative);" onclick="clearPlayerCompare()">비교 해제</button>
           </div>
+          <div id="player-detail-wrap"></div>
+          <div id="player-summary-wrap"></div>
+        </div>
+
+        <div class="subscreen" data-parent="people" id="people-search" style="display:none;">
           <div class="bento-card" style="margin-bottom:16px;">
             <div class="card-label">방송 검색</div>
             <div class="filter-row" style="margin-bottom:8px;">
+              <button class="chip-btn active" data-pq-type="전체">전체</button>
+              <button class="chip-btn" data-pq-type="생방">생방</button>
+              <button class="chip-btn" data-pq-type="본방">본방</button>
+              <button class="chip-btn" data-pq-type="재방">재방</button>
+              <span style="width:1px; align-self:stretch; background:var(--border); margin:0 4px;"></span>
               <input class="mini-filter" id="pq-input" style="min-width:300px;flex:1"
                 placeholder='검색어 · "정확한문구" · -제외어 (예: 신진서 -하이라이트)' autocomplete="off">
               <button class="chip-btn active" data-pq-target="players">대국자</button>
@@ -822,12 +834,10 @@
               <input type="date" id="pq-to" class="mini-filter">
               <button class="chip-btn" onclick="pqReset()">초기화</button>
             </div>
-          <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:8px;">상단 생방/본방/재방 필터가 함께 적용됩니다. 행을 체크하면 선택한 방송만 따로 집계합니다.</div>
+          <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:8px;">행을 체크하면 선택한 방송만 따로 집계해요.</div>
           <div id="pq-kpi" style="display:flex;gap:10px;flex-wrap:wrap;"></div>
           <div id="pq-results" style="overflow-x:auto;max-height:420px;overflow-y:auto;"></div>
         </div>
-          <div id="player-detail-wrap"></div>
-          <div id="player-summary-wrap"></div>
         </div>
 
         <div class="subscreen" data-parent="people" id="people-host" style="display:none;">
@@ -2597,7 +2607,7 @@ function jumpToHostFromSummary(name){
   document.getElementById('host-search').value = name;
   drawHostDetail();
 }
-let pqTarget='players', pqSortKey='date', pqSortDir=-1, pqHits=[], pqSel=new Set();
+let pqType='전체', pqTarget='players', pqSortKey='date', pqSortDir=-1, pqHits=[], pqSel=new Set();
 
 function pqParse(q){
   const exact=[], ex=[], inc=[];
@@ -2622,6 +2632,10 @@ function initPlayerQuery(){
   input.oninput=runPlayerQuery;
   document.getElementById('pq-from').onchange=runPlayerQuery;
   document.getElementById('pq-to').onchange=runPlayerQuery;
+  document.querySelectorAll('[data-pq-type]').forEach(b=>b.onclick=()=>{
+    document.querySelectorAll('[data-pq-type]').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active'); pqType=b.dataset.pqType; runPlayerQuery();
+  });
   document.querySelectorAll('[data-pq-target]').forEach(b=>b.onclick=()=>{
     document.querySelectorAll('[data-pq-target]').forEach(x=>x.classList.remove('active'));
     b.classList.add('active'); pqTarget=b.dataset.pqTarget; runPlayerQuery();
@@ -2656,7 +2670,7 @@ function runPlayerQuery(keepSel){
   if(q.length<2){ el.innerHTML='<div style="padding:20px;text-align:center;color:var(--text-tertiary)">검색어를 2글자 이상 입력하세요</div>'; document.getElementById('pq-kpi').innerHTML=''; pqHits=[]; return; }
   const pq=pqParse(q), from=document.getElementById('pq-from').value, to=document.getElementById('pq-to').value;
   pqHits=PROGRAMS.filter(p=>{
-    if(playerTypeFilter!=='전체'&&p.type!==playerTypeFilter) return false;
+    if(pqType!=='전체'&&p.type!==pqType) return false;
     if(from&&p.date<from) return false;
     if(to&&p.date>to) return false;
     const nm=pqMatch(p.name+' '+(p.segment_topic||''),pq), pl=pqMatch(p.players,pq);
@@ -2715,7 +2729,6 @@ function renderPlayerTab(){
   inputB.value = selectedPlayerNameB || '';
   drawPlayerDetail();
   renderPlayerSummaryTable();
-  initPlayerQuery();
 }
 
 let playerSummarySortKey = 'avgRating';
@@ -5648,6 +5661,7 @@ window.addEventListener('afterprint', ()=>{
   safeRender('renderCompare', renderCompare);
   safeRender('renderMinuteTab', renderMinuteTab);
   safeRender('renderPlayerTab', renderPlayerTab);
+  safeRender('initPlayerQuery', initPlayerQuery);
   safeRender('renderHostTab', renderHostTab);
   safeRender('renderCompetitorTab', renderCompetitorTab);
   // renderMatching(); // 편성궁합분석 탭 숨김 처리로 비활성화 (호출 시 존재하지 않는 DOM을 참조해서 에러 나며 이후 초기화 전체가 중단되던 버그 수정)
