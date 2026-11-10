@@ -14,9 +14,10 @@
     --bg-card: #ffffff;
     --bg-subtle: #f5f5f7;
     --text-primary: #1d1d1f;
-    --text-secondary: #86868b;
-    --text-muted: #a1a1a6;
-    --text-tertiary: #a1a1a6;
+    /* 2026-11-10: 회색 안내문이 흐려서 잘 안 읽힌다는 점 개선 — 한 단계 진하게 (기존 #86868b / #a1a1a6) */
+    --text-secondary: #6e6e73;
+    --text-muted: #86868b;
+    --text-tertiary: #86868b;
     --btn-dark: #1d1d1f;
     --accent: #0071e3;
     --accent-light: rgba(0, 113, 229, 0.08);
@@ -39,8 +40,8 @@
     --bg-subtle: #181c28;
     --text-primary: #e2e6f0;
     --text-secondary: #8a92a6;
-    --text-muted: #6b7386;
-    --text-tertiary: #6b7386;
+    --text-muted: #7f889c;
+    --text-tertiary: #7f889c;
     --btn-dark: #2a2d3a;
     --accent: #5b8dee;
     --accent-light: rgba(91, 141, 238, 0.12);
@@ -86,8 +87,9 @@
     display: flex;
     flex-direction: column;
     border-right: 1px solid var(--border-dark);
+    --text-secondary: #98989d; /* 어두운 왼쪽 메뉴 안에서는 회색 글씨를 오히려 밝게 유지 (2026-11-10) */
   }
-  
+
   .brand {
     display: flex;
     align-items: center;
@@ -277,7 +279,7 @@
   }
   .btn-report:hover { background: #000; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
 
-  .content { padding: 10px 40px 60px 40px; flex: 1; overflow-y: auto; }
+  .content { padding: 10px 40px 100px 40px; flex: 1; overflow-y: auto; } /* 아래 여백을 늘려 떠 있는 "보고서에 추가" 버튼이 마지막 내용을 가리지 않게 (2026-11-10) */
   .screen { display: none; }
   .screen.active { display: block; }
 
@@ -439,7 +441,7 @@
   .chart-wrap.tall { height: 340px; }
 
   .note-banner {
-    font-size: 12.5px; font-weight: 600; color: #8e8e93; background: rgba(142, 142, 147, 0.08);
+    font-size: 12.5px; font-weight: 600; color: var(--text-secondary); background: rgba(142, 142, 147, 0.08);
     padding: 12px 18px; border-radius: var(--radius-sm); margin-bottom: 20px; display: inline-block;
   }
 
@@ -508,7 +510,7 @@
   </div>
 </div>
 
-<button id="pin-add-btn" onclick="captureCurrentPanel()" type="button" style="position:fixed; bottom:24px; right:24px; z-index:150; padding:12px 20px; border-radius:999px; border:none; background:var(--btn-dark); color:#fff; font-weight:700; font-size:13px; cursor:pointer; box-shadow:0 6px 20px rgba(0,0,0,0.25); display:flex; align-items:center; gap:8px;">
+<button id="pin-add-btn" onclick="captureCurrentPanel()" type="button" style="position:fixed; bottom:24px; right:24px; z-index:150; padding:9px 16px; border-radius:999px; border:none; background:var(--btn-dark); color:#fff; font-weight:700; font-size:12px; cursor:pointer; box-shadow:0 6px 20px rgba(0,0,0,0.25); display:flex; align-items:center; gap:8px;">
   + 보고서에 추가
   <span id="pin-count-badge" style="display:none; background:var(--accent); color:#fff; border-radius:999px; padding:1px 7px; font-size:11px;">0</span>
 </button>
@@ -528,7 +530,7 @@
 
     <div class="nav">
       <div class="nav-group">
-        <div class="nav-item active" data-screen="dashboard">Dashboard</div>
+        <div class="nav-item active" data-screen="dashboard">종합 현황</div>
       </div>
 
       <div class="nav-group" data-group="program">
@@ -593,7 +595,7 @@
   <div class="main">
     <div class="topbar">
       <div>
-        <div class="topbar-title" id="topbar-title">Dashboard</div>
+        <div class="topbar-title" id="topbar-title">종합 현황</div>
         <div class="topbar-sub" id="topbar-sub">채널 전체 성과와 주요 편성 이슈 요약</div>
       </div>
       <div class="topbar-right">
@@ -646,7 +648,7 @@
           <div class="bento-card col-3">
             <div class="card-label">최고 시청률 프로그램</div>
             <div class="kpi-value" id="kpi-top-program" style="font-size:20px; margin-top:4px;">-</div>
-            <div class="kpi-delta up" id="kpi-top-rating"></div>
+            <div class="kpi-delta" id="kpi-top-rating" style="color:var(--text-secondary);"></div><!-- 오르내림이 아니라 초록 대신 회색 (2026-11-10) -->
           </div>
         </div>
 
@@ -708,7 +710,7 @@
             <button class="chip-btn" data-dna-type="본방">본방</button>
             <button class="chip-btn" data-dna-type="재방">재방</button>
           </div>
-          <div style="font-size:11px; color:var(--text-tertiary); margin:-6px 0 10px;">프로그램은 위에서 하나만 고르고, 여기서는 그 프로그램의 생방/본방/재방 중 어떤 효율을 볼지만 고르면 돼요.</div>
+          <div style="font-size:12px; color:var(--text-tertiary); margin:-6px 0 10px;">프로그램은 위에서 하나만 고르고, 여기서는 그 프로그램의 생방/본방/재방 중 어떤 효율을 볼지만 고르면 돼요.</div>
           <div class="bento-grid">
             <div class="bento-card col-7">
               <div class="card-label">목표 달성률</div>
@@ -772,7 +774,7 @@
               <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">
                 <button class="chip-btn" id="minute-compare-toggle-btn" type="button">비교 옵션 ▾</button>
                 <div id="minute-compare-panel" style="display:none; margin-top:10px;">
-                  <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:6px;">경쟁채널 (동일 시각 비교, 개별 회차 선택 시에만 가능)</div>
+                  <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:6px;">경쟁채널 (동일 시각 비교, 개별 회차 선택 시에만 가능)</div>
                   <label style="margin-right:14px; font-size:12px;"><input type="checkbox" class="minute-comp-channel" value="GOLF & PBA"> GOLF&amp;PBA</label>
                   <label style="margin-right:14px; font-size:12px;"><input type="checkbox" class="minute-comp-channel" value="브레인TV"> 브레인TV</label>
                   <label style="margin-right:14px; font-size:12px;"><input type="checkbox" class="minute-comp-channel" value="빌리어즈TV"> 빌리어즈TV</label>
@@ -855,7 +857,7 @@
               <div class="searchable-dropdown-list" id="host-search-dropdown"></div>
             </div>
           </div>
-          <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:8px;">⚠ 재방은 편성 슬롯 사정으로 시청률이 좌우돼서 해설/진행의 흥행력을 보기엔 왜곡이 있을 수 있어, 생방·본방만 집계해요.</div>
+          <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:8px;">⚠ 재방은 편성 슬롯 사정으로 시청률이 좌우돼서 해설/진행의 흥행력을 보기엔 왜곡이 있을 수 있어, 생방·본방만 집계해요.</div>
           <div id="host-detail-wrap"></div>
           <div id="host-combo-wrap"></div>
           <div id="host-summary-wrap"></div>
@@ -938,7 +940,7 @@
           <div class="bento-grid">
             <div class="bento-card col-12">
               <div class="card-label" id="adj-title">이 프로그램 뒤엔 어떤 대회유형이 잘 맞을까</div>
-              <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:10px;">전체 기간 방영 이력 기준. 그 대회유형의 평균 시청률 대비, 이 프로그램 바로 뒤에 편성됐을 때만 따로 평균 내서 비교합니다. 표본(n)이 적으면 참고만 하세요.</div>
+              <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:10px;">전체 기간 방영 이력 기준. 그 대회유형의 평균 시청률 대비, 이 프로그램 바로 뒤에 편성됐을 때만 따로 평균 내서 비교합니다. 표본(n)이 적으면 참고만 하세요.</div>
               <table class="data-table" id="adj-table" style="width:100%; font-size:13px; border-collapse:collapse;"></table>
             </div>
           </div>
@@ -977,7 +979,7 @@
             <button class="chip-btn" onclick="saveWeeklyTemplate()">현재 편성을 템플릿으로 저장</button>
             <button class="chip-btn" style="background:var(--btn-dark); color:#fff;" onclick="runWeeklyAutoFill()">자동으로 빈 슬롯 채우기</button>
             <select class="mini-filter" id="ws-lastweek-select" multiple size="1" style="max-width:200px; min-width:160px;" title="Ctrl(Mac은 Cmd)+클릭으로 여러 주를 한꺼번에 선택할 수 있어요. 최근 2~3주를 같이 선택하는 걸 권장해요 — 한 주만 피하면 2주 전이랑 똑같은 게 다시 추천돼요."></select>
-            <span style="font-size:11px; color:var(--text-tertiary);">(Ctrl/Cmd+클릭으로 여러 주 선택 — 최근 2~3주 권장)</span>
+            <span style="font-size:12px; color:var(--text-tertiary);">(Ctrl/Cmd+클릭으로 여러 주 선택 — 최근 2~3주 권장)</span>
             <button class="chip-btn" style="color:var(--negative);" onclick="clearAllFixed()">전체 초기화</button>
             <button class="chip-btn" style="background:var(--accent); color:#fff;" onclick="toggleThemeChat()">🤖 편성 도우미 AI</button>
           </div>
@@ -991,7 +993,7 @@
                   <input type="text" id="theme-chat-input" class="mini-filter" style="flex:1;" placeholder="편성 요청을 입력하세요..." onkeydown="if(event.key==='Enter') sendThemeChatMessage()">
                   <button class="chip-btn" style="background:var(--btn-dark); color:#fff;" onclick="sendThemeChatMessage()">전송</button>
                 </div>
-                <div style="font-size:10px; color:var(--text-tertiary); margin-top:6px;">⚠ 실험적 기능이에요 — AI가 실수로 잘못 편성할 수 있으니 결과를 꼭 확인해주세요.</div>
+                <div style="font-size:11.5px; color:var(--text-tertiary); margin-top:6px;">⚠ 실험적 기능이에요 — AI가 실수로 잘못 편성할 수 있으니 결과를 꼭 확인해주세요.</div>
               </div>
             </div>
           </div>
@@ -1021,14 +1023,14 @@
             <textarea id="ws-fixed-name" placeholder="고정 편성 내용 입력 (프로그램명, 대국자, 부, 해설/진행 등 원하는 형식으로 자유롭게)" style="flex:1; min-width:220px; min-height:38px; max-height:100px; padding:8px 12px; border:1px solid var(--border); border-radius:12px; font-family:inherit; font-size:13px; resize:vertical;"></textarea>
             <button class="chip-btn" style="background:var(--btn-dark); color:#fff; align-self:flex-start;" onclick="addFixedProgram()">+ 선택한 요일에 고정 편성 추가</button>
           </div>
-          <div style="font-size:10px; color:var(--text-tertiary); margin:-4px 0 10px 2px;">🔗 DB 프로그램을 검색해서 연결하면, 이 고정 슬롯이 실제 방영 이력이 있는 프로그램으로 인식돼요 (나중에 리드인/리드아웃 분석 등에 활용 예정). 연결 안 해도 그냥 자유 텍스트로 입력만 하셔도 됩니다.</div>
+          <div style="font-size:11.5px; color:var(--text-tertiary); margin:-4px 0 10px 2px;">🔗 DB 프로그램을 검색해서 연결하면, 이 고정 슬롯이 실제 방영 이력이 있는 프로그램으로 인식돼요 (나중에 리드인/리드아웃 분석 등에 활용 예정). 연결 안 해도 그냥 자유 텍스트로 입력만 하셔도 됩니다.</div>
           <div class="bento-grid">
             <div class="bento-card col-12">
               <div class="card-label">주간 편성표 (초안) · 30분 단위</div>
-              <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:10px;">고정 편성: <b style="color:#C6EFCE; text-shadow:0 0 1px #999;">■</b> 생방 · <b style="color:#FFFF00; text-shadow:0 0 1px #999;">■</b> 본방 · <b style="color:#e5e5ea; text-shadow:0 0 1px #999;">■</b> 재방 (마우스 올리면 전체 내용 확인) · 빈 칸을 클릭하면 그 슬롯에 어울리는 프로그램을 추천해드려요.</div>
+              <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:10px;">고정 편성: <b style="color:#C6EFCE; text-shadow:0 0 1px #999;">■</b> 생방 · <b style="color:#FFFF00; text-shadow:0 0 1px #999;">■</b> 본방 · <b style="color:#e5e5ea; text-shadow:0 0 1px #999;">■</b> 재방 (마우스 올리면 전체 내용 확인) · 빈 칸을 클릭하면 그 슬롯에 어울리는 프로그램을 추천해드려요.</div>
               <details style="margin-bottom:14px;">
-                <summary style="font-size:11px; color:var(--text-tertiary); cursor:pointer; user-select:none;">추천 점수는 어떻게 계산되나요? (펼쳐보기)</summary>
-                <div style="font-size:11px; color:var(--text-tertiary); line-height:1.8; margin-top:8px; padding:12px 14px; background:var(--bg-subtle); border-radius:10px;">
+                <summary style="font-size:12px; color:var(--text-tertiary); cursor:pointer; user-select:none;">추천 점수는 어떻게 계산되나요? (펼쳐보기)</summary>
+                <div style="font-size:12px; color:var(--text-tertiary); line-height:1.8; margin-top:8px; padding:12px 14px; background:var(--bg-subtle); border-radius:10px;">
                   1. 바둑TV에서 2회 이상 방영된 적 있는 모든 "회차"(같은 프로그램이라도 대진이 다르면 별개로 취급)를 일단 후보로 놓습니다.<br>
                   2. 선택한 슬롯 길이(RT)에 맞는 방영길이를 가진 회차만 남깁니다. (예: 150분 슬롯 → 120분 초과~130분 이하인 것만)<br>
                   3. 남은 후보 하나하나에 대해, <b>각자 독립적으로</b> 아래 순서를 시도합니다 — 어떤 후보를 위해 다른 후보를 참고하는 게 아니라, 후보 각자가 자기 데이터로 이 시험을 봅니다.<br>
@@ -1063,7 +1065,7 @@
           <div class="bento-grid">
             <div class="bento-card col-12">
               <div class="card-label">자동 편성 결과 (실험적 기능)</div>
-              <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:10px;">
+              <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:10px;">
                 <b style="color:#C6EFCE; text-shadow:0 0 1px #999;">■</b> 생방 · <b style="color:#FFFF00; text-shadow:0 0 1px #999;">■</b> 본방 · <b style="color:#e5e5ea; text-shadow:0 0 1px #999;">■</b> 재방(고정) · <b style="color:#b8ddfc;">■</b> 자동 추천으로 채워짐.
                 템플릿을 먼저 불러온 다음, "자동으로 빈 슬롯 채우기"를 누르면 고정 슬롯을 제외한 나머지 구간을 큰 프로그램 위주로 채우고, 남는 자리만 작게 쪼개서 채웁니다. 주간 편성안 추천 탭과는 별개로 동작하는 실험용 화면입니다.
               </div>
@@ -1103,7 +1105,7 @@
           <div class="bento-grid">
             <div class="bento-card col-12">
               <div class="card-label">경쟁채널 일별 1시간 단위 시청률</div>
-              <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:10px;">선택한 날짜의 분단위 시청률을, 시간대별로 평균 내서 보여줍니다. 그래프에 마우스를 올리면 그 시간대 프로그램명도 같이 확인할 수 있어요(빌리어즈TV는 아직 미지원).</div>
+              <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:10px;">선택한 날짜의 분단위 시청률을, 시간대별로 평균 내서 보여줍니다. 그래프에 마우스를 올리면 그 시간대 프로그램명도 같이 확인할 수 있어요(빌리어즈TV는 아직 미지원).</div>
               <div style="height:340px;"><canvas id="chart-competitor"></canvas></div>
             </div>
           </div>
@@ -1163,13 +1165,13 @@
           <div class="bento-grid">
             <div class="bento-card col-7">
               <div class="card-label" id="fatigue-title">누적 방영 순번별 시간대 대비 비율(%)</div>
-              <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:6px;">같은 대진(동일 콘텐츠)의 재방송이 몇 번째인지 기준 (생방·본방은 의무 편성이라 제외). 100% = 그 시간대 평균 수준.</div>
+              <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:6px;">같은 대진(동일 콘텐츠)의 재방송이 몇 번째인지 기준 (생방·본방은 의무 편성이라 제외). 100% = 그 시간대 평균 수준.</div>
               <div id="fatigue-insight" style="font-size:13px; font-weight:700; margin-bottom:8px; padding:8px 12px; background:var(--accent-light); border-radius:8px; color:var(--accent);"></div>
               <div class="chart-wrap"><canvas id="chart-fatigue"></canvas></div>
             </div>
             <div class="bento-card col-5">
               <div class="card-label">프로그램별 피로도 역치 순위</div>
-              <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:6px;">몇 번째 방영부터 그 시간대 평균 이하로 떨어지는지 (성과 저하 시점 — 재방이 갈수록 안 좋은 시간대로 밀려나는 편성 패턴 때문일 수도 있어, "피로도"로 단정하기보단 참고 지표로 봐주세요)</div>
+              <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:6px;">몇 번째 방영부터 그 시간대 평균 이하로 떨어지는지 (성과 저하 시점 — 재방이 갈수록 안 좋은 시간대로 밀려나는 편성 패턴 때문일 수도 있어, "피로도"로 단정하기보단 참고 지표로 봐주세요)</div>
               <div style="overflow-y:auto; max-height:360px;">
                 <table class="data-table" id="fatigue-rank-table" style="width:100%; font-size:12px; border-collapse:collapse;"></table>
               </div>
@@ -1768,7 +1770,7 @@ function attachSearchableDropdown(input, listEl, items, labelFn, onSelect){
 
 /* ============ NAV LOGIC ============ */
 const titleMap = {
-  dashboard:{t:'Dashboard', s:'채널 전체 성과와 주요 편성 이슈 요약'},
+  dashboard:{t:'종합 현황', s:'채널 전체 성과와 주요 편성 이슈 요약'},
   program:{t:'프로그램 분석', s:'프로그램별 콘텐츠 특성과 전략적 가치 분석'},
   people:{t:'인물 분석', s:'대국자·해설·진행자별 성적 분석'},
   schedule:{t:'편성 분석', s:'프로그램-시간대 적합도 및 편성 시나리오 분석'},
@@ -1912,7 +1914,7 @@ function renderTrendKpiAndChart(){
     type:'line',
     data:{ labels: TREND.map(t=>t[0]), datasets:[{
       data: TREND.map(t=>t[1]), borderColor: ACCENT_COLOR, backgroundColor: ACCENT_LIGHT,
-      fill:true, tension:0.4, pointRadius:4, pointHoverRadius:6, pointBackgroundColor: ACCENT_COLOR
+      fill:true, tension:0.4, cubicInterpolationMode:'monotone', pointRadius:4, pointHoverRadius:6, pointBackgroundColor: ACCENT_COLOR
     }]},
     options:{ 
       responsive: true,
@@ -2014,7 +2016,7 @@ function renderDashboard(){
         : `<span style="color:var(--text-tertiary);">목표 미설정</span>`;
       const badge = p.type==='생방' ? '<span class="badge live">생방</span>' : p.type==='본방' ? '<span class="badge live">본방</span>' : (p.type==='재방' ? '<span class="badge rerun">재방</span>' : '<span class="badge rerun">혼합</span>');
       const timeLabel = isSingleDay ? `${p.start}–${p.end}` : `${p.date} / ${p.start}`;
-      const partsNote = p._parts > 1 ? ` <span style="font-size:10px; color:var(--text-tertiary);">(${p._parts}부 통합)</span>` : '';
+      const partsNote = p._parts > 1 ? ` <span style="font-size:11.5px; color:var(--text-tertiary);">(${p._parts}부 통합)</span>` : '';
       const playersTxt = (p.players && p.players !== '-') ? p.players : '<span style="color:var(--text-tertiary);">-</span>';
       return `<tr><td><b>${p.name}</b>${partsNote}</td><td>${playersTxt}</td><td>${timeLabel}</td><td>${badge}</td><td>${p.rating.toFixed(3)}%</td><td>${achieveTxt}</td></tr>`;
     }).join('');
@@ -2191,7 +2193,7 @@ async function drawCompetitorChart(){
     const isOwnChannel = chName === '바둑TV';
     return {
       label: chName, data: values, borderColor: COMPETITOR_COLORS[chName]||'#999', backgroundColor:'transparent',
-      fill:false, tension:0.3, pointRadius: isOwnChannel ? 3 : 2, borderWidth: isOwnChannel ? 4 : 2, spanGaps:true,
+      fill:false, tension:0.3, cubicInterpolationMode:'monotone', pointRadius: isOwnChannel ? 3 : 2, borderWidth: isOwnChannel ? 4 : 2, spanGaps:true,
       order: isOwnChannel ? 0 : 1, // 바둑TV를 맨 위에 그려서 다른 선에 안 가리게
       programByHour: hourLabels.map(h => programByHour[h] || null),
     };
@@ -2344,7 +2346,7 @@ async function drawDNA(g){
   const related = getRelatedPrograms(g_.name);
   const relatedHtml = related.length > 0
     ? `<div style="margin-bottom:10px;">
-        <span style="font-size:11px; color:var(--text-tertiary); margin-right:6px;">🔗 관련 프로그램(대회방식이 달라 별도 집계):</span>
+        <span style="font-size:12px; color:var(--text-tertiary); margin-right:6px;">🔗 관련 프로그램(대회방식이 달라 별도 집계):</span>
         ${related.map(n=>`<span class="chip-btn" style="font-size:11px; cursor:pointer;" onclick="jumpToRelatedProgram('${n.replace(/'/g,"\\'")}')">${n} 보기</span>`).join(' ')}
       </div>`
     : '';
@@ -2386,7 +2388,7 @@ async function drawDNA(g){
       return AGE_ORDER.indexOf(a.age_group) - AGE_ORDER.indexOf(b.age_group);
     });
     document.getElementById('dna-audience').innerHTML = `
-      <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:4px;">${sorted.length}/14개 세그먼트 (일부 결측 가능)</div>
+      <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:4px;">${sorted.length}/14개 세그먼트 (일부 결측 가능)</div>
       <ul class="factor-list" style="columns:2;">
         ${sorted.map(a=>`<li>${a.gender}·${a.age_group}: ${a.rating_pct.toFixed(3)}%</li>`).join('')}
       </ul>`;
@@ -2491,7 +2493,7 @@ function drawHostDetail(){
 
   wrap.innerHTML = `
     <div class="bento-grid" style="margin-bottom:16px;">
-      <div class="bento-card col-3"><div class="card-label">출연 횟수</div><div class="kpi-value">${all.length}회</div><div style="font-size:11px; color:var(--text-tertiary);">해설 ${asCommentator} · 진행 ${asHost}</div></div>
+      <div class="bento-card col-3"><div class="card-label">출연 횟수</div><div class="kpi-value">${all.length}회</div><div style="font-size:12px; color:var(--text-tertiary);">해설 ${asCommentator} · 진행 ${asHost}</div></div>
       <div class="bento-card col-3"><div class="card-label">평균 시청률</div><div class="kpi-value">${avgRating.toFixed(3)}%</div></div>
       <div class="bento-card col-3"><div class="card-label">최고 기록</div><div class="kpi-value">${peak.toFixed(3)}%</div></div>
       <div class="bento-card col-3"><div class="card-label">최근 출연</div><div class="kpi-value" style="font-size:16px;">${all.slice().sort((a,b)=>b.date.localeCompare(a.date))[0]?.date || '-'}</div></div>
@@ -2507,7 +2509,7 @@ function drawHostDetail(){
             `).join('')}
           </table>
         </div>
-        ${all.length > 30 ? `<div style="font-size:11px; color:var(--text-tertiary); margin-top:6px;">최근 30건만 표시했어요 (전체 ${all.length}건)</div>` : ''}
+        ${all.length > 30 ? `<div style="font-size:12px; color:var(--text-tertiary); margin-top:6px;">최근 30건만 표시했어요 (전체 ${all.length}건)</div>` : ''}
       </div>
     </div>`;
 }
@@ -2567,7 +2569,7 @@ function renderHostComboSuggestion(){
     <div class="bento-grid" style="margin-top:16px;">
       <div class="bento-card col-12">
         <div class="card-label">해설·진행 조합 추천 (선택 기간 · ${hostTypeFilter})</div>
-        <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:8px;">둘이 같이 방송한 이력이 2회 이상 있는 조합 중, 평균 시청률이 높은 순으로 보여줘요.</div>
+        <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:8px;">둘이 같이 방송한 이력이 2회 이상 있는 조합 중, 평균 시청률이 높은 순으로 보여줘요.</div>
         <div style="overflow-x:auto;">
           <table class="data-table" style="width:100%;">
             <tr><th>해설</th><th>진행</th><th>같이 방영 횟수</th><th>평균 시청률</th></tr>
@@ -2585,12 +2587,12 @@ function renderHostSummaryTable(){
     <div class="bento-grid" style="margin-top:16px;">
       <div class="bento-card col-6">
         <div class="card-label">해설 TOP5 (선택 기간 · ${hostTypeFilter})</div>
-        <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:8px;">출연 2회 이상만 대상 — 열 제목 클릭하면 정렬 기준 변경</div>
+        <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:8px;">출연 2회 이상만 대상 — 열 제목 클릭하면 정렬 기준 변경</div>
         <div id="host-rank-해설" style="overflow-x:auto;">${renderRankTable('해설', hostSummarySortState.해설.key, hostSummarySortState.해설.dir)}</div>
       </div>
       <div class="bento-card col-6">
         <div class="card-label">진행 TOP5 (선택 기간 · ${hostTypeFilter})</div>
-        <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:8px;">출연 2회 이상만 대상 — 열 제목 클릭하면 정렬 기준 변경</div>
+        <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:8px;">출연 2회 이상만 대상 — 열 제목 클릭하면 정렬 기준 변경</div>
         <div id="host-rank-진행" style="overflow-x:auto;">${renderRankTable('진행', hostSummarySortState.진행.key, hostSummarySortState.진행.dir)}</div>
       </div>
     </div>`;
@@ -2766,7 +2768,7 @@ function renderPlayerSummaryTable(){
     <div class="bento-grid" style="margin-bottom:16px;">
       <div class="bento-card col-12">
         <div class="card-label">대국자 TOP5 요약 (선택 기간 · ${playerTypeFilter}) — 열 제목을 클릭하면 그 기준으로 정렬돼요</div>
-        <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:8px;">출연 2회 이상인 대국자만 대상으로 해요 (1회짜리는 표본이 너무 적어서 제외).</div>
+        <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:8px;">출연 2회 이상인 대국자만 대상으로 해요 (1회짜리는 표본이 너무 적어서 제외).</div>
         <div style="overflow-x:auto;">
           <table class="data-table" style="width:100%;">
             <tr>
@@ -2845,9 +2847,9 @@ function buildPlayerBlockHtml(name, instances, colClass){
     <div class="bento-card ${colClass}">
       <div class="card-label" style="font-size:15px;">${name}</div>
       <div style="display:flex; gap:16px; margin:10px 0 16px;">
-        <div><div style="font-size:11px; color:var(--text-tertiary);">출연 횟수</div><div style="font-size:20px; font-weight:800;">${n}회</div></div>
-        <div><div style="font-size:11px; color:var(--text-tertiary);">평균 시청률</div><div style="font-size:20px; font-weight:800;">${avgRating.toFixed(3)}%</div></div>
-        <div><div style="font-size:11px; color:var(--text-tertiary);">최고 기록</div><div style="font-size:20px; font-weight:800; color:var(--accent);">${peak.toFixed(3)}%</div></div>
+        <div><div style="font-size:12px; color:var(--text-tertiary);">출연 횟수</div><div style="font-size:20px; font-weight:800;">${n}회</div></div>
+        <div><div style="font-size:12px; color:var(--text-tertiary);">평균 시청률</div><div style="font-size:20px; font-weight:800;">${avgRating.toFixed(3)}%</div></div>
+        <div><div style="font-size:12px; color:var(--text-tertiary);">최고 기록</div><div style="font-size:20px; font-weight:800; color:var(--accent);">${peak.toFixed(3)}%</div></div>
       </div>
       ${heatmapHtml}
     </div>`;
@@ -2871,7 +2873,7 @@ function drawPlayerDetail(){
   }
   // 둘 다 있으면 나란히 비교
   wrap.innerHTML = `
-    <div style="font-size:11px; color:var(--text-tertiary); margin:16px 0 -4px;">칸에 마우스를 올리면 정확한 평균 시청률·출연 건수를 확인할 수 있어요.</div>
+    <div style="font-size:12px; color:var(--text-tertiary); margin:16px 0 -4px;">칸에 마우스를 올리면 정확한 평균 시청률·출연 건수를 확인할 수 있어요.</div>
     <div class="bento-grid" style="margin-top:16px;">
       ${a ? (a.instances.length > 0 ? buildPlayerBlockHtml(a.name, a.instances, 'col-6') : emptyNotice(a.name)) : `<div class="bento-card col-6" style="display:flex; align-items:center; justify-content:center; color:var(--text-tertiary); font-size:13px;">왼쪽 검색창에서 첫 번째 대국자를 선택해주세요.</div>`}
       ${b.instances.length > 0 ? buildPlayerBlockHtml(b.name, b.instances, 'col-6') : emptyNotice(b.name)}
@@ -3187,11 +3189,11 @@ function drawCompare(){
     <div style="display:flex; justify-content:space-between; margin-bottom:14px;">
       <div>
         <div style="font-size:12px; font-weight:700; color:var(--text-secondary);">${pa.name} · ${pa.type} ${pa.count>1?`(${pa.count}회 평균)`:''}</div>
-        <div style="font-size:11px; color:var(--text-tertiary); margin-top:2px;">대진: ${pa.players}</div>
+        <div style="font-size:12px; color:var(--text-tertiary); margin-top:2px;">대진: ${pa.players}</div>
       </div>
       <div style="text-align:right;">
         <div style="font-size:12px; font-weight:700; color:var(--text-secondary);">${pb.name} · ${pb.type} ${pb.count>1?`(${pb.count}회 평균)`:''}</div>
-        <div style="font-size:11px; color:var(--text-tertiary); margin-top:2px;">대진: ${pb.players}</div>
+        <div style="font-size:12px; color:var(--text-tertiary); margin-top:2px;">대진: ${pb.players}</div>
       </div>
     </div>
     ${metrics.map(m=>{
@@ -3201,12 +3203,13 @@ function drawCompare(){
       <div style="margin-bottom:14px;">
         <div style="font-size:12px; color:var(--text-secondary); margin-bottom:4px;">${m.label} (${m.unit})</div>
         <div style="display:flex; align-items:center; gap:8px;">
-          <div style="flex:1; text-align:right; font-weight:700; font-size:13px;">${m.va.toFixed(2)}</div>
+          <div style="flex:1; text-align:right; font-weight:700; font-size:13px; color:${ACCENT_COLOR};">${m.va.toFixed(2)}</div>
           <div style="flex:2; display:flex; gap:2px;">
-            <div style="flex:1; display:flex; justify-content:flex-end;"><div style="height:14px; width:${wa}%; background:var(--border); border-radius:4px 0 0 4px;"></div></div>
-            <div style="flex:1;"><div style="height:14px; width:${wb}%; background:${ACCENT_COLOR}; border-radius:0 4px 4px 0;"></div></div>
+            <!-- A=파랑, B=보라: 위쪽 A/B 동그라미 색과 맞춤 (2026-11-10) -->
+            <div style="flex:1; display:flex; justify-content:flex-end;"><div style="height:14px; width:${wa}%; background:${ACCENT_COLOR}; border-radius:4px 0 0 4px;"></div></div>
+            <div style="flex:1;"><div style="height:14px; width:${wb}%; background:#af52de; border-radius:0 4px 4px 0;"></div></div>
           </div>
-          <div style="flex:1; font-weight:700; font-size:13px; color:${ACCENT_COLOR};">${m.vb.toFixed(2)}</div>
+          <div style="flex:1; font-weight:700; font-size:13px; color:#af52de;">${m.vb.toFixed(2)}</div>
         </div>
       </div>`;
     }).join('')}
@@ -3485,7 +3488,7 @@ function renderHeatmap(history, fullHistory){
 
     const summaryCard = (label, main, sub, color) => `
       <div style="flex:1; min-width:150px; padding:14px 16px; background:var(--bg-subtle); border-radius:12px; border-left:4px solid ${color};">
-        <div style="font-size:11px; color:var(--text-tertiary); font-weight:700; margin-bottom:6px;">${label}</div>
+        <div style="font-size:12px; color:var(--text-tertiary); font-weight:700; margin-bottom:6px;">${label}</div>
         <div style="font-size:18px; font-weight:800; margin-bottom:2px;">${main}</div>
         <div style="font-size:11px; color:var(--text-secondary);">${sub}</div>
       </div>`;
@@ -4723,7 +4726,7 @@ async function loadCellRecommendations(day, startIdx, endIdx){
           <span style="font-weight:700; font-size:13px; color:var(--accent); white-space:nowrap;">${c.score}점</span>
         </div>
         ${c.repPlayers ? `<div style="font-size:11px; color:var(--text-secondary); margin-top:3px;">대진: ${c.repPlayers}</div>` : ''}
-        <div style="font-size:11px; color:var(--text-tertiary); margin-top:3px; line-height:1.5;">
+        <div style="font-size:12px; color:var(--text-tertiary); margin-top:3px; line-height:1.5;">
           ${BASIS_LABEL[c.basis]} · 해당 시간대 평균 시청률 ${c.avgRating!=null ? c.avgRating.toFixed(3)+'%' : '-'} · 평균 방영 ${Math.round(c.avgDurationMin)}분
         </div>
         ${used ? `<div style="font-size:10px; color:#ff9500; margin-top:3px; font-weight:600;">이미 이번 주 편성표에 사용됨</div>` : ''}
@@ -4740,7 +4743,7 @@ async function loadCellRecommendations(day, startIdx, endIdx){
 
   html += sectionDivider;
   html += `<div style="font-size:13px; font-weight:700; margin-bottom:2px;">추정 후보</div>`;
-  html += `<div style="font-size:11px; color:var(--text-tertiary); margin-bottom:8px;">재방 실측 데이터가 없어, 유사 조건으로 추정한 결과입니다.</div>`;
+  html += `<div style="font-size:12px; color:var(--text-tertiary); margin-bottom:8px;">재방 실측 데이터가 없어, 유사 조건으로 추정한 결과입니다.</div>`;
   if (basisGroups.length === 0) {
     html += `<div style="color:var(--text-tertiary); font-size:12px;">추정 후보가 없습니다.</div>`;
   } else {
@@ -4753,7 +4756,7 @@ async function loadCellRecommendations(day, startIdx, endIdx){
   if (playerStats.length > 0) {
     html += sectionDivider;
     html += `<div style="font-size:13px; font-weight:700; margin-bottom:2px;">강세 대국자</div>`;
-    html += `<div style="font-size:11px; color:var(--text-tertiary); margin-bottom:8px;">해당 대국자가 출연한 다른 프로그램·대진도 편성 후보로 고려해보세요.</div>`;
+    html += `<div style="font-size:12px; color:var(--text-tertiary); margin-bottom:8px;">해당 대국자가 출연한 다른 프로그램·대진도 편성 후보로 고려해보세요.</div>`;
     html += `<div style="display:flex; flex-wrap:wrap; gap:8px;">
       ${playerStats.map(p=>`<span style="display:inline-block; padding:6px 10px; border-radius:8px; font-size:11px; background:#fff7e6; border:1px solid #ffd580;">${p.name} · 평균 ${p.avgRating.toFixed(3)}% (${p.n}건)</span>`).join('')}
     </div>`;
@@ -4763,7 +4766,7 @@ async function loadCellRecommendations(day, startIdx, endIdx){
     adjInsights.forEach(insight => {
       html += sectionDivider;
       html += `<div style="font-size:13px; font-weight:700; margin-bottom:2px;">🔗 ${insight.label}</div>`;
-      html += `<div style="font-size:11px; color:var(--text-tertiary); margin-bottom:8px;">연결된 고정 프로그램 실측 이력 기준, 이 자리에 어떤 대회유형이 잘 맞았는지입니다.</div>`;
+      html += `<div style="font-size:12px; color:var(--text-tertiary); margin-bottom:8px;">연결된 고정 프로그램 실측 이력 기준, 이 자리에 어떤 대회유형이 잘 맞았는지입니다.</div>`;
       html += `<div style="display:flex; flex-wrap:wrap; gap:8px;">
         ${insight.results.map(r=>{
           const liftTxt = r.lift==null ? '' : ` (${r.lift>=0?'▲+':'▼'}${Math.abs(r.lift).toFixed(0)}%)`;
@@ -4778,7 +4781,7 @@ async function loadCellRecommendations(day, startIdx, endIdx){
   if (compStats.length > 0) {
     html += sectionDivider;
     html += `<div style="font-size:13px; font-weight:700; margin-bottom:2px;">동시간대 경쟁채널 시청률</div>`;
-    html += `<div style="font-size:11px; color:var(--text-tertiary); margin-bottom:8px;">상단 선택 기간(${compPeriodLabel}) 중 ${day} ${targetHourStr}시 · ${compDayCount}일 기준. 시청률이 낮은 시간대는 부담이 적고, 높은 시간대는 경쟁력 있는 콘텐츠 배치가 필요합니다.</div>`;
+    html += `<div style="font-size:12px; color:var(--text-tertiary); margin-bottom:8px;">상단 선택 기간(${compPeriodLabel}) 중 ${day} ${targetHourStr}시 · ${compDayCount}일 기준. 시청률이 낮은 시간대는 부담이 적고, 높은 시간대는 경쟁력 있는 콘텐츠 배치가 필요합니다.</div>`;
     html += `<div style="display:flex; flex-wrap:wrap; gap:8px;">
       ${compStats.map(c=>`<span style="display:inline-block; padding:6px 10px; border-radius:8px; font-size:11px; background:#e8f6ff; border:1px solid #8ecfff;">${c.name} · 평균 ${c.avgRating.toFixed(3)}%</span>`).join('')}
     </div>`;
@@ -4788,7 +4791,7 @@ async function loadCellRecommendations(day, startIdx, endIdx){
       : `선택 기간(${compPeriodLabel})에 경쟁채널 데이터가 없어요.`;
     html += sectionDivider;
     html += `<div style="font-size:13px; font-weight:700; margin-bottom:2px;">동시간대 경쟁채널 시청률</div>`;
-    html += `<div style="font-size:11px; color:var(--text-tertiary);">${reason}</div>`;
+    html += `<div style="font-size:12px; color:var(--text-tertiary);">${reason}</div>`;
   }
 
   list.innerHTML = html;
@@ -5229,7 +5232,7 @@ function renderRegression(){
       return new Chart(document.getElementById(canvasId), {
         type:'line',
         data:{ labels, datasets:[{
-          data, borderColor: ACCENT_COLOR, backgroundColor: ACCENT_LIGHT, fill:true, tension:0.3,
+          data, borderColor: ACCENT_COLOR, backgroundColor: ACCENT_LIGHT, fill:true, tension:0.3, cubicInterpolationMode:'monotone',
           pointRadius: labels.map((_,i)=> i===boundaryIdx ? 6 : 2),
           pointBackgroundColor: labels.map((_,i)=> i===boundaryIdx ? 'var(--negative)' : ACCENT_COLOR),
         }]},
@@ -5394,7 +5397,7 @@ async function renderFatigue(){
       type:'line',
       data:{ labels, datasets:[{
         data, borderColor: ACCENT_COLOR, backgroundColor: ACCENT_LIGHT,
-        fill:true, tension:0.3, pointRadius:5, pointBackgroundColor: (ctx)=> data[ctx.dataIndex]!=null && data[ctx.dataIndex]<100 ? 'var(--negative)' : ACCENT_COLOR,
+        fill:true, tension:0.3, cubicInterpolationMode:'monotone', pointRadius:5, pointBackgroundColor: (ctx)=> data[ctx.dataIndex]!=null && data[ctx.dataIndex]<100 ? 'var(--negative)' : ACCENT_COLOR,
         spanGaps: true
       }]},
       options:{ responsive: true, maintainAspectRatio: false,
@@ -5584,7 +5587,7 @@ function renderPinListInModal(){
   wrap.innerHTML = window.__pinnedItems.map((item, i) => `
     <div style="border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:10px;">
       <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
-        <span style="font-size:11px; color:var(--text-tertiary); font-weight:700;">#${i+1}</span>
+        <span style="font-size:12px; color:var(--text-tertiary); font-weight:700;">#${i+1}</span>
         <input value="${item.title.replace(/"/g,'&quot;')}" oninput="updatePinTitle('${item.id}', this.value)"
           style="flex:1; border:none; border-bottom:1px solid var(--border); font-size:13px; font-weight:600; padding:2px 4px; font-family:inherit;">
         <button onclick="movePin('${item.id}', -1)" style="border:none; background:var(--bg-subtle); border-radius:6px; width:24px; height:24px; cursor:pointer;">↑</button>
