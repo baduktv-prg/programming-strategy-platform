@@ -4251,8 +4251,9 @@ async function loadWeeklyTemplate(){
   }
   (data.template_data || []).forEach(item => {
     const { _source, ...rest } = item;
-    if (_source === 'recommended') recommendedBlocks.push({ id: recSeq++, ...rest });
-    else fixedPrograms.push({ id: fixedSeq++, ...rest }); // _source 없는 예전 템플릿은 전부 고정슬롯으로 처리(기존 방식 그대로)
+    // id는 템플릿 안의 값이 아니라 항상 새로 매김 — id가 ✕/드래그 버튼 동작에 들어가므로 템플릿 값이 덮어쓰지 못하게 뒤에 둠 (2026-11-10)
+    if (_source === 'recommended') recommendedBlocks.push({ ...rest, id: recSeq++ });
+    else fixedPrograms.push({ ...rest, id: fixedSeq++ }); // _source 없는 예전 템플릿은 전부 고정슬롯으로 처리(기존 방식 그대로)
   });
   renderWeeklyGrid();
 }
@@ -4282,24 +4283,25 @@ function renderWeeklyGrid(){
     WS_DAY_ORDER.forEach(day=>{
       const fixed = findFixedAt(day, slot.idx);
       const chosen = findRecommendedAt(day, slot.idx);
-      const escaped = fixed ? fixed.name.replace(/"/g,'&quot;').replace(/\n/g,' ') : '';
+      // 템플릿은 누구나 저장할 수 있으므로, 이름·구분 등은 항상 글자로만 보이게 escapeHtml 처리 (2026-11-10)
+      const escaped = fixed ? escapeHtml(String(fixed.name ?? '').replace(/\n/g,' ')) : '';
 
       if (fixed) {
         const isStart = fixed.startIdx === slot.idx;
         const bg = fixed.type==='재방' ? '#e5e5ea' : fixed.type==='본방' ? '#FFFF00' : '#C6EFCE'; // 생방=연두, 본방=노랑 (원본 편성표 색상코드), 재방=회색
         const linkBadge = fixed.program_id ? '🔗' : '';
         const linkTitle = fixed.program_id ? ' [DB 연결됨]' : '';
-        html += `<div draggable="true" ondragstart="onFixedDragStart(${fixed.id})" ondragover="event.preventDefault()" ondrop="onCellDrop(event,'${day}', ${slot.idx})" style="height:18px; background:${bg}; color:var(--text-primary); display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; position:relative; overflow:hidden; padding:0 3px; border-radius:${isStart?'6px 6px 0 0':'0'}; cursor:grab;" title="[${fixed.type}]${linkTitle} ${escaped} (드래그해서 옮기기 가능)">
-          ${isStart ? `<span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${linkBadge}${fixed.name.split('\n')[0]}</span><span onclick="removeFixedProgram(${fixed.id})" style="position:absolute; top:0; right:2px; cursor:pointer; opacity:0.5; font-size:9px;">✕</span>` : ''}
+        html += `<div draggable="true" ondragstart="onFixedDragStart(${fixed.id})" ondragover="event.preventDefault()" ondrop="onCellDrop(event,'${day}', ${slot.idx})" style="height:18px; background:${bg}; color:var(--text-primary); display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; position:relative; overflow:hidden; padding:0 3px; border-radius:${isStart?'6px 6px 0 0':'0'}; cursor:grab;" title="[${escapeHtml(fixed.type)}]${linkTitle} ${escaped} (드래그해서 옮기기 가능)">
+          ${isStart ? `<span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${linkBadge}${escapeHtml(String(fixed.name ?? '').split('\n')[0])}</span><span onclick="removeFixedProgram(${fixed.id})" style="position:absolute; top:0; right:2px; cursor:pointer; opacity:0.5; font-size:9px;">✕</span>` : ''}
         </div>`;
       } else if (chosen) {
         const isStart = chosen.startIdx === slot.idx;
         const inPreview = isInDragPreview(day, slot.idx);
         const chosenBg = chosen.type==='재방' ? '#e5e5ea' : chosen.type==='본방' ? '#FFFF00' : chosen.type==='생방' ? '#C6EFCE' : 'var(--accent-light)';
         const chosenColor = chosen.type ? 'var(--btn-dark)' : 'var(--accent)';
-        const chosenTitle = `${chosen.name}${chosen.repPlayers ? ' · '+chosen.repPlayers : ''} (추천 · ${chosen.score}점)${chosen.type?' · '+chosen.type:''}`;
+        const chosenTitle = escapeHtml(`${chosen.name}${chosen.repPlayers ? ' · '+chosen.repPlayers : ''} (추천 · ${chosen.score}점)${chosen.type?' · '+chosen.type:''}`);
         html += `<div onmousedown="onCellMouseDown(event,'${day}', ${slot.idx})" onmouseover="onCellMouseOver('${day}', ${slot.idx})" ondragover="event.preventDefault()" ondrop="onCellDrop(event,'${day}', ${slot.idx})" style="height:18px; border-radius:${isStart?'6px 6px 0 0':'0'}; background:${inPreview?'#b8ddfc':chosenBg}; color:${chosenColor}; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; cursor:pointer; position:relative; padding:0 3px; overflow:hidden;" title="${chosenTitle} — 드래그해서 범위 다시 선택 가능">
-          ${isStart ? `<span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${chosen.name}${chosen.repPlayers ? ' · '+chosen.repPlayers : ''}</span><span onclick="event.stopPropagation(); removeRecommendedBlock(${chosen.id})" style="position:absolute; top:0; right:2px; cursor:pointer; opacity:0.5; font-size:9px;">✕</span>` : ''}
+          ${isStart ? `<span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(chosen.name)}${chosen.repPlayers ? ' · '+escapeHtml(chosen.repPlayers) : ''}</span><span onclick="event.stopPropagation(); removeRecommendedBlock(${chosen.id})" style="position:absolute; top:0; right:2px; cursor:pointer; opacity:0.5; font-size:9px;">✕</span>` : ''}
         </div>`;
       } else {
         const inPreview = isInDragPreview(day, slot.idx);
