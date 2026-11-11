@@ -1029,25 +1029,21 @@
               <div class="card-label">주간 편성표 (초안) · 30분 단위</div>
               <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:10px;">고정 편성: <b style="color:#C6EFCE; text-shadow:0 0 1px #999;">■</b> 생방 · <b style="color:#FFFF00; text-shadow:0 0 1px #999;">■</b> 본방 · <b style="color:#e5e5ea; text-shadow:0 0 1px #999;">■</b> 재방 (마우스 올리면 전체 내용 확인) · 빈 칸을 클릭하면 그 슬롯에 어울리는 프로그램을 추천해드려요.</div>
               <details style="margin-bottom:14px;">
-                <summary style="font-size:12px; color:var(--text-tertiary); cursor:pointer; user-select:none;">추천 점수는 어떻게 계산되나요? (펼쳐보기)</summary>
+                <summary style="font-size:12px; color:var(--text-tertiary); cursor:pointer; user-select:none;">추천은 어떻게 계산되나요? (펼쳐보기)</summary>
                 <div style="font-size:12px; color:var(--text-tertiary); line-height:1.8; margin-top:8px; padding:12px 14px; background:var(--bg-subtle); border-radius:10px;">
-                  <b>한 줄 요약: "이 회차를 이 자리에 넣으면, 이 자리 평소 수준보다 얼마나 더 나올까"를 점수로 매깁니다.</b><br>
-                  <b>점수 = 체급 × 궁합 × 100</b> — 100점은 이 시간대에 재방을 틀면 보통 나오는 수준, 130점이면 그보다 30% 더 나올 것으로 예상된다는 뜻입니다.<br><br>
-                  1. <b>후보:</b> 바둑TV에서 2회 이상 방영된 모든 "회차"(같은 프로그램이라도 대진·라운드가 다르면 별개)가 후보입니다. 선택한 칸 길이 안에 평균 방영길이가 들어가는 회차만 남깁니다.<br>
-                  2. <b>이 자리 기준선:</b> 평일/주말 × 시간대별로, 과거에 재방을 틀었을 때의 평균 시청률입니다. (요일 하나하나로 나누면 표본이 너무 적어 평일끼리·주말끼리 묶어서 봅니다. 생방·본방은 원래 더 높게 나오므로 따로 계산합니다.)<br>
-                  3. <b>체급:</b> 이 회차가 방영될 때마다 "그 자리 기준선의 몇 배였나"를 구해 평균낸 값입니다. 주로 프라임에 나가서 시청률이 높았던 건지, 회차 자체가 강한 건지를 구분해줍니다. (예: 체급 +30% = 어디에 틀든 그 자리 평소보다 30% 더 나오는 회차)<br>
-                  4. <b>이 시간대 궁합:</b> 이 회차가 이 시간대에서 특히 강한지·약한지입니다.<br>
-                  &nbsp;&nbsp;① 실측 — 이 회차가 이 시간대(평일/주말 묶음)에 재방된 적이 있으면, 그때 실제로 몇 배가 나왔는지로 계산합니다. (가장 신뢰도 높음)<br>
-                  &nbsp;&nbsp;② 추정 — 실측이 없으면, 비슷한 <u>다른 프로그램들</u>이 "이 시간대에서 평소보다 몇 배 더 나왔나"를 빌려옵니다. 표본이 2건 이상 나오는 첫 단계를 씁니다.<br>
-                  &nbsp;&nbsp;&nbsp;&nbsp;1순위 — 대회유형이 같고 대진도 같은 프로그램들 · 2순위 — 대국자가 한 명이라도 겹치는 프로그램들 · 3순위 — 대회유형이 같은 프로그램들<br>
-                  &nbsp;&nbsp;&nbsp;&nbsp;4순위 — 위 단계에 참고할 프로그램이 없으면 궁합은 "보통(±0%)"으로 가정하고 체급만으로 점수를 매깁니다.<br>
-                  5. <b>더하고 빼는 점수:</b> 최근 1주 안에 방영한 회차 −30점, 2주 안 −15점 · 최근 7일 안에 생방·본방으로 나간 세계기전(그 뒤 재방 2회 미만) +25점 · 편성 AI에서 선호 장르 +20점 / 제외 장르 −40점 / 선호 키워드 +15점<br>
-                  6. <b>화면 구성:</b> 실측 후보(상위 5개)를 먼저, 그 아래에 추정 근거별로 상위 3개씩 보여줍니다. 카드의 "예상 시청률"은 기준선 × 체급 × 궁합입니다. 참고로 삼은 다른 프로그램들은 계산에만 쓰이고 추천 목록에는 오르지 않습니다.<br>
-                  7. 이미 이번 주 편성표에 쓰인 프로그램은 빠지지 않고 순위만 맨 아래로 내려갑니다.<br>
-                  8. <b>"자동으로 빈 슬롯 채우기"</b>는 <b>이 자리 기준선이 높은 빈 구간(프라임 시간대)부터</b> 채웁니다. 긴 빈 구간은 그 안에서 가장 좋은 시간부터 채우고, 남은 앞뒤 조각을 이어서 채웁니다.<br>
-                  &nbsp;&nbsp;· 칸 크기(300·240·210·180·150·120·90·60·30분)마다 1등 후보를 뽑아 점수로 비교하고, 큰 칸은 30분당 +1점 우대합니다(편성표가 잘게 쪼개지지 않게).<br>
-                  &nbsp;&nbsp;· 후보는 "평균 방영길이 + 전환 여유시간 30분"이 그 칸 크기 이하이고 한 단계 작은 칸보다는 커야 하며, 배치되면 그 칸 전체를 차지합니다. (방송법 시행령상 프로그램 간 토막광고는 매시간 2회·매회 90초 이내라, 여유 있게 30분으로 설정)<br>
-                  &nbsp;&nbsp;· 이번 주에 이미 쓴 회차와 "지난주와 중복 방지"에서 고른 주의 회차는 아예 제외하고, 바로 앞뒤 고정 프로그램과 대회유형 궁합이 좋으면 최대 ±15점을 조정합니다.
+                  <b>묻는 질문: "이 칸에 어떤 프로그램을 넣어야 시청률이 가장 좋을까?"</b> — 후보마다 이 칸에 넣었을 때의 <b>예상 시청률</b>을 계산해 높은 순으로 보여줍니다.<br>
+                  <b>예상 시청률 = 이 칸 평소 시청률 × 이 회차가 평소 잘 나오는 정도 × 이 시간대 궁합</b><br><br>
+                  1. <b>후보:</b> 바둑TV에서 2회 이상 방영된 모든 "회차"(같은 프로그램이라도 대진·라운드가 다르면 별개)입니다. 칸 길이에 맞는 평균 방영 길이의 회차만 남깁니다 — 60분 칸: 30~60분 · 90분: 60~90분 · 120분: 90~100분 · 150분: 100~120분 · 180분 이상: "칸 길이 − 30분(토막광고·전환 여유)" 이하이면서 한 단계 작은 칸 기준보다 긴 것 (예: 180분 120~150분, 240분 180~210분, 300분 210~270분). 짧은 프로그램이 긴 칸을 차지하지 않도록 하한을 둡니다(자동채우기도 같은 기준).<br>
+                  2. <b>이 칸 평소 시청률:</b> 평일/주말 × 시간대별로, 과거에 재방을 틀었을 때의 평균 시청률입니다. (요일별로 나누면 표본이 너무 적어 평일끼리·주말끼리 묶어서 봅니다.)<br>
+                  3. <b>이 회차가 평소 잘 나오는 정도 (모든 시간대 기록):</b> 방영될 때마다 "그 칸 평소의 몇 배였나"를 구해 평균냅니다. 프라임에 자주 나가서 높았던 건지, 회차 자체가 강한 건지를 구분해줍니다.<br>
+                  4. <b>이 시간대 궁합 (이 칸과 같은 시간대 기록만):</b> 이 시간대에서 평소보다 더 잘 나오는지 봅니다. 이 회차 → 같은 프로그램 → 비슷한 프로그램들(같은 대진 → 같은 선수 → 같은 대회유형) 순서로 기록을 찾고, 모두 부족하면 "평소만큼"으로 가정합니다.<br>
+                  5. <b>튀는 시청률 보완:</b> 모든 단계에서 <b>최댓값·최솟값을 빼고 평균</b>을 냅니다. 회차 기록이 3건 미만이면 <b>프로그램 전체 기록</b>으로 대신하고, 시간대 기록은 원래 적어서 튀기 쉬우므로 <b>5건 이상</b>일 때만 씁니다. 카드에 근거(기록 몇 건 기준인지)가 표시되고, 회차 기록이 부족한 후보에는 <b>"근거 적음 — 테스트 편성 성격"</b>이 붙습니다.<br>
+                  6. <b>순위 조정:</b> 최근 1주 안에 방영한 회차는 많이, 2주 안은 조금 순위를 낮추고, 최근 7일 안에 생방·본방으로 나간 세계기전(그 뒤 재방 2회 미만)과 편성 AI 선호 장르·키워드는 순위를 올립니다. 이 조정은 순위에만 반영되고 예상 시청률 숫자에는 들어가지 않습니다.<br>
+                  7. <b>화면 구성:</b> 이 시간대에 재방된 적 있는 후보(상위 5개)를 먼저, 그 아래에 추정 근거별로 상위 3개씩 보여줍니다. 이미 이번 주 편성표에 쓰인 프로그램은 빠지지 않고 순위만 맨 아래로 내려갑니다.<br>
+                  8. <b>"자동으로 빈 슬롯 채우기"</b>는 <b>평소 시청률이 높은 빈 구간(프라임 시간대)부터</b> 채웁니다. 긴 빈 구간은 그 안에서 가장 좋은 시간부터 채우고, 남은 앞뒤 조각을 이어서 채웁니다.<br>
+                  &nbsp;&nbsp;· <b>긴 프로그램 우선</b>(짧은 프로그램을 여러 개 붙이면 시청 흐름이 끊기므로): 300·240·210·180·150·120·90·60·30분 순으로 보다가, 1등 후보가 <b>이 칸 평소 시청률 이상</b>일 것으로 예상되는 가장 큰 칸을 고릅니다. 어느 크기에도 그런 후보가 없을 때만 예상이 가장 좋은 크기를 고릅니다.<br>
+                  &nbsp;&nbsp;· 후보 길이는 위 1번의 칸 길이별 기준을 그대로 쓰고, 배치되면 그 칸 전체를 차지합니다. (방송법 시행령상 프로그램 간 토막광고는 매시간 2회·매회 90초 이내라, 180분 이상 칸은 여유 있게 30분을 뺀 길이를 상한으로 설정)<br>
+                  &nbsp;&nbsp;· 이번 주에 이미 쓴 회차와 "지난주와 중복 방지"에서 고른 주의 회차는 아예 제외하고, 바로 앞뒤 고정 프로그램과 대회유형 궁합이 좋으면 순위를 조금 조정합니다.
                 </div>
               </details>
               <div style="overflow-x:auto; max-height:720px; overflow-y:auto;">
@@ -4341,7 +4337,7 @@ function renderWeeklyGrid(){
         const inPreview = isInDragPreview(day, slot.idx);
         const chosenBg = chosen.type==='재방' ? '#e5e5ea' : chosen.type==='본방' ? '#FFFF00' : chosen.type==='생방' ? '#C6EFCE' : 'var(--accent-light)';
         const chosenColor = chosen.type ? 'var(--btn-dark)' : 'var(--accent)';
-        const chosenTitle = escapeHtml(`${chosen.name}${chosen.repPlayers ? ' · '+chosen.repPlayers : ''} (추천 · ${chosen.score}점)${chosen.type?' · '+chosen.type:''}`);
+        const chosenTitle = escapeHtml(`${chosen.name}${chosen.repPlayers ? ' · '+chosen.repPlayers : ''} (추천 · ${chosen.avgRating!=null ? '예상 '+Number(chosen.avgRating).toFixed(3)+'%' : chosen.score+'점'})${chosen.type?' · '+chosen.type:''}`);
         html += `<div onmousedown="onCellMouseDown(event,'${day}', ${slot.idx})" onmouseover="onCellMouseOver('${day}', ${slot.idx})" ondragover="event.preventDefault()" ondrop="onCellDrop(event,'${day}', ${slot.idx})" style="height:18px; border-radius:${isStart?'6px 6px 0 0':'0'}; background:${inPreview?'#b8ddfc':chosenBg}; color:${chosenColor}; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; cursor:pointer; position:relative; padding:0 3px; overflow:hidden;" title="${chosenTitle} — 드래그해서 범위 다시 선택 가능">
           ${isStart ? `<span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(chosen.name)}${chosen.repPlayers ? ' · '+escapeHtml(chosen.repPlayers) : ''}</span><span onclick="event.stopPropagation(); removeRecommendedBlock(${chosen.id})" style="position:absolute; top:0; right:2px; cursor:pointer; opacity:0.5; font-size:9px;">✕</span>` : ''}
         </div>`;
@@ -4553,7 +4549,7 @@ function getHistoryIndex(all){
   __wsHistIndexCache.set(all, api);
   return api;
 }
-function wsFastMatch(history, targetDow, hour, all, typeFilter){
+function wsFastMatch(history, targetDow, hour, all, typeFilter, opts = {}){
   if (history.length === 0) return { score: 50, basis: 'none', n: 0, peak: null };
   const H = getHistoryIndex(all);
   const isWeekendDow = (d) => d === 0 || d === 6;
@@ -4569,7 +4565,7 @@ function wsFastMatch(history, targetDow, hour, all, typeFilter){
 
   // 1) 실측
   const exact = history.filter(h => matchDow(h.dow) && h.hour === hour);
-  if (exact.length > 0) {
+  if (exact.length > 0 && !opts.skipExact) {
     const avgRating = trimmedMean(exact.map(h=>h.rating));
     return { score: toScore(avgRating), basis: 'actual', basisN: exact.length, avgRating, ...common };
   }
@@ -4589,17 +4585,17 @@ function wsFastMatch(history, targetDow, hour, all, typeFilter){
   if (repGenreNorm && repPlayers) {
     const tier1 = H.byGenrePlayers.get(repGenreNorm + '\u0001' + repPlayers) || [];
     const m = preferType(atSlot(tier1));
-    if (m.length >= 2) { pool = m; poolAll = tier1; basis = 'similar_genre_players'; }
+    if (m.length >= (opts.minPool || 2)) { pool = m; poolAll = tier1; basis = 'similar_genre_players'; }
   }
   if (pool.length === 0 && repNames.length > 0) {
     const tier2 = H.byAnyName(repNames);
     const m = preferType(atSlot(tier2));
-    if (m.length >= 2) { pool = m; poolAll = tier2; basis = 'similar_players'; }
+    if (m.length >= (opts.minPool || 2)) { pool = m; poolAll = tier2; basis = 'similar_players'; }
   }
   if (pool.length === 0 && repGenreNorm) {
     const tier3 = H.byGenre.get(repGenreNorm) || [];
     const m = preferType(atSlot(tier3));
-    if (m.length >= 2) { pool = m; poolAll = tier3; basis = 'similar_genre'; }
+    if (m.length >= (opts.minPool || 2)) { pool = m; poolAll = tier3; basis = 'similar_genre'; }
   }
   if (pool.length === 0 && peak > 0) {
     const lo = peak * 0.7, hi = peak * 1.3;
@@ -4611,6 +4607,34 @@ function wsFastMatch(history, targetDow, hour, all, typeFilter){
   if (pool.length === 0) return { score: 50, basis: 'none', basisN: 0, ...common };
   const avgRating = trimmedMean(pool.map(h=>h.rating));
   return { score: toScore(avgRating), basis, basisN: pool.length, avgRating, poolAtSlot: pool, poolAll, ...common };
+}
+
+const WS_MIN_N_ALL = 3;  // 회차 전체 기록: 3건 이상이면 최대·최소 빼고 평균, 미만이면 프로그램 전체 기록으로
+const WS_MIN_N_SLOT = 5; // 이 시간대 기록: 5건 이상일 때만 사용(최대·최소 빼고 3건 이상 남도록)
+// 3건 이상이면 최대·최소를 빼고 평균(가운데 값만 남김) — 공용 trimmedMean(5건 이상에서만 제외)과 별도로 추천 탭 전용
+function trim3Mean(nums){
+  if (nums.length < 3) return nums.reduce((a,b)=>a+b,0) / nums.length;
+  const s = [...nums].sort((a,b)=>a-b).slice(1, -1);
+  return s.reduce((a,b)=>a+b,0) / s.length;
+}
+const __wsTrimIndexCache = new WeakMap();
+function wsTrimIndex(items, bl){
+  if (!items || !items.length) return null;
+  const c = __wsTrimIndexCache.get(items);
+  if (c && c.bl === bl) return c.v;
+  const xs = items.map(bl.indexOf).filter(v => v != null && isFinite(v));
+  const v = xs.length ? trim3Mean(xs) : null;
+  __wsTrimIndexCache.set(items, { bl, v });
+  return v;
+}
+// 같은 프로그램 전체 이력 — 회차 기록이 부족할 때 체급·궁합을 프로그램 기준으로 보기 위함
+const __wsProgramItemsCache = new WeakMap();
+function getProgramItems(all){
+  if (__wsProgramItemsCache.has(all)) return __wsProgramItemsCache.get(all);
+  const m = new Map();
+  all.forEach(p => { let a = m.get(p.program_id); if (!a) { a = []; m.set(p.program_id, a); } a.push(p); });
+  __wsProgramItemsCache.set(all, m);
+  return m;
 }
 
 // 회차 묶기는 슬롯과 무관하므로 데이터 묶음(all)마다 한 번만 계산해서 재사용
@@ -4668,9 +4692,22 @@ function groupHistoryByEpisode(all){
 const __wsRawCandCache = new WeakMap();
 const __wsFilteredCache = new WeakMap();
 
+// 칸 길이(분) → 추천할 평균 방영 길이 범위 {lo 초과, hi 이하} — 사용자 지정 기준(2026-11-11)
+//   30분 칸: 30분 이하 / 60분: 30~60 / 90분: 60~90 / 120분: 90~100 / 150분: 100~120
+//   180분 이상: "칸 길이 − 30분(토막광고·전환 여유)" 이하이면서, 한 단계 작은 표준 칸의 상한보다는 긴 것
+//   (예: 180분 120~150, 210분 150~180, 240분 180~210, 300분 210~270 — 270분 표준 칸이 없어 300분이 211~270을 맡음)
+const WS_DURATION_TABLE = { 30: [0, 30], 60: [30, 60], 90: [60, 90], 120: [90, 100], 150: [100, 120] };
+const WS_STD_SIZES = [30, 60, 90, 120, 150, 180, 210, 240, 300];
+function wsDurationRange(targetMin){
+  const t = WS_DURATION_TABLE[targetMin];
+  if (t) return { lo: t[0], hi: t[1] };
+  const smaller = WS_STD_SIZES.filter(s => s < targetMin).pop();
+  return { lo: smaller ? wsDurationRange(smaller).hi : 0, hi: targetMin - 30 };
+}
+
 // 공용 후보 계산 함수 — 주간편성안 추천(수동 클릭)과 자동편성 테스트(자동채우기)가 같이 씀
 function computeRecommendationCandidates(day, startIdx, endIdx, all, usedSet, opts = {}){
-  const { usedCheckField = 'program_id', hardExclude = false, durationBufferMin = 0, durationMinThreshold = 0 } = opts;
+  const { usedCheckField = 'program_id', hardExclude = false } = opts;
   // 편성 AI가 설정한 점수 계산 데이터 범위 필터(없으면 영향 없음) — 같은 필터면 걸러낸 결과를 재사용
   const sf = window.__scoringFilter;
   if (sf) {
@@ -4704,12 +4741,9 @@ function computeRecommendationCandidates(day, startIdx, endIdx, all, usedSet, op
   if (!raw) { raw = scoreEpisodesForSlot(day, slot, all); rawMap.set(rawKey, raw); }
   const { withType, withoutType } = raw;
 
-  // 버킷 표 대신 단순 공식: (실제 평균 방영길이 + 여유시간)이 목표 슬롯 길이 이내이면서, durationMinThreshold(이전 버킷 크기)보다는 커야 함
-  // 이게 없으면 60분짜리 프로그램이 300분 빈칸에서도 통과돼서 300분 전체를 잘못 차지해버리는 문제가 생김
-  const applyDurationFilter = (arr) => arr.filter(r => {
-    const effectiveLen = r.avgDurationMin + durationBufferMin;
-    return effectiveLen <= targetDurationMin && effectiveLen > durationMinThreshold;
-  });
+  // 칸 길이별 평균 방영 길이 기준(클릭 추천·자동채우기 공통) — 짧은 프로그램이 긴 칸을 차지하지 않도록 하한도 둠
+  const durRange = wsDurationRange(targetDurationMin);
+  const applyDurationFilter = (arr) => arr.filter(r => r.avgDurationMin > durRange.lo && r.avgDurationMin <= durRange.hi);
   // 연도(기수) 무시 + 대국자 표기를 지금 기준으로 재정규화해서 비교하는 "느슨한" 매칭용.
   // AF(기수) 백필 전/후로 연도 표기("2026"→"제9기")뿐 아니라 대국자 표기 형식 자체가 달라진 옛 템플릿(예: "신진서vs판팅위, 박정환vs자오천위")도
   // 지금 형식("박정환_vs_자오천위, 신진서_vs_판팅위")과 같은 회차로 인식하게 함 — 안 그러면 "지난주 방지"가 안 먹힘
@@ -4752,20 +4786,37 @@ function scoreEpisodesForSlot(day, slot, all){
   const atThisSlot = (x) => isWe(x.dow) === isWe(targetDow) && x.hour === slot.hour;
   const slotBaseline = bl.rerunAt(targetDow, slot.hour);
 
-  // 체급 × 궁합 계산. items = computeMatchScore에 넘긴 이력(재방 2건 이상이면 재방만, 아니면 전체)
-  function scoreV2(r, items){
-    const baseIndex = wsMeanIndex(items, bl); // 체급
-    if (baseIndex == null) return null;
-    let fit = 1, fitKnown = false;            // 궁합
-    if (r.basis === 'actual') {
-      const slotIndex = wsMeanIndex(items.filter(atThisSlot), bl);
-      if (slotIndex != null && baseIndex > 0) { fit = slotIndex / baseIndex; fitKnown = true; }
-    } else if (r.basis !== 'similar_rt' && r.poolAtSlot && r.poolAll) {
-      const atSlotIdx = wsMeanIndex(r.poolAtSlot, bl), usualIdx = wsMeanIndex(r.poolAll, bl);
-      if (atSlotIdx != null && usualIdx > 0) { fit = atSlotIdx / usualIdx; fitKnown = true; }
+  // 예상 시청률 = 이 칸 평소 시청률 × ② 회차가 평소 잘 나오는 정도 × ③ 이 시간대 궁합 (2026-11-11 v3)
+  // 튀는 시청률 보완: 단계마다 "최대·최소 빼고 평균", 기록이 모자라면 범위를 넓힘(회차 → 프로그램 전체 → 비슷한 프로그램들 → 보통)
+  // items = 이 회차 이력(재방 2건 이상이면 재방만, 아니면 전체)
+  const progItemsOf = (pid) => getProgramItems(all).get(pid) || [];
+  function scoreV2(r, items, g){
+    // ── ② 회차가 평소 잘 나오는 정도 (모든 시간대 기록) ── 3건 이상이면 최대·최소 빼고 평균, 아니면 프로그램 전체
+    let baseIndex = 1, baseSource = 'none', baseN = 0;
+    const progItems = progItemsOf(g.program_id);
+    if (items.length >= WS_MIN_N_ALL) { baseIndex = wsTrimIndex(items, bl); baseSource = 'episode'; baseN = items.length; }
+    else if (progItems.length >= WS_MIN_N_ALL) { baseIndex = wsTrimIndex(progItems, bl); baseSource = 'program'; baseN = progItems.length; }
+    if (baseIndex == null) { baseIndex = 1; baseSource = 'none'; baseN = 0; }
+    // ── ③ 이 시간대 궁합 (이 칸과 같은 시간대 기록만) ── 기록이 적어 튀기 쉬우므로 5건 이상일 때만 사용
+    let fit = 1, fitKnown = false, fitSource = 'none', fitN = 0;
+    const epSlot = items.filter(atThisSlot);
+    const progSlot = progItems.filter(atThisSlot);
+    if (epSlot.length >= WS_MIN_N_SLOT && baseSource === 'episode' && baseIndex > 0) {
+      fit = wsTrimIndex(epSlot, bl) / baseIndex; fitKnown = true; fitSource = 'episode'; fitN = epSlot.length;
+    } else if (progSlot.length >= WS_MIN_N_SLOT) {
+      const pAll = wsTrimIndex(progItems, bl);
+      if (pAll > 0) { fit = wsTrimIndex(progSlot, bl) / pAll; fitKnown = true; fitSource = 'program'; fitN = progSlot.length; }
+    }
+    if (!fitKnown) {
+      // 비슷한 프로그램들(같은 대진 → 같은 선수 → 같은 대회유형)의 이 시간대 기록 — 여기도 5건 이상인 단계만 사용
+      const est = wsFastMatch(items, targetDow, slot.hour, all, WS_REC_TYPE, { skipExact: true, minPool: WS_MIN_N_SLOT });
+      if (est.basis !== 'similar_rt' && est.poolAtSlot && est.poolAll) {
+        const atSlotIdx = wsTrimIndex(est.poolAtSlot, bl), usualIdx = wsTrimIndex(est.poolAll, bl);
+        if (atSlotIdx != null && usualIdx > 0) { fit = atSlotIdx / usualIdx; fitKnown = true; fitSource = est.basis; fitN = est.poolAtSlot.length; }
+      }
     }
     return {
-      baseIndex, fit, fitKnown, slotBaseline,
+      baseIndex, fit, fitKnown, slotBaseline, baseSource, baseN, fitSource, fitN,
       expectedRating: slotBaseline ? baseIndex * fit * slotBaseline : null,
       raw: 100 * baseIndex * fit,
     };
@@ -4818,6 +4869,8 @@ function scoreEpisodesForSlot(day, slot, all){
       avgRating: v ? v.expectedRating : rLite.avgRating, // 이 자리에 넣었을 때 예상 시청률
       baseIndex: v ? v.baseIndex : null, fit: v ? v.fit : null, fitKnown: v ? v.fitKnown : false,
       slotBaseline: v ? v.slotBaseline : null,
+      baseSource: v ? v.baseSource : 'none', baseN: v ? v.baseN : 0, fitSource: v ? v.fitSource : 'none', fitN: v ? v.fitN : 0,
+      penalty, boost, // 순위 조정 사유를 카드에 쉬운 말로 보여주기 위함
       score, repPlayers, ...(extra || {}),
     };
   }
@@ -4833,7 +4886,7 @@ function scoreEpisodesForSlot(day, slot, all){
     if (typeItems.length >= 2) {
       const r = wsFastMatch(typeItems, targetDow, slot.hour, all, WS_REC_TYPE);
       const avgDurationMin = typeItems.reduce((a,x)=>a+(x._absEnd-x._absStart),0)/typeItems.length;
-      const item = makeItem(g, key, r, scoreV2(r, typeItems), penalty, boost, avgDurationMin);
+      const item = makeItem(g, key, r, scoreV2(r, typeItems, g), penalty, boost, avgDurationMin);
       if (r.basis === 'actual') withType.push(item); else withoutType.push(item);
     } else if (timely) {
       // 시의성 회차(최근 세계기전 생방/본방, 최근 재방 2회 미만): 기록이 몇 건이든 우선 후보(withType)에 넣음
@@ -4842,11 +4895,11 @@ function scoreEpisodesForSlot(day, slot, all){
       const liveDur = g.items.reduce((a,x)=>a+(x._absEnd-x._absStart),0)/g.items.length;
       const avgDurationMin = durs.length ? durs[Math.floor(durs.length/2)] : liveDur; // 같은 프로그램 재방 길이(중앙값), 없으면 방영 길이
       const r = wsFastMatch(g.items, targetDow, slot.hour, all, WS_REC_TYPE);
-      withType.push(makeItem(g, key, r, scoreV2(r, g.items), penalty, boost, avgDurationMin, { timely: true }));
+      withType.push(makeItem(g, key, r, scoreV2(r, g.items, g), penalty, boost, avgDurationMin, { timely: true }));
     } else if (g.items.length >= 2) {
       const r = wsFastMatch(g.items, targetDow, slot.hour, all, WS_REC_TYPE);
       const avgDurationMin = g.items.reduce((a,x)=>a+(x._absEnd-x._absStart),0)/g.items.length;
-      withoutType.push(makeItem(g, key, r, scoreV2(r, g.items), penalty, boost, avgDurationMin));
+      withoutType.push(makeItem(g, key, r, scoreV2(r, g.items, g), penalty, boost, avgDurationMin));
     }
   });
   return { withType, withoutType };
@@ -4951,7 +5004,8 @@ async function loadCellRecommendations(day, startIdx, endIdx){
   title.textContent = `${day} ${rangeLabel} (${targetDurationMin}분)`;
   const durationRuleLabel = document.getElementById('ws-duration-rule-label');
   if (durationRuleLabel) {
-    durationRuleLabel.textContent = `적용 기준: 선택한 슬롯 길이(${targetDurMin}분) 이하인 프로그램만 추천 (여유시간 없이 엄격 적용)`;
+    const dr = wsDurationRange(targetDurMin);
+    durationRuleLabel.textContent = `적용 기준: ${targetDurMin}분 칸 → 평균 방영 ${dr.lo > 0 ? dr.lo + '분 초과 ~ ' : ''}${dr.hi}분 이하 프로그램만 추천 (자동채우기와 같은 기준)`;
   }
 
   // 카드형 렌더링 — 줄바꿈이 안전하게 되도록 chip-btn 대신 블록 레이아웃 사용 (텍스트 넘침 버그 수정)
@@ -4962,23 +5016,39 @@ async function loadCellRecommendations(day, startIdx, endIdx){
       program_id: c.program_id, repPlayers: c.repPlayers || null, avgRating: c.avgRating,
       episodeKey: c.episodeKey || null, // 직접 고른 회차도 자동채우기·다음 주 중복 방지에서 인식되도록 같이 저장
     }).replace(/'/g,"&apos;");
-    // "+30%" / "-5%" 형식 — 1.0(보통)을 기준으로 얼마나 높고 낮은지
-    const pctTxt = (v) => { const d = Math.round((v - 1) * 100); return (d >= 0 ? '+' : '') + d + '%'; };
-    const baseTxt = c.baseIndex != null ? `체급 ${pctTxt(c.baseIndex)}` : '체급 정보 없음';
-    const fitTxt = c.fitKnown ? `이 시간대 궁합 ${pctTxt(c.fit)}` : '이 시간대 궁합 보통으로 가정';
+    // 예상 시청률 중심 표시 — "이 칸에 무엇을 넣어야 시청률이 가장 좋을까"에 바로 답하도록
+    const vsBase = (c.avgRating != null && c.slotBaseline) ? Math.round((c.avgRating / c.slotBaseline - 1) * 100) : null;
+    const vsTxt = vsBase == null ? '' : `이 칸 평소 ${c.slotBaseline.toFixed(3)}%보다 ${vsBase >= 0 ? '+' : ''}${vsBase}%`;
+    // 근거(쉬운 말): 회차가 평소 잘 나오는 정도 / 이 시간대 기록
+    const baseWhy = c.baseSource === 'episode' ? `회차 기록 ${c.baseN}건`
+      : c.baseSource === 'program' ? `회차 기록 부족 → 프로그램 전체 ${c.baseN}건 기준`
+      : '기록 부족 → 평소 수준으로 가정';
+    const FIT_SRC = { episode: '이 회차', program: '같은 프로그램', similar_genre_players: '같은 대진 프로그램들', similar_players: '같은 선수 프로그램들', similar_genre: '같은 대회유형 프로그램들' };
+    const fitWhy = c.fitKnown ? `이 시간대 기록: ${FIT_SRC[c.fitSource] || '비슷한 프로그램들'} ${c.fitN}건` : '이 시간대 기록 부족 → 평소만큼 가정';
+    // 순위 조정 사유(예상 시청률에는 안 들어가고 순위에만 반영)
+    const themePart = (c.boost || 0) - (c.timely ? 25 : 0);
+    const adj = [];
+    if (c.penalty >= 30) adj.push('최근 1주 안에 방영 → 순위 낮춤');
+    else if (c.penalty > 0) adj.push('최근 2주 안에 방영 → 순위 낮춤');
+    if (c.timely) adj.push('최근 세계기전 → 순위 올림');
+    if (themePart > 0) adj.push('편성 AI 선호 반영 → 순위 올림');
+    if (themePart < 0) adj.push('편성 AI 제외 장르 → 순위 낮춤');
+    const lowEvidence = c.baseSource !== 'episode';
     return `
       <button onclick='chooseRecommendation(${payload})' style="display:block; width:100%; text-align:left; padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:${used?'var(--bg-subtle)':'var(--bg-card)'}; margin-bottom:6px; cursor:pointer; font-family:inherit;">
         <div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">
           <span style="font-weight:700; font-size:13px; word-break:break-all;">${c.name}</span>
-          <span style="font-weight:700; font-size:13px; color:var(--accent); white-space:nowrap;">${c.score}점</span>
+          <span style="font-weight:700; font-size:13px; color:var(--accent); white-space:nowrap;">예상 ${c.avgRating!=null ? c.avgRating.toFixed(3)+'%' : '-'}</span>
         </div>
         ${c.repPlayers ? `<div style="font-size:11px; color:var(--text-secondary); margin-top:3px;">대진: ${c.repPlayers}</div>` : ''}
         <div style="font-size:12px; color:var(--text-secondary); margin-top:3px; line-height:1.5;">
-          ${baseTxt} · ${fitTxt} · ${BASIS_LABEL[c.basis]}
+          ${vsTxt}${vsTxt ? ' · ' : ''}평균 방영 ${Math.round(c.avgDurationMin)}분
         </div>
-        <div style="font-size:12px; color:var(--text-tertiary); margin-top:2px; line-height:1.5;">
-          예상 시청률 ${c.avgRating!=null ? c.avgRating.toFixed(3)+'%' : '-'}${c.slotBaseline!=null ? ` (이 자리 평소 ${c.slotBaseline.toFixed(3)}%)` : ''} · 평균 방영 ${Math.round(c.avgDurationMin)}분
+        <div style="font-size:11px; color:var(--text-tertiary); margin-top:2px; line-height:1.5;">
+          근거: ${baseWhy} · ${fitWhy}
         </div>
+        ${adj.length ? `<div style="font-size:11px; color:var(--text-tertiary); margin-top:2px;">${adj.join(' · ')}</div>` : ''}
+        ${lowEvidence ? `<div style="font-size:10px; color:#ff9500; margin-top:3px; font-weight:600;">근거 적음 — 테스트 편성 성격</div>` : ''}
         ${used ? `<div style="font-size:10px; color:#ff9500; margin-top:3px; font-weight:600;">이미 이번 주 편성표에 사용됨</div>` : ''}
       </button>`;
   };
@@ -4986,14 +5056,20 @@ async function loadCellRecommendations(day, startIdx, endIdx){
   const sectionDivider = `<div style="border-top:1px solid var(--border); margin:14px 0;"></div>`;
 
   let html = '';
-  html += `<div style="font-size:13px; font-weight:700; margin-bottom:8px;">실측 데이터 후보</div>`;
+  if (!topWithType.length && !basisGroups.length) {
+    // 길이 기준에 맞는 후보가 하나도 없을 때 — 칸 길이를 바꿔보도록 안내
+    const dr = wsDurationRange(targetDurMin);
+    html += `<div style="padding:10px 12px; border-radius:10px; background:var(--bg-subtle); font-size:12px; color:var(--text-secondary); line-height:1.6; margin-bottom:10px;">이 길이(${targetDurMin}분 칸 → 평균 방영 ${dr.lo > 0 ? dr.lo + '분 초과 ~ ' : ''}${dr.hi}분)에 맞는 후보가 없어요. 칸을 줄이거나 늘려서 다시 선택해 보세요.</div>`;
+  }
+  html += `<div style="font-size:13px; font-weight:700; margin-bottom:2px;">이 시간대에 재방된 적 있는 후보</div>`;
+  html += `<div style="font-size:12px; color:var(--text-tertiary); margin-bottom:8px;">예상 시청률이 높은 순(최근 방영 등 순위 조정 반영)입니다.</div>`;
   html += topWithType.length
     ? topWithType.map(renderCandidateCard).join('')
-    : `<div style="color:var(--text-tertiary); font-size:12px;">실측 데이터 기반 후보가 없습니다.</div>`;
+    : `<div style="color:var(--text-tertiary); font-size:12px;">이 시간대에 재방된 적 있는 후보가 없습니다.</div>`;
 
   html += sectionDivider;
   html += `<div style="font-size:13px; font-weight:700; margin-bottom:2px;">추정 후보</div>`;
-  html += `<div style="font-size:12px; color:var(--text-tertiary); margin-bottom:8px;">재방 실측 데이터가 없어, 유사 조건으로 추정한 결과입니다.</div>`;
+  html += `<div style="font-size:12px; color:var(--text-tertiary); margin-bottom:8px;">이 시간대 재방 기록이 없어, 비슷한 조건의 프로그램들을 참고해 추정한 결과입니다.</div>`;
   if (basisGroups.length === 0) {
     html += `<div style="color:var(--text-tertiary); font-size:12px;">추정 후보가 없습니다.</div>`;
   } else {
@@ -5160,7 +5236,8 @@ async function computeAutoFillBlocks(fixedList, preExcludedEpisodeKeys, alreadyO
   //       긴 빈 구간은 그 안에서 가장 좋은 시간(앵커)부터 채우고, 남은 앞뒤 조각을 다시 대기열에 넣음
   const bl = getSlotBaselines(all);
   const slotValue = (day, idx) => bl.rerunAt(DOW_INDEX[day[0]], WS_SLOTS[idx].hour) || 0;
-  const SIZE_BONUS_PER_30MIN = 1; // 큰 칸 소폭 우대(300분 +10점, 150분 +5점) — 편성표가 잘게 쪼개지지 않게
+  const LONG_BLOCK_MIN_SCORE = 100; // 이 점수 이상이면 가장 큰 칸 확정(100점 = 이 자리 평소 수준)
+  const SIZE_BONUS_PER_30MIN = 1;   // 100점 이상 후보가 없을 때 크기끼리 비교하면서 큰 칸 소폭 우대(300분 +10점)
   const makeGap = (day, start, end) => {
     let anchor = start, best = -1;
     for (let i = start; i < end; i++) { const v = slotValue(day, i); if (v > best) { best = v; anchor = i; } }
@@ -5195,24 +5272,26 @@ async function computeAutoFillBlocks(fixedList, preExcludedEpisodeKeys, alreadyO
       if (lo > hi) continue;
       const startIdx = (gap.start >= lo && gap.start <= hi) ? gap.start : ((gap.end - n >= lo && gap.end - n <= hi) ? gap.end - n : anchor);
       const endIdx = startIdx + n - 1;
-      // 이 RT보다 한 단계 작은 버킷 크기(배열상 다음 원소, AUTOFILL_RT_ORDER가 큰 순이므로) — 그보다는 커야 이 버킷에 맞는 크기
-      const nextSmallerRt = AUTOFILL_RT_ORDER[AUTOFILL_RT_ORDER.indexOf(rt) + 1] || 0;
-      const { topWithType, basisGroups } = computeRecommendationCandidates(day, startIdx, endIdx, all, usedInThisRun, { usedCheckField: 'episodeKey', hardExclude: true, durationBufferMin: 30, durationMinThreshold: nextSmallerRt });
+      // 길이 기준은 클릭 추천과 같은 wsDurationRange(칸 크기별 평균 방영 길이 범위)를 그대로 사용
+      const { topWithType, basisGroups } = computeRecommendationCandidates(day, startIdx, endIdx, all, usedInThisRun, { usedCheckField: 'episodeKey', hardExclude: true });
       if (!topWithType.length && !basisGroups.length) continue;
       const liftMap = await getAdjacencyLiftMap(day, startIdx, endIdx);
       // 같은 크기 안에서는 기존처럼 실측 후보 우선 → 없으면 추정 1순위부터
       let best = applyAdjacencyBoost(topWithType, liftMap)[0] || null;
       if (!best) { for (const g of basisGroups) { if (g.items.length > 0) { best = applyAdjacencyBoost(g.items, liftMap)[0]; break; } } }
       if (!best) continue;
-      // 크기끼리는 점수(+앞뒤 궁합 조정 +큰 칸 소폭 우대)로 비교
-      const rank = (best.adjustedScore ?? best.score) + SIZE_BONUS_PER_30MIN * n;
+      // 긴 프로그램 우선(짧은 프로그램을 여러 개 붙이면 시청 흐름이 끊기므로) —
+      // 큰 칸부터 보다가 1등 후보가 "이 자리 평소 수준(100점)" 이상이면 바로 그 크기로 확정.
+      // 어느 크기에도 100점 이상이 없을 때만 크기끼리 점수(+큰 칸 소폭 우대)로 비교해서 고름.
+      const s0 = best.adjustedScore ?? best.score;
+      if (s0 >= LONG_BLOCK_MIN_SCORE) { pick = { rank: Infinity, best, startIdx, endIdx, n }; break; }
+      const rank = s0 + SIZE_BONUS_PER_30MIN * n;
       if (!pick || rank > pick.rank) pick = { rank, best, startIdx, endIdx, n };
     }
 
     if (pick) {
       const { best, startIdx, endIdx } = pick;
-      // durationBufferMin:30으로 이미 "실제길이+30분 <= 이 RT버킷" 검증을 통과한 후보이므로,
-      // RT버킷 크기 그대로 자리를 차지시킴 (버킷 자체가 길이별 여유폭을 담고 있어 이게 더 안정적)
+      // 이미 칸 크기별 길이 범위(wsDurationRange) 검증을 통과한 후보이므로 칸 크기 그대로 자리를 차지시킴
       results.push({
         day, startIdx, endIdx: endIdx + 1,
         name: best.name, score: best.score, basis: best.basis, type: WS_REC_TYPE,
