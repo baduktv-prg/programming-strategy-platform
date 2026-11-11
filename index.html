@@ -331,6 +331,16 @@
   }
 
   /* Bento KPI Components */
+  /* 주간 편성안 추천 상단 버튼 묶음 */
+  .ws-toolbar { flex-wrap:wrap; align-items:stretch; gap:8px; }
+  .ws-group { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:6px 10px; border:1px solid var(--border); border-radius:12px; background:var(--bg-card); }
+  .ws-group-label { font-size:11px; font-weight:700; color:var(--text-secondary); margin-right:2px; }
+  .ws-group-sub { font-size:12px; color:var(--text-secondary); }
+  .ws-group-hint { font-size:11px; color:var(--text-tertiary); }
+  .ws-group-end { margin-left:auto; border:none; background:transparent; padding:6px 0; }
+  /* 로딩 표시 통일 — 모든 화면에서 "⏳ 로딩 중입니다" */
+  .loading-msg { font-size:13px; font-weight:600; color:var(--text-tertiary); letter-spacing:0; }
+  .loading-overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:var(--bg-card); z-index:2; border-radius:inherit; }
   .kpi-value {
     font-size: 34px;
     font-weight: 800;
@@ -351,12 +361,16 @@
   /* Apple Segmented Control (Subtabs) */
   .subtabs {
     display: inline-flex;
+    max-width: 100%;
+    overflow-x: auto;
     background: rgba(120, 120, 128, 0.12);
     padding: 4px;
     border-radius: 12px;
     margin-bottom: 24px;
   }
   .subtab {
+    white-space: nowrap; /* 탭 이름이 두 줄로 꺾이지 않게 */
+    flex-shrink: 0;
     padding: 8px 18px;
     font-size: 13px;
     font-weight: 600;
@@ -632,22 +646,22 @@
         <div class="bento-grid">
           <div class="bento-card col-3">
             <div class="card-label" id="kpi-avg-rating-title">평균 시청률 (선택 기간)</div>
-            <div class="kpi-value" id="kpi-avg-rating">-</div>
+            <div class="kpi-value" id="kpi-avg-rating"><span class="loading-msg">⏳ 로딩 중입니다</span></div>
             <div class="kpi-delta" id="kpi-avg-rating-delta"></div>
           </div>
           <div class="bento-card col-3">
             <div class="card-label">평균 점유율</div>
-            <div class="kpi-value" id="kpi-avg-share">-</div>
+            <div class="kpi-value" id="kpi-avg-share"><span class="loading-msg">⏳ 로딩 중입니다</span></div>
             <div class="kpi-delta" id="kpi-avg-share-note"></div>
           </div>
           <div class="bento-card col-3">
             <div class="card-label" id="kpi-rank-title">채널 순위 (종합·기간평균 실측)</div>
-            <div class="kpi-value" id="kpi-rank">-</div>
+            <div class="kpi-value" id="kpi-rank"><span class="loading-msg">⏳ 로딩 중입니다</span></div>
             <div class="kpi-delta" id="kpi-rank-note"></div>
           </div>
           <div class="bento-card col-3">
             <div class="card-label">최고 시청률 프로그램</div>
-            <div class="kpi-value" id="kpi-top-program" style="font-size:20px; margin-top:4px;">-</div>
+            <div class="kpi-value" id="kpi-top-program" style="font-size:20px; margin-top:4px;"><span class="loading-msg">⏳ 로딩 중입니다</span></div>
             <div class="kpi-delta" id="kpi-top-rating" style="color:var(--text-secondary);"></div><!-- 오르내림이 아니라 초록 대신 회색 (2026-11-10) -->
           </div>
         </div>
@@ -672,10 +686,10 @@
       <!-- ============ PROGRAM ============ -->
       <div class="screen" id="screen-program">
         <div class="subtabs">
-          <div class="subtab active" data-parent="program" data-tab="value-map">가치 지도</div>
-          <div class="subtab" data-parent="program" data-tab="dna">DNA 분석</div>
-          <div class="subtab" data-parent="program" data-tab="compare">비교 분석</div>
-          <div class="subtab" data-parent="program" data-tab="minute">분단위 시청률</div>
+          <div class="subtab active" data-parent="program" data-tab="value-map">프로그램 가치 지도</div>
+          <div class="subtab" data-parent="program" data-tab="dna">프로그램 DNA 분석</div>
+          <div class="subtab" data-parent="program" data-tab="compare">프로그램 비교 분석</div>
+          <div class="subtab" data-parent="program" data-tab="minute">프로그램별 분단위 시청률</div>
         </div>
 
         <div class="subscreen active" data-parent="program" id="program-value-map">
@@ -973,15 +987,25 @@
         </div>
 
         <div class="subscreen" data-parent="schedule" id="schedule-weekly" style="display:none;">
-          <div class="filter-row" style="flex-wrap:wrap;">
-            <select class="mini-filter" id="ws-template-select" style="max-width:160px;"><option value="">템플릿 불러오기...</option></select>
-            <button class="chip-btn" onclick="loadWeeklyTemplate()">불러오기</button>
-            <button class="chip-btn" onclick="saveWeeklyTemplate()">현재 편성을 템플릿으로 저장</button>
-            <button class="chip-btn" style="background:var(--btn-dark); color:#fff;" onclick="runWeeklyAutoFill()">자동으로 빈 슬롯 채우기</button>
-            <select class="mini-filter" id="ws-lastweek-select" multiple size="1" style="max-width:200px; min-width:160px;" title="Ctrl(Mac은 Cmd)+클릭으로 여러 주를 한꺼번에 선택할 수 있어요. 최근 2~3주를 같이 선택하는 걸 권장해요 — 한 주만 피하면 2주 전이랑 똑같은 게 다시 추천돼요."></select>
-            <span style="font-size:12px; color:var(--text-tertiary);">(Ctrl/Cmd+클릭으로 여러 주 선택 — 최근 2~3주 권장)</span>
-            <button class="chip-btn" style="color:var(--negative);" onclick="clearAllFixed()">전체 초기화</button>
-            <button class="chip-btn" style="background:var(--accent); color:#fff;" onclick="toggleThemeChat()">🤖 편성 도우미 AI</button>
+          <!-- 상단 버튼을 하는 일별로 묶음 (2026-11-11): [템플릿] / [자동 채우기] / 오른쪽 끝 [AI · 초기화] -->
+          <div class="filter-row ws-toolbar">
+            <div class="ws-group">
+              <span class="ws-group-label">템플릿</span>
+              <select class="mini-filter" id="ws-template-select" style="max-width:180px;"><option value="">템플릿 불러오기...</option></select>
+              <button class="chip-btn" onclick="loadWeeklyTemplate()">불러오기</button>
+              <button class="chip-btn" onclick="saveWeeklyTemplate()">현재 편성을 템플릿으로 저장</button>
+            </div>
+            <div class="ws-group">
+              <span class="ws-group-label">자동 채우기</span>
+              <span class="ws-group-sub">지난주와 중복 방지</span>
+              <select class="mini-filter" id="ws-lastweek-select" multiple size="1" style="max-width:200px; min-width:160px;" title="Ctrl(Mac은 Cmd)+클릭으로 여러 주를 한꺼번에 선택할 수 있어요. 최근 2~3주를 같이 선택하는 걸 권장해요 — 한 주만 피하면 2주 전이랑 똑같은 게 다시 추천돼요."></select>
+              <span class="ws-group-hint">Ctrl/Cmd+클릭으로 여러 주 · 최근 2~3주 권장</span>
+              <button class="chip-btn" style="background:var(--btn-dark); color:#fff;" onclick="runWeeklyAutoFill()">자동으로 빈 슬롯 채우기</button>
+            </div>
+            <div class="ws-group ws-group-end">
+              <button class="chip-btn" style="background:var(--accent); color:#fff;" onclick="toggleThemeChat()">🤖 편성 도우미 AI</button>
+              <button class="chip-btn" style="color:var(--negative);" onclick="clearAllFixed()">전체 초기화</button>
+            </div>
           </div>
 
           <div id="theme-chat-panel" style="display:none; margin-bottom:16px;">
@@ -1117,9 +1141,9 @@
         <div class="subtabs">
           <div class="subtab active" data-parent="audience" data-tab="regression">시청자 이탈 분석</div>
           <!-- 공사중: 이동 지도 (추정치 기반 목업) 임시 비활성화
-          <div class="subtab" data-parent="audience" data-tab="sankey">이동 지도</div>
+          <div class="subtab" data-parent="audience" data-tab="sankey">시청자 이동 지도</div>
           -->
-          <div class="subtab" data-parent="audience" data-tab="fatigue">피로도 분석</div>
+          <div class="subtab" data-parent="audience" data-tab="fatigue">시청 피로도 분석</div>
         </div>
 
         <div class="subscreen active" data-parent="audience" id="audience-regression">
@@ -1207,6 +1231,8 @@
 <script>
 /* ============ SUPABASE 연결 설정 ============ */
 // ⚠️ 여기 URL/키는 anon(공개용) 키만 넣으세요. service_role 키는 절대 브라우저 코드에 넣으면 안 됩니다.
+const LOADING_TEXT = '⏳ 로딩 중입니다';
+const LOADING_HTML = `<span class="loading-msg">${LOADING_TEXT}</span>`;
 const SUPABASE_URL = 'https://fvjxpdbnenbbfsgrondc.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ2anhwZGJuZW5iYmZzZ3JvbmRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4MjA5NzAsImV4cCI6MjEwMTM5Njk3MH0.qCBzFg9pnmHRqgceCHkq9M7z-Xv6DnwP067CwL27TCs';
 
@@ -2379,7 +2405,7 @@ async function drawDNA(g){
   document.getElementById('dna-detail').innerHTML = `
     <div class="card-label">구조화 분석 결과 ${g_.count>1 ? `<span style="font-weight:400; color:var(--text-tertiary); font-size:11px;">(평균)</span>` : ''}</div>
     ${relatedHtml}
-    <div id="dna-tags">불러오는 중...</div>
+    <div id="dna-tags">${LOADING_HTML}</div>
     <ul class="factor-list">
       <li><b>대진:</b> ${playersTxt}</li>
       <li><b>평균 시청지속시간:</b> ${g_.avgView.toFixed(1)}분</li>
@@ -2387,7 +2413,7 @@ async function drawDNA(g){
       ${liveCompareLine}
     </ul>
     <div class="card-label" style="margin-top:14px;">성·연령대별 시청률 ${g_.count>1?'(평균)':''}</div>
-    <div id="dna-audience">불러오는 중...</div>
+    <div id="dna-audience">${LOADING_HTML}</div>
   `;
 
   const tags = [];
@@ -3129,8 +3155,10 @@ const CMP_YEARKEY_AT_PLAYERS_STAGE = new Set([
   '빅매치승부처', '세상친절한바둑', '세계바둑클래식', 'EASYGO명국쉽게보기', '현대바둑80년명국선조남철에서신진서까지'
 ]);
 
-function createCompareSlot(slotId, allGrouped, onChange){
-  const state = { typeFilter: '전체', programGroups: [], playersGroups: [], selected: null };
+// startEmpty: B처럼 처음엔 비워두고 "비교할 프로그램을 골라주세요" 안내를 띄울 칸 (2026-11-11)
+function createCompareSlot(slotId, allGrouped, onChange, opts = {}){
+  const EMPTY_LABEL = '비교할 프로그램을 골라주세요';
+  const state = { typeFilter: '전체', programGroups: [], playersGroups: [], selected: null, picked: !opts.startEmpty };
   const programSel = document.getElementById(`cmp-${slotId}-program`);
   const playersSel = document.getElementById(`cmp-${slotId}-players`);
 
@@ -3151,8 +3179,10 @@ function createCompareSlot(slotId, allGrouped, onChange){
     });
     state.programGroups.sort((a,b)=> a.name.localeCompare(b.name) || String(a.yearKey||'').localeCompare(String(b.yearKey||'')));
     // 생방/본방/재방은 위 칩 버튼으로 이미 필터링되니까, 목록 텍스트엔 굳이 다시 안 보여줌
-    programSel.innerHTML = state.programGroups.map((pg,i)=>`<option value="${i}">${pg.name}${pg.mergeYear ? '' : ' · '+pg.yearKey}</option>`).join('') || '<option>없음</option>';
-    programSel.value = 0;
+    const optionsHtml = state.programGroups.map((pg,i)=>`<option value="${i}">${pg.name}${pg.mergeYear ? '' : ' · '+pg.yearKey}</option>`).join('');
+    // 아직 고르지 않은 빈 칸이면 맨 위에 안내 항목을 두고 그걸 선택해둠
+    programSel.innerHTML = (state.picked ? '' : `<option value="">${EMPTY_LABEL}</option>`) + (optionsHtml || '<option>없음</option>');
+    programSel.value = state.picked ? 0 : '';
     refreshPlayers();
   }
    function refreshPlayers(){
@@ -3160,6 +3190,12 @@ function createCompareSlot(slotId, allGrouped, onChange){
     state.playersGroups = pg
       ? typeFiltered().filter(g=>g.name===pg.name && (pg.type===null || g.type===pg.type) && (pg.mergeYear || g.yearKey===pg.yearKey))
       : [];
+    if (!pg) {
+      playersSel.innerHTML = `<option>${state.picked ? '없음' : '먼저 프로그램을 골라주세요'}</option>`;
+      state.selected = null;
+      onChange();
+      return;
+    }
     playersSel.innerHTML = state.playersGroups.map((g,i)=>{
       const base = (pg && pg.mergeYear) ? `${g.players} · ${g.yearKey}` : g.players;
       const label = (pg && pg.type===null) ? `[${g.type}] ${base}` : base;
@@ -3169,7 +3205,16 @@ function createCompareSlot(slotId, allGrouped, onChange){
     state.selected = state.playersGroups[0] || null;
     onChange();
   }
-  programSel.onchange = refreshPlayers;
+  programSel.onchange = () => {
+    // 안내 항목이 아닌 실제 프로그램을 고르면, 그때부터는 안내 항목을 없애고 일반 칸처럼 동작
+    if (!state.picked && programSel.value !== '') {
+      const chosen = Number(programSel.value);
+      state.picked = true;
+      programSel.querySelector('option[value=""]')?.remove();
+      programSel.value = chosen;
+    }
+    refreshPlayers();
+  };
   playersSel.onchange = () => { state.selected = state.playersGroups[playersSel.value] || null; onChange(); };
 
   document.querySelectorAll(`.chip-btn[data-cmp-slot="${slotId}"]`).forEach(btn=>{
@@ -3188,14 +3233,18 @@ function createCompareSlot(slotId, allGrouped, onChange){
 function renderCompare(){
   const allGrouped = aggregateByProgramAndPlayers(PROGRAMS);
   window.__cmpStateA = createCompareSlot('a', allGrouped, drawCompare);
-  window.__cmpStateB = createCompareSlot('b', allGrouped, drawCompare);
+  window.__cmpStateB = createCompareSlot('b', allGrouped, drawCompare, { startEmpty: true }); // B는 비워두고 안내
   drawCompare();
 }
 
 function drawCompare(){
   const pa = window.__cmpStateA && window.__cmpStateA.selected;
   const pb = window.__cmpStateB && window.__cmpStateB.selected;
-  if (!pa || !pb) { document.getElementById('compare-table-wrap').innerHTML = '<div style="color:var(--text-tertiary); font-size:13px;">비교할 프로그램을 양쪽 다 선택해주세요</div>'; return; }
+  if (!pa || !pb) {
+    const msg = (pa && !pb) ? '비교할 프로그램을 골라주세요' : '비교할 프로그램을 양쪽 다 선택해주세요';
+    document.getElementById('compare-table-wrap').innerHTML = `<div style="color:var(--text-tertiary); font-size:13px; padding:24px 0; text-align:center;">${msg}</div>`;
+    return;
+  }
 
   const metrics = [
     { label: '시청률', unit: '%', va: pa.rating, vb: pb.rating },
@@ -3447,7 +3496,7 @@ function renderMatching(){
       document.getElementById('heatmap').innerHTML = '';
       return;
     }
-    document.getElementById('match-score').textContent = '계산 중...';
+    document.getElementById('match-score').innerHTML = LOADING_HTML;
     document.getElementById('match-factors').innerHTML = '';
     let history = await fetchProgramHistory(p.program_id);
     if (matchTypeFilter !== '전체') history = history.filter(h=>h.type===matchTypeFilter); // 선택한 타입의 과거 이력만으로 예측
@@ -3733,7 +3782,7 @@ function renderAdjacency(){
     if (!selectedProgram) { document.getElementById('adj-table').innerHTML = ''; return; }
     const posLabel = adjMode==='out' ? '뒤' : '앞';
     document.getElementById('adj-title').textContent = `"${selectedProgram.program_name}"(${adjTypeFilter}) ${posLabel}엔 어떤 대회유형이 잘 맞을까`;
-    document.getElementById('adj-table').innerHTML = `<tr><td>계산 중...</td></tr>`;
+    document.getElementById('adj-table').innerHTML = `<tr><td>${LOADING_HTML}</td></tr>`;
     const { totalFollowers, results } = adjMode==='out'
       ? await computeAdjacencyStats(selectedProgram.program_id, adjTypeFilter)
       : await computeLeadInStats(selectedProgram.program_id, adjTypeFilter);
@@ -3903,7 +3952,7 @@ async function runWeeklyAutoFill(){
   if (fixedPrograms.length === 0) { alert('먼저 고정 편성을 추가해주세요.'); return; }
   const btn = document.querySelector('#schedule-weekly [onclick="runWeeklyAutoFill()"]');
   const origText = btn ? btn.textContent : null;
-  if (btn) { btn.textContent = '채우는 중...'; btn.disabled = true; }
+  if (btn) { btn.textContent = LOADING_TEXT; btn.disabled = true; }
   try {
     // "지난주와 중복 방지"에서 선택된 (여러 주 가능) 템플릿들의 회차도 이번 주 추천에서 제외
     let preExcluded = recommendedBlocks.map(b=>b.episodeKey).filter(Boolean);
@@ -4918,7 +4967,7 @@ async function loadCellRecommendations(day, startIdx, endIdx){
   const title = document.getElementById('ws-recommend-title');
   const list = document.getElementById('ws-recommend-list');
   panel.style.display = 'flex';
-  title.textContent = `${day} ${rangeLabel} (${targetDurationMin}분) — 계산 중...`;
+  title.textContent = `${day} ${rangeLabel} (${targetDurationMin}분) — ${LOADING_TEXT}`;
   list.innerHTML = '';
 
   const all = await loadFullHistory();
@@ -5452,7 +5501,7 @@ function renderCounterfactual(){
     const p = currentProgram();
     const virtual = selectedVirtual;
     if (!p || !virtual) { document.getElementById('cf-comment').textContent = '프로그램을 선택해주세요.'; return; }
-    document.getElementById('cf-comment').textContent = '계산 중...';
+    document.getElementById('cf-comment').textContent = LOADING_TEXT;
 
     const dowLabel = ['일요일','월요일','화요일','수요일','목요일','금요일','토요일'][new Date(p.date+'T00:00:00').getDay()];
     const history = await fetchProgramHistory(virtual.program_id);
@@ -6008,14 +6057,38 @@ window.addEventListener('afterprint', ()=>{
   document.getElementById('report-print-container').innerHTML = '';
 });
 
+/* ============ 로딩 표시 통일 ============ */
+// 그래프는 데이터를 받는 동안 빈 칸으로 보여서, 그래프 위에 "⏳ 로딩 중입니다"를 덮었다가 끝나면 걷어냄
+function setChartLoading(canvasId, on){
+  const wrap = document.getElementById(canvasId)?.parentElement;
+  if (!wrap) return;
+  if (getComputedStyle(wrap).position === 'static') wrap.style.position = 'relative';
+  let ov = wrap.querySelector(':scope > .loading-overlay');
+  if (on && !ov) { ov = document.createElement('div'); ov.className = 'loading-overlay'; ov.innerHTML = LOADING_HTML; wrap.appendChild(ov); }
+  if (!on && ov) ov.remove();
+}
+// 데이터를 받아오는 그래프 함수들에 로딩 표시를 씌움 (끝나거나 실패해도 반드시 걷어냄)
+function withChartLoading(fnName, canvasId){
+  const orig = window[fnName];
+  if (typeof orig !== 'function') return;
+  window[fnName] = async function(...args){
+    setChartLoading(canvasId, true);
+    try { return await orig.apply(this, args); } finally { setChartLoading(canvasId, false); }
+  };
+}
+withChartLoading('drawCompetitorChart', 'chart-competitor');
+withChartLoading('renderMinuteComparisons', 'chart-minute');
+
 /* ============ INIT ============ */
 (async function init(){
   // 데이터 로딩(3~4초) 끝날 때까지 기다리지 않고 화면 위치부터 먼저 복원.
   // 화면 전환 자체(어느 메뉴/탭이 보이는지)는 데이터 내용과 무관한 DOM class 토글이라 미리 해도 안전하고,
   // 이렇게 해야 "새로고침하면 대시보드로 잠깐 튀었다가 원래 화면으로 돌아오는" 깜빡임이 없어짐.
   restoreNavState();
+  setChartLoading('chart-trend', true);
   await loadData();
   if (PROGRAMS.length === 0) {
+    setChartLoading('chart-trend', false);
     document.querySelector('.content').insertAdjacentHTML('afterbegin',
       '<div style="padding:16px; background:#fff3cd; border-radius:8px; margin-bottom:16px; font-size:13px;">⚠ 데이터를 불러오지 못했어요. SUPABASE_URL/ANON_KEY 설정을 확인해주세요 (콘솔 로그 참고).</div>');
     return;
@@ -6024,6 +6097,7 @@ window.addEventListener('afterprint', ()=>{
   // (예전에 renderMatching()이 존재하지 않는 DOM을 참조해서 에러를 던지며 이 아래 초기화 전체가 멈춘 적이 있었음 — 그런 케이스의 재발 방지)
   const safeRender = (name, fn) => { try { fn(); } catch (e) { console.error(`[init] ${name} 렌더링 실패`, e); } };
   safeRender('renderDashboard', renderDashboard);
+  setChartLoading('chart-trend', false);
   safeRender('renderValueMap', renderValueMap);
   safeRender('renderDNA', renderDNA);
   safeRender('renderCompare', renderCompare);
