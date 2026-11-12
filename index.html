@@ -954,7 +954,7 @@
           <div class="bento-grid">
             <div class="bento-card col-12">
               <div class="card-label" id="adj-title">이 프로그램 뒤엔 어떤 대회유형이 잘 맞을까</div>
-              <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:10px;">전체 기간 방영 이력 기준. 그 대회유형의 평균 시청률 대비, 이 프로그램 바로 뒤에 편성됐을 때만 따로 평균 내서 비교합니다. 표본(n)이 적으면 참고만 하세요.</div>
+              <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:10px;">맨 위에서 선택한 기간의 방영 이력 기준. 그 대회유형의 평균 시청률 대비, 이 프로그램 바로 뒤에 편성됐을 때만 따로 평균 내서 비교합니다. 표본(n)이 적으면 참고만 하세요.</div>
               <table class="data-table" id="adj-table" style="width:100%; font-size:13px; border-collapse:collapse;"></table>
             </div>
           </div>
@@ -1993,6 +1993,7 @@ async function reloadAllForPeriod(){
   renderRegression();
   renderCounterfactual();
   renderFatigue();
+  if (window.__refreshAdjacency) await window.__refreshAdjacency(); // 리드인/리드아웃도 기간 따라 다시 계산 (2026-11-12)
   document.querySelector('.content').style.opacity = '1';
 }
 
@@ -3683,10 +3684,14 @@ async function loadFullHistory(){
 // "그 대회유형 전체 평균" 대비 "이 프로그램 뒤에서만의 평균"을 비교
 // 리드인 분석 — "앞에 뭐가 오면 이 프로그램 자체가 더 잘 되는지"
 // (리드아웃과 달리, 평균 내는 대상이 "뒤에 온 프로그램"이 아니라 "기준 프로그램 자기 자신"으로 바뀜)
-async function computeLeadInStats(targetProgramId, typeFilter){
+// range: { from, to } (YYYY-MM-DD) — 주면 그 기간 안에 방영된 기준 프로그램만 대상으로 계산 (리드인/리드아웃 화면용, 2026-11-12)
+//        안 주면(주간 편성안 추천 등) 예전처럼 전체 이력 기준
+// ※ 앞/뒤 프로그램을 찾는 건 기간으로 잘라내지 않은 전체 목록에서 함 — 기간 첫날 첫 방송의 앞 프로그램(전날 밤)도 놓치지 않게
+const inAdjRange = (p, range) => !range || !range.from || !range.to || (p.date >= range.from && p.date <= range.to);
+async function computeLeadInStats(targetProgramId, typeFilter, range){
   const all = await loadFullHistory();
   const relatedIds = getRelatedProgramIds(targetProgramId, all); // 대회방식은 다르지만 같은 프로그램으로 봐야 하는 관련군까지 포함
-  const targetInstances = all.filter(p => relatedIds.includes(p.program_id) && (typeFilter === '전체' || p.type === typeFilter));
+  const targetInstances = all.filter(p => relatedIds.includes(p.program_id) && (typeFilter === '전체' || p.type === typeFilter) && inAdjRange(p, range));
   const avg = arr => arr.reduce((a,b)=>a+b,0)/arr.length;
   const normType = t => t ? String(t).replace(/\s/g, '') : '(미분류)';
   const targetOverallAvg = targetInstances.length ? avg(targetInstances.map(p=>p.rating)) : 0;
@@ -3695,6 +3700,7 @@ async function computeLeadInStats(targetProgramId, typeFilter){
   all.forEach((p,i)=>{
     if (!relatedIds.includes(p.program_id)) return;
     if (typeFilter !== '전체' && p.type !== typeFilter) return;
+    if (!inAdjRange(p, range)) return;
     const prev = all[i-1];
     if (prev && (p._absStart - prev._absEnd) <= 60) pairs.push({ lead: prev, target: p });
   });
@@ -3716,13 +3722,14 @@ async function computeLeadInStats(targetProgramId, typeFilter){
   return { totalFollowers: pairs.length, results };
 }
 
-async function computeAdjacencyStats(leadingProgramId, typeFilter){
+async function computeAdjacencyStats(leadingProgramId, typeFilter, range){
   const all = await loadFullHistory();
   const relatedIds = getRelatedProgramIds(leadingProgramId, all); // 대회방식은 다르지만 같은 프로그램으로 봐야 하는 관련군까지 포함
   const followers = [];
   all.forEach((p,i)=>{
     if (!relatedIds.includes(p.program_id)) return;
     if (typeFilter !== '전체' && p.type !== typeFilter) return; // 기준 프로그램이 이 타입으로 방영된 경우만
+    if (!inAdjRange(p, range)) return; // 기준 프로그램이 선택 기간 안에 방영된 경우만
     const next = all[i+1];
     if (next && (next._absStart - p._absEnd) <= 60) followers.push(next);
   });
@@ -3730,7 +3737,8 @@ async function computeAdjacencyStats(leadingProgramId, typeFilter){
   const avg = arr => arr.reduce((a,b)=>a+b,0)/arr.length;
   const normType = t => t ? String(t).replace(/\s/g, '') : '(미분류)'; // 띄어쓰기 차이로 "세계 기전"/"세계기전"이 갈라지는 문제 방지
   const baselineByType = {};
-  all.forEach(p=>{ const t = normType(p.tournament_type); (baselineByType[t]=baselineByType[t]||[]).push(p.rating); });
+  // 비교 기준("전체 평균")도 같은 기간 안의 방송만으로 — 기간을 줬을 때 한쪽만 기간 적용되면 비교가 어긋남
+  all.forEach(p=>{ if (!inAdjRange(p, range)) return; const t = normType(p.tournament_type); (baselineByType[t]=baselineByType[t]||[]).push(p.rating); });
   const followByType = {};
   followers.forEach(p=>{
     const t = normType(p.tournament_type);
@@ -3756,18 +3764,27 @@ function renderAdjacency(){
   let adjTypeFilter = '전체';
   let adjMode = 'in'; // 'in' = 리드인(앞), 'out' = 리드아웃(뒤)
 
-  async function refreshProgramList(){
+  // 맨 위에서 선택한 기간 (2026-11-12: 예전엔 기간 무시하고 전체 이력을 쓰던 버그 수정)
+  const getRange = () => ({ from: document.getElementById('date-from').value, to: document.getElementById('date-to').value });
+
+  // keepSelection: 기간만 바뀐 경우, 고른 프로그램이 새 기간에도 있으면 선택 유지하고 결과만 다시 계산
+  async function refreshProgramList(keepSelection){
     const all = await loadFullHistory();
-    const filtered = adjTypeFilter === '전체' ? all : all.filter(p=>p.type===adjTypeFilter);
+    const range = getRange();
+    // 드롭다운 = "선택 기간 안에 + 선택한 방송유형(생/본/재)으로" 방영된 프로그램만
+    const filtered = all.filter(p => inAdjRange(p, range) && (adjTypeFilter === '전체' || p.type === adjTypeFilter));
     const seen = new Map();
     filtered.forEach(p=>{ if (!seen.has(p.program_id)) seen.set(p.program_id, { program_id: p.program_id, program_name: p.name }); });
     const list = Array.from(seen.values()).sort((a,b)=>a.program_name.localeCompare(b.program_name));
+    const kept = keepSelection && selectedProgram ? list.find(it => it.program_id === selectedProgram.program_id) : null;
+    attachSearchableDropdown(sel, dropdown, list, p=>p.program_name, (it)=>{ selectedProgram = it; update(); });
+    if (kept) { selectedProgram = kept; update(); return; }
     sel.value = '';
     selectedProgram = null;
     document.getElementById('adj-table').innerHTML = '';
     document.getElementById('adj-title').textContent = adjMode==='out' ? '이 프로그램 뒤엔 어떤 대회유형이 잘 맞을까' : '이 프로그램 앞엔 어떤 대회유형이 잘 맞을까';
-    attachSearchableDropdown(sel, dropdown, list, p=>p.program_name, (it)=>{ selectedProgram = it; update(); });
   }
+  window.__refreshAdjacency = () => refreshProgramList(true); // 기간 바뀌면 reloadAllForPeriod에서 호출
 
   document.querySelectorAll('#schedule-adjacency .chip-btn[data-adj-mode]').forEach(btn=>{
     btn.onclick = () => {
@@ -3784,10 +3801,10 @@ function renderAdjacency(){
     document.getElementById('adj-title').textContent = `"${selectedProgram.program_name}"(${adjTypeFilter}) ${posLabel}엔 어떤 대회유형이 잘 맞을까`;
     document.getElementById('adj-table').innerHTML = `<tr><td>${LOADING_HTML}</td></tr>`;
     const { totalFollowers, results } = adjMode==='out'
-      ? await computeAdjacencyStats(selectedProgram.program_id, adjTypeFilter)
-      : await computeLeadInStats(selectedProgram.program_id, adjTypeFilter);
+      ? await computeAdjacencyStats(selectedProgram.program_id, adjTypeFilter, getRange())
+      : await computeLeadInStats(selectedProgram.program_id, adjTypeFilter, getRange());
     if (totalFollowers === 0) {
-      document.getElementById('adj-table').innerHTML = `<tr><td style="color:var(--text-tertiary); padding:12px;">이 프로그램 바로 ${posLabel}에 이어진 방송 이력이 없어요.</td></tr>`;
+      document.getElementById('adj-table').innerHTML = `<tr><td style="color:var(--text-tertiary); padding:12px;">선택한 기간에 이 프로그램 바로 ${posLabel}에 이어진 방송 이력이 없어요.</td></tr>`;
       return;
     }
     const colHeader = adjMode==='out' ? '뒤에 온 대회유형' : '앞에 온 대회유형';
