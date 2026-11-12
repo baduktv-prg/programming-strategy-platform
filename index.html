@@ -5342,9 +5342,19 @@ async function computeAutoFillBlocks(fixedList, preExcludedEpisodeKeys, alreadyO
       const { topWithType, basisGroups } = computeRecommendationCandidates(day, startIdx, endIdx, all, usedInThisRun, { usedCheckField: 'episodeKey', hardExclude: true });
       if (!topWithType.length && !basisGroups.length) continue;
       const liftMap = await getAdjacencyLiftMap(day, startIdx, endIdx);
-      // 같은 크기 안에서는 기존처럼 실측 후보 우선 → 없으면 추정 1순위부터
+      // 같은 크기 안에서는 실측 후보(이 시간대에 방영된 적 있는 후보) 우선.
+      // 단, 실측 1등이 "이 자리 평소 수준(100점)"에 못 미치면 추정 후보들의 1등과도 비교해서 더 높은 쪽을 씀 (2026-11-12)
+      // — 예전엔 실측 후보가 1개라도 있으면(예: 69점) 그것만 보고 "이 크기엔 100점 이상 없음"으로 판단해서,
+      //   추정 후보 중 150점대가 있어도 작은 칸으로 내려가 90분+30분처럼 잘게 쪼개지는 문제가 있었음
+      const scoreOf = c => c ? (c.adjustedScore ?? c.score) : -Infinity;
       let best = applyAdjacencyBoost(topWithType, liftMap)[0] || null;
-      if (!best) { for (const g of basisGroups) { if (g.items.length > 0) { best = applyAdjacencyBoost(g.items, liftMap)[0]; break; } } }
+      if (!best || scoreOf(best) < LONG_BLOCK_MIN_SCORE) {
+        for (const g of basisGroups) {
+          if (!g.items.length) continue;
+          const c = applyAdjacencyBoost(g.items, liftMap)[0];
+          if (scoreOf(c) > scoreOf(best)) best = c;
+        }
+      }
       if (!best) continue;
       // 긴 프로그램 우선(짧은 프로그램을 여러 개 붙이면 시청 흐름이 끊기므로) —
       // 큰 칸부터 보다가 1등 후보가 "이 자리 평소 수준(100점)" 이상이면 바로 그 크기로 확정.
