@@ -2174,7 +2174,7 @@ async function drawCompetitorChart(){
     const byHour = {};
     const programByHour = {}; // 프로그램명 매칭 — 바둑TV/K바둑/빌리어즈TV는 우리 fact_schedule에 있어서 가능, GOLF&PBA/브레인TV는 크롤링한 fact_competitor_schedule에서 가능
     const usesOwnScheduleTable = ['바둑TV','K바둑','빌리어즈TV'].includes(chName); // 편성정보(프로그램명) 출처
-    const usesOwnMinuteTable = ['바둑TV','K바둑'].includes(chName); // 시청률 출처: fact_rating_minute(schedule_id 기반) vs fact_competitor_minute_rating(clock_time 기반)
+    const usesOwnMinuteTable = chName === '바둑TV'; // 시청률 출처: 바둑TV만 fact_rating_minute(schedule_id 기반), 나머지(K바둑 포함)는 fact_competitor_minute_rating(clock_time 기반, 광고·예고 등 빈 구간까지 하루 1,440분 전부)
 
     // 1) 편성정보(프로그램명) — 자사 방식 채널(바둑TV/K바둑/빌리어즈TV)이면 fact_schedule에서
     let scheds = [];
