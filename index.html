@@ -792,7 +792,7 @@
                   <label style="margin-right:14px; font-size:12px;"><input type="checkbox" class="minute-comp-channel" value="GOLF & PBA"> GOLF&amp;PBA</label>
                   <label style="margin-right:14px; font-size:12px;"><input type="checkbox" class="minute-comp-channel" value="브레인TV"> 브레인TV</label>
                   <label style="margin-right:14px; font-size:12px;"><input type="checkbox" class="minute-comp-channel" value="빌리어즈TV"> 빌리어즈TV</label>
-                  <label style="margin-right:14px; font-size:12px;"><input type="checkbox" id="minute-comp-kbaduk"> K바둑</label>
+                  <label style="margin-right:14px; font-size:12px;"><input type="checkbox" class="minute-comp-channel" value="K바둑"> K바둑</label>
                 </div>
               </div>
             </div>
@@ -3001,9 +3001,6 @@ function renderMinuteTab(){
     cb.checked = false;
     cb.onchange = renderMinuteComparisons;
   });
-  const kbadukCb = document.getElementById('minute-comp-kbaduk');
-  kbadukCb.checked = false;
-  kbadukCb.onchange = renderMinuteComparisons;
 
   refreshProgramList();
 }
@@ -3028,9 +3025,6 @@ async function drawMinuteChart(program, episode){
 
   // 경쟁채널 비교는 "전체 평균"이 아니라 개별 회차를 선택했을 때만 가능 (시계 시각 정렬이 필요해서)
   document.querySelectorAll('.minute-comp-channel').forEach(cb => { cb.disabled = episode.isAvg; if (episode.isAvg) cb.checked = false; });
-  const kbadukCbEl = document.getElementById('minute-comp-kbaduk');
-  kbadukCbEl.disabled = episode.isAvg;
-  if (episode.isAvg) kbadukCbEl.checked = false;
 
   await renderMinuteComparisons();
 }
@@ -3074,7 +3068,7 @@ async function renderMinuteComparisons(){
   const startMin = inst ? hhmmToMin(inst.start) : null;
   const clipToRange = (offset) => { let o = offset; if (o < -720) o += 1440; return o; };
 
-  // 경쟁채널 오버레이(GOLF&PBA/브레인TV/빌리어즈TV) — 시계 시각 기준, 우리 방송 시작 기준 경과분으로 환산
+  // 경쟁채널 오버레이(GOLF&PBA/브레인TV/빌리어즈TV/K바둑) — 시계 시각 기준, 우리 방송 시작 기준 경과분으로 환산
   const checkedCompetitors = Array.from(document.querySelectorAll('.minute-comp-channel:checked')).map(cb=>cb.value);
   const compColors = { 'GOLF & PBA':'#34c759', '브레인TV':'#af52de', '빌리어즈TV':'#ff2d55', 'K바둑':'#ff9500' };
 
@@ -3098,31 +3092,6 @@ async function renderMinuteComparisons(){
     compDatasets.filter(Boolean).forEach(d => datasets.push(d));
   }
 
-  // K바둑 오버레이 — 자사 채널이라 저장 방식이 달라서(방송별 상대경과분) 별도 처리:
-  // 그날 K바둑 스케줄들을 찾아 각 스케줄의 시작시각+경과분으로 시계시각을 복원한 뒤, 우리 방송 기준으로 재환산
-  const kbadukChecked = document.getElementById('minute-comp-kbaduk')?.checked;
-  if (!episode.isAvg && kbadukChecked && inst) {
-    const kChannelId = await getChannelId('K바둑');
-    if (kChannelId != null) {
-      const { data: kSchedules } = await sb.from('fact_schedule')
-        .select('schedule_id, start_time').eq('channel_id', kChannelId).eq('date_key', inst.date);
-      const kScheduleIds = (kSchedules||[]).map(s=>s.schedule_id);
-      const kStartMap = {}; (kSchedules||[]).forEach(s=>{ kStartMap[s.schedule_id] = hhmmToMin(s.start_time.slice(0,5)); });
-      if (kScheduleIds.length) {
-        const { data: kMinuteRows } = await sb.from('fact_rating_minute')
-          .select('schedule_id, minute_offset, rating_pct').in('schedule_id', kScheduleIds).limit(20000);
-        const kPoints = (kMinuteRows||[]).map(r=>{
-          if (r.rating_pct == null) return null;
-          const clockMin = kStartMap[r.schedule_id] + r.minute_offset;
-          return { x: clipToRange(clockMin - startMin), y: r.rating_pct };
-        }).filter(p => p && p.x >= 0 && p.x <= maxMinute).sort((a,b)=>a.x-b.x);
-        datasets.push({
-          label: 'K바둑', data: kPoints, borderColor: compColors['K바둑'], backgroundColor:'transparent',
-          fill:false, tension:0.3, pointRadius:0, borderWidth:2, order:2, isChannelSeries:true
-        });
-      }
-    }
-  }
 
 
   if (minuteChart) minuteChart.destroy();
