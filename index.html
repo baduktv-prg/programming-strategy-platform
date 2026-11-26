@@ -5477,6 +5477,55 @@ function closeWeeklyCompare(){
   document.getElementById('ws-compare-panel').style.display = 'none';
 }
 
+// 두 결과를 이름 한 번 입력으로 템플릿 2개(순수 데이터 / 규칙 반영)로 한꺼번에 저장 — 편성표 화면은 안 바뀜 (2026-11-26)
+async function saveBothCompareTemplates(){
+  if (!wsCompareState) return;
+  const name = prompt('템플릿 이름을 입력해주세요 (예: 12월 1주차)\n"이름 (순수 데이터)", "이름 (규칙 반영)" 두 개로 저장돼요. 같은 이름이 있으면 덮어써집니다.');
+  if (!name) return;
+  const { base, pure, ruled } = wsCompareState;
+  const build = (chosen) => [
+    ...fixedPrograms.map(({id, ...rest}) => ({ ...rest, _source: 'fixed' })),
+    ...base.map(({id, ...rest}) => ({ ...rest, _source: 'recommended' })),
+    ...chosen.map(({id, ...rest}) => ({ ...rest, _source: 'recommended' })),
+  ];
+  const namePure = `${name} (순수 데이터)`, nameRuled = `${name} (규칙 반영)`;
+  await upsertTemplateByName(namePure, build(pure));
+  await upsertTemplateByName(nameRuled, build(ruled));
+  await refreshTemplateList();
+  alert(`"${namePure}", "${nameRuled}" 두 템플릿으로 저장했어요.`);
+}
+
+// 비교용 편성표 그림(보기 전용) — 주간편성표(renderWeeklyGrid)와 같은 모양·색. 상대 방식과 다른 칸은 테두리, 같은 칸은 흐리게
+function wsCompareGridHtml(blocks, otherBlocks, title, base){
+  const sameBlock = (a, b) => a && b && a.episodeKey === b.episodeKey && a.startIdx === b.startIdx && a.endIdx === b.endIdx;
+  const at = (list, day, i) => list.find(b => b.day === day && i >= b.startIdx && i < b.endIdx) || null;
+  const typeBg = (t) => t==='재방' ? '#e5e5ea' : t==='본방' ? '#FFFF00' : t==='생방' ? '#C6EFCE' : 'var(--accent-light)';
+  let html = `<div style="font-size:13px; font-weight:700; margin-bottom:6px;">${title}</div>
+    <div style="display:grid; grid-template-columns:36px repeat(7,1fr); gap:2px; font-size:9px; min-width:480px;">
+    <div></div>` + WS_DAY_ORDER.map(d=>`<div style="text-align:center; font-weight:700; color:var(--text-secondary); padding-bottom:2px;">${d.slice(0,1)}</div>`).join('');
+  WS_SLOTS.forEach(slot => {
+    const isHourMark = slot.label.endsWith(':00');
+    html += `<div style="color:var(--text-secondary); font-weight:${isHourMark?700:400}; font-size:${isHourMark?10:9}px; display:flex; align-items:center;">${isHourMark ? slot.label.split(':')[0]+'시' : ''}</div>`;
+    WS_DAY_ORDER.forEach(day => {
+      const fixed = findFixedAt(day, slot.idx);
+      const b = fixed ? null : (at(base, day, slot.idx) || at(blocks, day, slot.idx));
+      const item = fixed || b;
+      if (!item) { html += `<div style="height:16px; border-radius:4px; background:#f5f5f7;"></div>`; return; }
+      const isStart = item.startIdx === slot.idx;
+      const isEnd = item.endIdx - 1 === slot.idx;
+      const isLeft = !fixed && blocks.includes(b);
+      const differs = isLeft && !sameBlock(b, at(otherBlocks, day, slot.idx));
+      const label = String(item.name ?? '').split('\n')[0];
+      const tip = fixed
+        ? `[${item.type}] 고정 · ${String(item.name ?? '').replace(/\n/g,' ')}`
+        : `${item.name}${item.repPlayers ? ' · '+item.repPlayers : ''} · ${WS_SLOTS[item.startIdx].label}~${wsSlotEndLabel(item.endIdx-1)} (${(item.endIdx-item.startIdx)*30}분)${Number.isFinite(item.avgRating) ? ' · 예상 '+item.avgRating.toFixed(3)+'%' : ''}${differs ? ' — 다른 방식과 다름' : ''}`;
+      const border = differs ? `border-left:2px solid var(--accent); border-right:2px solid var(--accent);${isStart?' border-top:2px solid var(--accent);':''}${isEnd?' border-bottom:2px solid var(--accent);':''}` : '';
+      html += `<div style="height:16px; box-sizing:border-box; background:${fixed ? typeBg(fixed.type) : typeBg(b.type)}; color:var(--btn-dark); opacity:${differs?1:0.45}; ${border} border-radius:${isStart?'5px 5px 0 0':'0'}; display:flex; align-items:center; justify-content:center; overflow:hidden; padding:0 2px; font-weight:700;" title="${escapeHtml(tip)}">${isStart ? `<span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(label)}</span>` : ''}</div>`;
+    });
+  });
+  return html + '</div>';
+}
+
 function renderWeeklyCompare(){
   const panel = document.getElementById('ws-compare-panel');
   const body = document.getElementById('ws-compare-body');
@@ -5519,14 +5568,25 @@ function renderWeeklyCompare(){
       <tr><td ${td}>못 채운 빈 칸</td><td ${td}>${unfilledTxt(pure)}</td><td ${td}>${unfilledTxt(ruled)}</td></tr>
       <tr><td ${td}>편성표에 표시</td><td ${td}>${radio('pure', '이 결과 선택')}</td><td ${td}>${radio('ruled', '이 결과 선택')}</td></tr>
     </table>
-    <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:12px;">한쪽을 선택하면 그 결과가 편성표에 표시돼요. 저장은 위의 "현재 편성을 템플릿으로 저장" 버튼으로 하시면 됩니다.${applied ? ` <b style="color:var(--accent);">지금 편성표: ${applied==='pure'?'순수 데이터':'규칙 반영'} 결과</b>` : ''}</div>
-    <div style="font-size:13px; font-weight:700; margin-bottom:6px;">서로 다른 칸 ${rows.length}곳</div>`;
+    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
+      <button class="chip-btn" onclick="saveBothCompareTemplates()" title="이름을 한 번만 입력하면 '이름 (순수 데이터)', '이름 (규칙 반영)' 두 템플릿으로 저장돼요">둘 다 템플릿으로 저장</button>
+      <div style="font-size:12px; color:var(--text-tertiary);">한쪽을 선택하면 그 결과가 편성표에 표시돼요. 하나만 저장하려면 위의 "현재 편성을 템플릿으로 저장" 버튼을, 둘 다 저장하려면 왼쪽 버튼을 누르세요.${applied ? ` <b style="color:var(--accent);">지금 편성표: ${applied==='pure'?'순수 데이터':'규칙 반영'} 결과</b>` : ''}</div>
+    </div>
+    <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:8px;">아래 그림에서 <b style="color:var(--accent);">테두리 친 진한 칸</b>이 두 방식이 서로 다른 곳이고, 흐린 칸은 같은 곳(고정 편성 포함)이에요. 칸에 마우스를 올리면 프로그램·시간·예상 시청률이 보여요.</div>
+    <div style="overflow-x:auto; margin-bottom:12px;">
+      <div style="display:grid; grid-template-columns:repeat(2, minmax(480px, 1fr)); gap:16px;">
+        <div>${wsCompareGridHtml(pure, ruled, '순수 데이터 (규칙 끔)', wsCompareState.base)}</div>
+        <div>${wsCompareGridHtml(ruled, pure, '규칙 반영 (규칙 켬)', wsCompareState.base)}</div>
+      </div>
+    </div>`;
   html += rows.length ? `
+    <details>
+    <summary style="cursor:pointer; font-size:13px; font-weight:700; margin-bottom:6px;">서로 다른 칸 ${rows.length}곳 (목록으로 보기)</summary>
     <div style="max-height:420px; overflow-y:auto;">
     <table style="width:100%; border-collapse:collapse;">
       <tr><th ${th}>요일·시간</th><th ${th}>순수 데이터 추천</th><th ${th}>규칙 반영 추천</th></tr>
       ${rows.map(x => `<tr><td style="padding:6px 8px; border-bottom:1px solid var(--border); vertical-align:top; font-size:12px; white-space:nowrap;">${x.day.slice(0,1)} ${WS_SLOTS[x.start].label}~${wsSlotEndLabel(x.end - 1)}</td><td ${td}>${blockTxt(x.a)}</td><td ${td}>${blockTxt(x.r)}</td></tr>`).join('')}
-    </table></div>` : `<div style="font-size:12px; color:var(--text-tertiary);">두 방식의 결과가 완전히 같아요.</div>`;
+    </table></div></details>` : `<div style="font-size:12px; color:var(--text-tertiary);">두 방식의 결과가 완전히 같아요.</div>`;
   body.innerHTML = html;
 }
 
