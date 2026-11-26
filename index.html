@@ -487,6 +487,7 @@
   body.print-mode .main { overflow:visible; }
   body.print-mode #report-print-container { display:block !important; }
   .report-print-item { page-break-inside: avoid; margin-bottom: 28px; }
+  .report-print-schedule { page-break-before: always; } /* 편성표는 항상 새 페이지에서 시작 (2026-11-26) */
   .report-cover { page-break-after: always; }
   /* 주간편성표/자동편성 격자 칸은 화면용으로 높이 18px에 말줄임 처리돼있는데, 인쇄할 땐 잘리지 않게 강제로 풀어줌 */
   #report-print-container div[style*="height:18px"] {
@@ -3949,7 +3950,14 @@ function clearAllFixed(){
   if (!confirm('지금 편성표의 고정 편성을 전부 지울까요? (추천 확정된 것도 같이 지워집니다)')) return;
   fixedPrograms = [];
   recommendedBlocks = [];
+  wsReportLabel = { template: '', method: '' };
   renderWeeklyGrid();
+}
+
+// 보고서에 담을 때 제목에 붙일 이름 — 불러온 템플릿 이름 + (두 방식 비교에서 고른) 방식 (2026-11-26)
+let wsReportLabel = { template: '', method: '' };
+function wsReportLabelText(){
+  return [wsReportLabel.template, wsReportLabel.method].filter(Boolean).join(' · ');
 }
 
 async function runWeeklyAutoFill(){
@@ -4340,6 +4348,7 @@ async function loadWeeklyTemplate(){
     fixedPrograms = [];
     recommendedBlocks = [];
   }
+  wsReportLabel = { template: sel.options[sel.selectedIndex]?.text || '', method: '' };
   (data.template_data || []).forEach(item => {
     const { _source, ...rest } = item;
     // id는 템플릿 안의 값이 아니라 항상 새로 매김 — id가 ✕/드래그 버튼 동작에 들어가므로 템플릿 값이 덮어쓰지 못하게 뒤에 둠 (2026-11-10)
@@ -5469,6 +5478,7 @@ function applyWeeklyCompare(which){
   const chosen = which === 'pure' ? wsCompareState.pure : wsCompareState.ruled;
   recommendedBlocks = [...wsCompareState.base, ...chosen.map(r => ({ id: recSeq++, ...r }))];
   wsCompareState.applied = which;
+  wsReportLabel.method = which === 'pure' ? '순수 데이터' : '규칙 반영';
   renderWeeklyGrid();
   renderWeeklyCompare();
 }
@@ -6129,7 +6139,7 @@ function captureCurrentPanel(){
     const topbarTitleForCapture = document.getElementById('topbar-title')?.textContent || '';
     window.__pinnedItems.push({
       id: Date.now() + '_' + Math.floor(Math.random()*1000),
-      title: (topbarTitleForCapture ? topbarTitleForCapture + ' — ' : '') + (subtabActiveForTitle ? subtabActiveForTitle.textContent.trim() : '주간 편성안'),
+      title: (topbarTitleForCapture ? topbarTitleForCapture + ' — ' : '') + (subtabActiveForTitle ? subtabActiveForTitle.textContent.trim() : '주간 편성안') + (wsReportLabelText() ? ' — ' + wsReportLabelText() : ''),
       html, comment: '',
     });
     updatePinBadge();
@@ -6265,14 +6275,15 @@ function generateReport(){
       <div style="font-size:12px; color:var(--text-muted); margin-top:6px;">생성일: ${genDate}</div>
     </div>
     ${window.__pinnedItems.map(item => `
-      <div class="report-print-item">
-        <div style="font-size:16px; font-weight:700; margin-bottom:10px;">${item.title}</div>
+      <div class="report-print-item${item.html.trim().startsWith('<table') ? ' report-print-schedule' : ''}">
+        <div style="font-size:16px; font-weight:700; margin-bottom:10px;">${escapeHtml(item.title)}</div>
         <div${item.html.trim().startsWith('<table') ? '' : ' class="bento-grid"'}>${item.html}</div>
         ${item.comment ? `<div style="margin-top:10px; padding:12px; background:var(--bg-subtle); border-radius:10px; font-size:13px; line-height:1.6; white-space:pre-wrap;"><b>코멘트</b><br>${item.comment.replace(/</g,'&lt;')}</div>` : ''}
       </div>
     `).join('')}
   `;
 
+  fitScheduleItemsToPage(container);
   document.body.classList.add('print-mode');
 
   // 인쇄용 이미지/레이아웃이 자리잡을 시간을 살짝 줌
@@ -6282,6 +6293,37 @@ function generateReport(){
     });
   });
 }
+// 편성표가 인쇄 한 페이지(A4 가로, 여백 10mm → 277×190mm)보다 길면 표 전체를 한 장에 맞게 줄임 (2026-11-26)
+// 짧은 블록이 많으면 좁은 칸에 회차·대국자 글자가 여러 줄로 꺾여 표가 길어지기 때문 — 글자는 빼지 않고 크기만 줄임
+const REPORT_PAGE_W_MM = 277, REPORT_PAGE_H_MM = 190;
+function fitScheduleItemsToPage(container){
+  const items = container.querySelectorAll('.report-print-schedule');
+  if (!items.length) return;
+  const origStyle = container.getAttribute('style');
+  // 화면엔 숨겨져 있으니, 보이지 않는 곳에 인쇄 폭으로 잠깐 펼쳐서 높이를 잼
+  container.setAttribute('style', `display:block; position:absolute; left:-20000px; top:0; width:${REPORT_PAGE_W_MM}mm; visibility:hidden;`);
+  const ruler = document.createElement('div');
+  ruler.style.height = REPORT_PAGE_H_MM + 'mm';
+  container.appendChild(ruler);
+  const pageH = ruler.getBoundingClientRect().height * 0.97; // 약간 여유
+  ruler.remove();
+  items.forEach(item => {
+    item.style.marginBottom = '0';
+    item.style.zoom = '';
+    if (item.getBoundingClientRect().height <= pageH) return;
+    // 줄이면 칸 폭에 여유가 생겨 줄바꿈이 줄어드니, 비율을 여러 번 나눠 찾아서 들어가는 가장 큰 크기를 고름
+    let lo = 0.3, hi = 1;
+    for (let k = 0; k < 10; k++) {
+      const mid = (lo + hi) / 2;
+      item.style.zoom = mid;
+      if (item.getBoundingClientRect().height <= pageH) lo = mid; else hi = mid;
+    }
+    item.style.zoom = lo;
+    item.dataset.fitZoom = lo.toFixed(2);
+  });
+  container.setAttribute('style', origStyle || 'display:none;');
+}
+
 window.addEventListener('afterprint', ()=>{
   document.body.classList.remove('print-mode');
   document.getElementById('report-print-container').innerHTML = '';
