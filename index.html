@@ -5319,14 +5319,25 @@ async function computeAutoFillBlocks(fixedList, preExcludedEpisodeKeys, alreadyO
     return { day, start, end, anchor, value: best, origLen, afterLong };
   };
   const queue = [];
+  // 새벽 6시 경계(규칙 반영일 때만, 2026-11-26): 빈 구간이 6시를 넘어가면 "~6시"와 "6시~"로 나눠서 채움.
+  // 새벽에 고정 편성이 없으면 2:00~6:00이 한 구간이 되어 긴 프로그램 우선 규칙대로 240분 블록이 들어가게 함
+  // (전엔 2시~아침 첫 고정 편성까지 한 덩어리라, 아침 좋은 시간 기준 300분 블록 뒤 새벽은 자투리로 채워졌음)
+  // 채우는 순서(시청률 높은 구간 먼저)는 그대로라 프라임 시간대에는 영향 없음
+  const DAWN_END_IDX = WS_SLOTS.findIndex(s => s.label === '6:00');
+  const pushInitialGap = (day, start, end) => {
+    if (rules && DAWN_END_IDX > 0 && start < DAWN_END_IDX && end > DAWN_END_IDX) {
+      queue.push(makeGap(day, start, DAWN_END_IDX));
+      queue.push(makeGap(day, DAWN_END_IDX, end));
+    } else queue.push(makeGap(day, start, end));
+  };
   for (const day of WS_DAY_ORDER) {
     const dayFixed = occupied.filter(f=>f.day===day).sort((a,b)=>a.startIdx-b.startIdx);
     let cursor = 0;
     dayFixed.forEach(f=>{
-      if (f.startIdx > cursor) queue.push(makeGap(day, cursor, f.startIdx));
+      if (f.startIdx > cursor) pushInitialGap(day, cursor, f.startIdx);
       cursor = Math.max(cursor, f.endIdx);
     });
-    if (cursor < WS_SLOTS.length) queue.push(makeGap(day, cursor, WS_SLOTS.length));
+    if (cursor < WS_SLOTS.length) pushInitialGap(day, cursor, WS_SLOTS.length);
   }
   const dayOrder = (d) => WS_DAY_ORDER.indexOf(d);
   const pushPiece = (day, start, end, parent, afterLong) => { if (end > start) queue.push(makeGap(day, start, end, parent.origLen, afterLong)); };
