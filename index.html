@@ -999,8 +999,10 @@
               <span class="ws-group-label">자동 채우기</span>
               <span class="ws-group-sub">지난주와 중복 방지</span>
               <select class="mini-filter" id="ws-lastweek-select" multiple size="1" style="max-width:200px; min-width:160px;" title="Ctrl(Mac은 Cmd)+클릭으로 여러 주를 한꺼번에 선택할 수 있어요. 최근 2~3주를 같이 선택하는 걸 권장해요 — 한 주만 피하면 2주 전이랑 똑같은 게 다시 추천돼요."></select>
-              <span class="ws-group-hint">Ctrl/Cmd+클릭으로 여러 주 · 최근 2~3주 권장</span>
+              <!-- 안내 글씨("Ctrl/Cmd+클릭으로 여러 주 · 최근 2~3주 권장")는 선택칸 마우스오버 설명에 같은 내용이 있어 생략 — 규칙 체크박스·비교 버튼 추가 후 한 줄 유지용 (2026-11-26) -->
+              <label class="ws-group-sub" style="display:inline-flex; align-items:center; gap:4px; cursor:pointer;" title="켬: 최근 방영 감점·세계기전 가산·편성 AI 선호/제외·앞뒤 고정 프로그램 궁합·긴 블록 우선·짧은 프로그램 제한을 반영 / 끔: 예상 시청률만으로 고름 (칸 길이 기준·고정 편성·회차 중복 제외는 둘 다 지킴)"><input type="checkbox" id="ws-rules-toggle" checked> 편성 규칙 반영</label>
               <button class="chip-btn" style="background:var(--btn-dark); color:#fff;" onclick="runWeeklyAutoFill()">자동으로 빈 슬롯 채우기</button>
+              <button class="chip-btn" onclick="runWeeklyCompare()" title="같은 고정 편성으로 순수 데이터 / 규칙 반영 두 방식을 각각 돌려서 비교해요 (편성표는 바뀌지 않아요)">두 방식 비교</button>
             </div>
             <div class="ws-group ws-group-end">
               <button class="chip-btn" style="background:var(--accent); color:#fff;" onclick="toggleThemeChat()">🤖 편성 도우미 AI</button>
@@ -1018,6 +1020,20 @@
                   <button class="chip-btn" style="background:var(--btn-dark); color:#fff;" onclick="sendThemeChatMessage()">전송</button>
                 </div>
                 <div style="font-size:11.5px; color:var(--text-tertiary); margin-top:6px;">⚠ 실험적 기능이에요 — AI가 실수로 잘못 편성할 수 있으니 결과를 꼭 확인해주세요.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 두 방식 비교 (2026-11-26): 순수 데이터 vs 규칙 반영 -->
+          <div id="ws-compare-panel" style="display:none; margin-bottom:16px;">
+            <div class="bento-grid">
+              <div class="bento-card col-12">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <div class="card-label">두 방식 비교 — 같은 고정 편성 · 순수 데이터 vs 규칙 반영</div>
+                  <button class="chip-btn" onclick="closeWeeklyCompare()">닫기</button>
+                </div>
+                <div style="font-size:12px; color:var(--text-tertiary); margin:4px 0 10px;">순수 데이터: 예상 시청률만으로 고름 · 규칙 반영: 최근 방영 감점, 세계기전 가산, 편성 AI 선호/제외, 앞뒤 고정 프로그램 궁합, 긴 블록 우선, 짧은 프로그램 제한 적용. 두 방식 모두 칸 길이 기준·고정 편성·회차 중복 제외는 지키고, 빈 칸은 남기지 않아요.</div>
+                <div id="ws-compare-body"></div>
               </div>
             </div>
           </div>
@@ -1057,7 +1073,7 @@
                 <div style="font-size:12px; color:var(--text-tertiary); line-height:1.8; margin-top:8px; padding:12px 14px; background:var(--bg-subtle); border-radius:10px;">
                   <b>묻는 질문: "이 칸에 어떤 프로그램을 넣어야 시청률이 가장 좋을까?"</b> — 후보마다 이 칸에 넣었을 때의 <b>예상 시청률</b>을 계산해 높은 순으로 보여줍니다.<br>
                   <b>예상 시청률 = 이 칸 평소 시청률 × 이 회차가 평소 잘 나오는 정도 × 이 시간대 궁합</b><br><br>
-                  1. <b>후보:</b> 바둑TV에서 2회 이상 방영된 모든 "회차"(같은 프로그램이라도 대진·라운드가 다르면 별개)입니다. 칸 길이에 맞는 평균 방영 길이의 회차만 남깁니다 — 60분 칸: 30~60분 · 90분: 60~90분 · 120분: 90~100분 · 150분: 100~120분 · 180분 이상: "칸 길이 − 30분(토막광고·전환 여유)" 이하이면서 한 단계 작은 칸 기준보다 긴 것 (예: 180분 120~150분, 240분 180~210분, 300분 210~270분). 짧은 프로그램이 긴 칸을 차지하지 않도록 하한을 둡니다(자동채우기도 같은 기준).<br>
+                  1. <b>후보:</b> 바둑TV에서 2회 이상 방영된 모든 "회차"(같은 프로그램이라도 대진·라운드가 다르면 별개)입니다. 칸 길이에 맞는 평균 방영 길이의 회차만 남깁니다 — 60분 칸: 30~60분 · 90분: 60~90분 · 120분: 90~100분 · 150분: 100~120분 · 180분 이상: "칸 길이 − 30분(토막광고·전환 여유)" 이하이면서 한 단계 작은 칸 기준보다 긴 것 (예: 180분 120~150분, 240분 180~210분, 270분 210~240분, 300분 240~270분, 330분 270~300분, 360분 300~330분 — 330·360분 칸은 빈 칸 클릭 추천에서만 쓰고 자동채우기는 300분까지). 짧은 프로그램이 긴 칸을 차지하지 않도록 하한을 둡니다(자동채우기도 같은 기준).<br>
                   2. <b>이 칸 평소 시청률:</b> 평일/주말 × 시간대별로, 과거에 재방을 틀었을 때의 평균 시청률입니다. (요일별로 나누면 표본이 너무 적어 평일끼리·주말끼리 묶어서 봅니다.)<br>
                   3. <b>이 회차가 평소 잘 나오는 정도 (모든 시간대 기록):</b> 방영될 때마다 "그 칸 평소의 몇 배였나"를 구해 평균냅니다. 프라임에 자주 나가서 높았던 건지, 회차 자체가 강한 건지를 구분해줍니다.<br>
                   4. <b>이 시간대 궁합 (이 칸과 같은 시간대 기록만):</b> 이 시간대에서 평소보다 더 잘 나오는지 봅니다. 이 회차 → 같은 프로그램 → 비슷한 프로그램들(같은 대진 → 같은 선수 → 같은 대회유형) 순서로 기록을 찾고, 모두 부족하면 "평소만큼"으로 가정합니다.<br>
@@ -1065,9 +1081,11 @@
                   6. <b>순위 조정:</b> 최근 1주 안에 방영한 회차는 많이, 2주 안은 조금 순위를 낮추고, 최근 7일 안에 생방·본방으로 나간 세계기전(그 뒤 재방 2회 미만)과 편성 AI 선호 장르·키워드는 순위를 올립니다. 이 조정은 순위에만 반영되고 예상 시청률 숫자에는 들어가지 않습니다.<br>
                   7. <b>화면 구성:</b> 이 시간대에 재방된 적 있는 후보(상위 5개)를 먼저, 그 아래에 추정 근거별로 상위 3개씩 보여줍니다. 이미 이번 주 편성표에 쓰인 프로그램은 빠지지 않고 순위만 맨 아래로 내려갑니다.<br>
                   8. <b>"자동으로 빈 슬롯 채우기"</b>는 <b>평소 시청률이 높은 빈 구간(프라임 시간대)부터</b> 채웁니다. 긴 빈 구간은 그 안에서 가장 좋은 시간부터 채우고, 남은 앞뒤 조각을 이어서 채웁니다.<br>
-                  &nbsp;&nbsp;· <b>긴 프로그램 우선</b>(짧은 프로그램을 여러 개 붙이면 시청 흐름이 끊기므로): 300·240·210·180·150·120·90·60·30분 순으로 보다가, 1등 후보가 <b>이 칸 평소 시청률 이상</b>일 것으로 예상되는 가장 큰 칸을 고릅니다. 어느 크기에도 그런 후보가 없을 때만 예상이 가장 좋은 크기를 고릅니다.<br>
+                  &nbsp;&nbsp;· <b>긴 프로그램 우선</b>(짧은 프로그램을 여러 개 붙이면 시청 흐름이 끊기므로): 300·270·240·210·180·150·120·90·60·30분 순으로 보다가, 1등 후보가 <b>이 칸 평소 시청률 이상</b>일 것으로 예상되는 가장 큰 칸을 고릅니다. 어느 크기에도 그런 후보가 없을 때만 예상이 가장 좋은 크기를 고릅니다.<br>
                   &nbsp;&nbsp;· 후보 길이는 위 1번의 칸 길이별 기준을 그대로 쓰고, 배치되면 그 칸 전체를 차지합니다. (방송법 시행령상 프로그램 간 토막광고는 매시간 2회·매회 90초 이내라, 180분 이상 칸은 여유 있게 30분을 뺀 길이를 상한으로 설정)<br>
-                  &nbsp;&nbsp;· 이번 주에 이미 쓴 회차와 "지난주와 중복 방지"에서 고른 주의 회차는 아예 제외하고, 바로 앞뒤 고정 프로그램과 대회유형 궁합이 좋으면 순위를 조금 조정합니다.
+                  &nbsp;&nbsp;· 이번 주에 이미 쓴 회차와 "지난주와 중복 방지"에서 고른 주의 회차는 아예 제외하고, 바로 앞뒤 고정 프로그램과 대회유형 궁합이 좋으면 순위를 조금 조정합니다.<br>
+                  &nbsp;&nbsp;· <b>짧은 프로그램 제한:</b> 평균 방영 60분 이하 프로그램은 고정 편성 사이 빈 구간 전체가 120분 이하이거나, 긴 프로그램을 넣고 남은 조각이 120분 이하일 때만 넣습니다. 단, 그래도 맞는 게 없으면 빈 칸이 남지 않도록 짧은 프로그램도 넣습니다.<br>
+                  9. <b>"편성 규칙 반영" 체크를 끄면</b> 자동채우기가 <b>예상 시청률만으로</b> 고릅니다 — 6번 순위 조정, 앞뒤 고정 프로그램 궁합, 긴 프로그램 우선, 짧은 프로그램 제한을 모두 빼고, 모든 칸 크기·후보 중 예상 시청률 1등을 넣습니다. 칸 길이 기준·고정 편성과 안 겹치기·같은 회차 중복 제외는 그대로 지킵니다. (빈 칸 클릭 추천 목록은 체크와 관계없이 순위 조정이 반영된 그대로예요.) <b>"두 방식 비교"</b>를 누르면 두 결과를 나란히 보여주고, 한쪽을 선택해 편성표에 표시한 뒤 템플릿으로 저장할 수 있어요.
                 </div>
               </details>
               <div style="overflow-x:auto; max-height:720px; overflow-y:auto;">
@@ -4730,9 +4748,10 @@ const __wsFilteredCache = new WeakMap();
 // 칸 길이(분) → 추천할 평균 방영 길이 범위 {lo 초과, hi 이하} — 사용자 지정 기준(2026-11-11)
 //   30분 칸: 30분 이하 / 60분: 30~60 / 90분: 60~90 / 120분: 90~100 / 150분: 100~120
 //   180분 이상: "칸 길이 − 30분(토막광고·전환 여유)" 이하이면서, 한 단계 작은 표준 칸의 상한보다는 긴 것
-//   (예: 180분 120~150, 210분 150~180, 240분 180~210, 300분 210~270 — 270분 표준 칸이 없어 300분이 211~270을 맡음)
+//   (예: 180분 120~150, 210분 150~180, 240분 180~210, 270분 210~240, 300분 240~270, 330분 270~300, 360분 300~330)
+//   2026-11-26: 270·330·360분 칸 추가 — 전엔 300분이 최대라 평균 270분 넘는 회차는 후보가 못 됐고, 270분 빈 구간도 한 블록으로 못 채웠음
 const WS_DURATION_TABLE = { 30: [0, 30], 60: [30, 60], 90: [60, 90], 120: [90, 100], 150: [100, 120] };
-const WS_STD_SIZES = [30, 60, 90, 120, 150, 180, 210, 240, 300];
+const WS_STD_SIZES = [30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330, 360];
 function wsDurationRange(targetMin){
   const t = WS_DURATION_TABLE[targetMin];
   if (t) return { lo: t[0], hi: t[1] };
@@ -4742,7 +4761,8 @@ function wsDurationRange(targetMin){
 
 // 공용 후보 계산 함수 — 주간편성안 추천(수동 클릭)과 자동편성 테스트(자동채우기)가 같이 씀
 function computeRecommendationCandidates(day, startIdx, endIdx, all, usedSet, opts = {}){
-  const { usedCheckField = 'program_id', hardExclude = false } = opts;
+  // rules: true(기본) = 순위 조정(최근 방영 감점·세계기전 시의성·편성 AI 선호/제외) 반영 / false = 예상 시청률만으로 순위 (2026-11-26)
+  const { usedCheckField = 'program_id', hardExclude = false, rules = true } = opts;
   // 편성 AI가 설정한 점수 계산 데이터 범위 필터(없으면 영향 없음) — 같은 필터면 걸러낸 결과를 재사용
   const sf = window.__scoringFilter;
   if (sf) {
@@ -4769,11 +4789,11 @@ function computeRecommendationCandidates(day, startIdx, endIdx, all, usedSet, op
   const targetDow = DOW_INDEX[day[0]];
   const isWe = (d) => d === 0 || d === 6;
 
-  const rawKey = `${isWe(targetDow) ? 'we' : 'wd'}|${slot.hour}|${window.__latestDate}|${JSON.stringify(window.__themePrefs || null)}`;
+  const rawKey = `${isWe(targetDow) ? 'we' : 'wd'}|${slot.hour}|${window.__latestDate}|${rules ? JSON.stringify(window.__themePrefs || null) : 'pure'}`;
   let rawMap = __wsRawCandCache.get(all);
   if (!rawMap) { rawMap = new Map(); __wsRawCandCache.set(all, rawMap); }
   let raw = rawMap.get(rawKey);
-  if (!raw) { raw = scoreEpisodesForSlot(day, slot, all); rawMap.set(rawKey, raw); }
+  if (!raw) { raw = scoreEpisodesForSlot(day, slot, all, rules); rawMap.set(rawKey, raw); }
   const { withType, withoutType } = raw;
 
   // 칸 길이별 평균 방영 길이 기준(클릭 추천·자동채우기 공통) — 짧은 프로그램이 긴 칸을 차지하지 않도록 하한도 둠
@@ -4796,7 +4816,9 @@ function computeRecommendationCandidates(day, startIdx, endIdx, all, usedSet, op
     const base = hardExclude ? arr.filter(r => !isUsed(r)) : arr;
     return base.sort((a,b) => {
       const usedDiff = hardExclude ? 0 : (isUsed(a)?1:0) - (isUsed(b)?1:0);
-      return usedDiff !== 0 ? usedDiff : b.score - a.score;
+      if (usedDiff !== 0) return usedDiff;
+      // 순수 데이터: 반올림 전 값(= 예상 시청률 ÷ 이 칸 평소 × 100)으로 정렬 — 같은 칸 안에서는 예상 시청률 순서와 같음
+      return rules ? b.score - a.score : b.rawScore - a.rawScore;
     });
   };
 
@@ -4813,7 +4835,7 @@ function computeRecommendationCandidates(day, startIdx, endIdx, all, usedSet, op
 }
 
 // 한 시간대(요일그룹+시)에 대해 모든 회차의 점수를 매김 — 슬롯 길이/이미 쓴 회차 필터는 호출부에서 적용
-function scoreEpisodesForSlot(day, slot, all){
+function scoreEpisodesForSlot(day, slot, all, rules = true){
   const byEpisode = groupHistoryByEpisode(all);
   const bl = getSlotBaselines(all);
   const targetDow = DOW_INDEX[day[0]];
@@ -4899,6 +4921,7 @@ function scoreEpisodesForSlot(day, slot, all){
     const repPlayers = g.players + (g.round ? ' · '+g.round : '') + ' · ' + g.year;
     return {
       program_id: g.program_id, name: g.name, episodeKey: key, avgDurationMin,
+      rawScore: base, // 순위 조정 전 값(순수 데이터 정렬용)
       tournament_type: g.items[0]?.tournament_type || null,
       ...rLite,
       avgRating: v ? v.expectedRating : rLite.avgRating, // 이 자리에 넣었을 때 예상 시청률
@@ -4913,10 +4936,11 @@ function scoreEpisodesForSlot(day, slot, all){
   const withType = [], withoutType = [];
   Object.entries(byEpisode).forEach(([key, g])=>{
     const typeItems = g.items.filter(x=>x.type===WS_REC_TYPE);
-    const timely = isTimely(g);
+    // 순수 데이터(rules=false)면 시의성·최근 방영 감점·편성 AI 선호/제외를 모두 적용하지 않음
+    const timely = rules && isTimely(g);
     // 시의성 회차는 최근 "생방/본방"이 감점 사유가 되면 안 됨 → 최근 재방만 기준으로 감점
-    const penalty = timely ? recencyPenalty0(g.items.filter(x => x.type === '재방')) : recencyPenalty(g.items);
-    const boost = themeBoost(g) + (timely ? TIMELY_BOOST : 0);
+    const penalty = !rules ? 0 : timely ? recencyPenalty0(g.items.filter(x => x.type === '재방')) : recencyPenalty(g.items);
+    const boost = !rules ? 0 : themeBoost(g) + (timely ? TIMELY_BOOST : 0);
 
     if (typeItems.length >= 2) {
       const r = wsFastMatch(typeItems, targetDow, slot.hour, all, WS_REC_TYPE);
@@ -5040,7 +5064,7 @@ async function loadCellRecommendations(day, startIdx, endIdx){
   const durationRuleLabel = document.getElementById('ws-duration-rule-label');
   if (durationRuleLabel) {
     const dr = wsDurationRange(targetDurMin);
-    durationRuleLabel.textContent = `적용 기준: ${targetDurMin}분 칸 → 평균 방영 ${dr.lo > 0 ? dr.lo + '분 초과 ~ ' : ''}${dr.hi}분 이하 프로그램만 추천 (자동채우기와 같은 기준)`;
+    durationRuleLabel.textContent = `적용 기준: ${targetDurMin}분 칸 → 평균 방영 ${dr.lo > 0 ? dr.lo + '분 초과 ~ ' : ''}${dr.hi}분 이하 프로그램만 추천 ${targetDurMin > AUTOFILL_RT_ORDER[0] ? `(${targetDurMin}분 칸은 직접 고를 때만 — 자동채우기는 ${AUTOFILL_RT_ORDER[0]}분 칸까지)` : '(자동채우기와 같은 기준)'}`;
   }
 
   // 카드형 렌더링 — 줄바꿈이 안전하게 되도록 chip-btn 대신 블록 레이아웃 사용 (텍스트 넘침 버그 수정)
@@ -5182,7 +5206,10 @@ function clearCellChoice(){
 let autoFillFixed = [];      // 템플릿에서 불러온 고정 슬롯 {id, day, startIdx, endIdx, name, type}
 let autoFillResults = [];    // 자동으로 채운 결과 블록
 let autoFillSeq = 0;
-const AUTOFILL_RT_ORDER = [300, 240, 210, 180, 150, 120, 90, 60, 30]; // 큰 단위 우선
+// 큰 단위 우선 (270분은 2026-11-26 추가)
+// 330·360분 칸은 빈 칸 클릭 추천에서만 씀(WS_STD_SIZES) — 자동채우기에 넣으면 "100점 넘으면 큰 칸 확정" 규칙 때문에
+// 300분대 회차가 360분 칸을 쉽게 차지해 예상 시청률이 5~11% 떨어졌음(2026-11-26 실험, 사용자 결정으로 제외)
+const AUTOFILL_RT_ORDER = [300, 270, 240, 210, 180, 150, 120, 90, 60, 30];
 
 function renderAutoFillTab(){
   refreshAutoFillTemplateList();
@@ -5235,8 +5262,11 @@ async function saveAutoFillAsTemplate(){
 // 공용 자동채우기 엔진 — 주간편성안 추천/자동편성 테스트 둘 다 사용
 // fixedList: 고정 슬롯 배열, preExcludedEpisodeKeys: 이미 다른 곳에 쓰인 회차(중복 방지용)
 // id는 할당하지 않고 반환하니, 호출부에서 원하는 시퀀스로 붙여서 쓰면 됨
-async function computeAutoFillBlocks(fixedList, preExcludedEpisodeKeys, alreadyOccupiedList){
+// opts.rules: true = 편성 규칙 반영(순위 조정 + 짧은 프로그램 제한) / false = 순수 데이터(예상 시청률만). 생략하면 화면 체크박스를 따름.
+async function computeAutoFillBlocks(fixedList, preExcludedEpisodeKeys, alreadyOccupiedList, opts = {}){
+  const rules = opts.rules ?? wsRulesEnabled();
   const results = [];
+  const unfilled = []; // 끝까지 맞는 후보가 없어 비게 된 30분 칸(원칙상 0이어야 함 — 비교 화면·점검용)
   const all = await loadFullHistory();
   const usedInThisRun = new Set(preExcludedEpisodeKeys || []);
   const occupied = [...fixedList, ...(alreadyOccupiedList || [])]; // 고정 슬롯 + 이미 채워진 추천 블록 둘 다 "찬 자리"로 취급
@@ -5273,10 +5303,11 @@ async function computeAutoFillBlocks(fixedList, preExcludedEpisodeKeys, alreadyO
   const slotValue = (day, idx) => bl.rerunAt(DOW_INDEX[day[0]], WS_SLOTS[idx].hour) || 0;
   const LONG_BLOCK_MIN_SCORE = 100; // 이 점수 이상이면 가장 큰 칸 확정(100점 = 이 자리 평소 수준)
   const SIZE_BONUS_PER_30MIN = 1;   // 100점 이상 후보가 없을 때 크기끼리 비교하면서 큰 칸 소폭 우대(300분 +10점)
-  const makeGap = (day, start, end) => {
+  // origLen: 고정 편성 사이 원래 빈 구간 길이(30분 칸 수) / afterLong: 긴 프로그램(평균 60분 초과)을 넣고 남은 조각인지
+  const makeGap = (day, start, end, origLen = end - start, afterLong = false) => {
     let anchor = start, best = -1;
     for (let i = start; i < end; i++) { const v = slotValue(day, i); if (v > best) { best = v; anchor = i; } }
-    return { day, start, end, anchor, value: best };
+    return { day, start, end, anchor, value: best, origLen, afterLong };
   };
   const queue = [];
   for (const day of WS_DAY_ORDER) {
@@ -5289,7 +5320,18 @@ async function computeAutoFillBlocks(fixedList, preExcludedEpisodeKeys, alreadyO
     if (cursor < WS_SLOTS.length) queue.push(makeGap(day, cursor, WS_SLOTS.length));
   }
   const dayOrder = (d) => WS_DAY_ORDER.indexOf(d);
-  const pushPiece = (day, start, end) => { if (end > start) queue.push(makeGap(day, start, end)); };
+  const pushPiece = (day, start, end, parent, afterLong) => { if (end > start) queue.push(makeGap(day, start, end, parent.origLen, afterLong)); };
+
+  // 짧은 프로그램 제한(규칙 반영일 때만, 2026-11-26): 평균 방영 60분 이하 프로그램은
+  //   고정 편성 사이 빈 구간 전체가 120분 이하이거나, 긴 프로그램으로 채우고 남은 조각이 120분 이하일 때만 후보
+  const SHORT_PROGRAM_MAX_MIN = 60, SHORT_ALLOWED_GAP_MIN = 120;
+  const shortAllowedIn = (gap) => !rules
+    || gap.origLen * 30 <= SHORT_ALLOWED_GAP_MIN
+    || (gap.afterLong && (gap.end - gap.start) * 30 <= SHORT_ALLOWED_GAP_MIN);
+  const isShort = (c) => c.avgDurationMin <= SHORT_PROGRAM_MAX_MIN;
+  // 순수 데이터: 예상 시청률이 높은 쪽(예상을 못 구하면 반올림 전 값으로 비교)
+  const pureKey = (c) => c ? [c.avgRating ?? -Infinity, c.rawScore ?? -Infinity] : [-Infinity, -Infinity];
+  const pureBetter = (a, b) => { const ka = pureKey(a), kb = pureKey(b); return ka[0] !== kb[0] ? ka[0] > kb[0] : ka[1] > kb[1]; };
 
   while (queue.length) {
     // 가치 높은 구간 먼저(같으면 요일 순·이른 시각 순 — 평일끼리는 기준선이 같아서 순서를 고정해둠)
@@ -5297,6 +5339,43 @@ async function computeAutoFillBlocks(fixedList, preExcludedEpisodeKeys, alreadyO
     const gap = queue.shift();
     const { day, anchor } = gap;
 
+    // 1차: 규칙대로(짧은 프로그램 제한 포함) / 2차: 1차에서 아무것도 못 넣으면 짧은 프로그램 제한을 풀고 다시 — 빈 슬롯(블랙아웃) 금지
+    let pick = null;
+    const shortOk1 = shortAllowedIn(gap);
+    for (const allowShort of (shortOk1 ? [true] : [false, true])) {
+      pick = await pickForGap(gap, allowShort);
+      if (pick) break;
+    }
+
+    if (pick) {
+      const { best, startIdx, endIdx } = pick;
+      // 이미 칸 크기별 길이 범위(wsDurationRange) 검증을 통과한 후보이므로 칸 크기 그대로 자리를 차지시킴
+      results.push({
+        day, startIdx, endIdx: endIdx + 1,
+        name: best.name, score: best.score, basis: best.basis, type: WS_REC_TYPE,
+        program_id: best.program_id, repPlayers: best.repPlayers, avgRating: best.avgRating, episodeKey: best.episodeKey,
+      });
+      usedInThisRun.add(best.episodeKey);
+      const afterLong = gap.afterLong || !isShort(best);
+      pushPiece(day, gap.start, startIdx, gap, afterLong);
+      pushPiece(day, endIdx + 1, gap.end, gap, afterLong);
+    } else {
+      // 어떤 크기로도 맞는 후보가 없으면(이미 다 쓴 경우 등) 앵커 30분만 비워두고 나머지 조각은 다시 시도 — 점검용으로 기록
+      unfilled.push({ day, idx: anchor });
+      pushPiece(day, gap.start, anchor, gap, gap.afterLong);
+      pushPiece(day, anchor + 1, gap.end, gap, gap.afterLong);
+    }
+  }
+  // 화면·저장 순서를 보기 좋게 요일·시각 순으로 정리
+  results.sort((a,b) => (dayOrder(a.day) - dayOrder(b.day)) || (a.startIdx - b.startIdx));
+  results.unfilled = unfilled;
+  results.rules = rules;
+  return results;
+
+  // 한 빈 구간에서 칸 크기·후보를 고름 (allowShort=false면 평균 60분 이하 프로그램은 후보에서 뺌)
+  async function pickForGap(gap, allowShort){
+    const { day, anchor } = gap;
+    const keep = (arr) => allowShort ? arr : arr.filter(c => !isShort(c));
     // 칸 크기마다: 앵커를 포함하도록 위치를 잡고, 그 크기의 1등 후보를 구함
     let pick = null;
     for (const rt of AUTOFILL_RT_ORDER) {
@@ -5308,8 +5387,17 @@ async function computeAutoFillBlocks(fixedList, preExcludedEpisodeKeys, alreadyO
       const startIdx = (gap.start >= lo && gap.start <= hi) ? gap.start : ((gap.end - n >= lo && gap.end - n <= hi) ? gap.end - n : anchor);
       const endIdx = startIdx + n - 1;
       // 길이 기준은 클릭 추천과 같은 wsDurationRange(칸 크기별 평균 방영 길이 범위)를 그대로 사용
-      const { topWithType, basisGroups } = computeRecommendationCandidates(day, startIdx, endIdx, all, usedInThisRun, { usedCheckField: 'episodeKey', hardExclude: true });
+      const cand = computeRecommendationCandidates(day, startIdx, endIdx, all, usedInThisRun, { usedCheckField: 'episodeKey', hardExclude: true, rules });
+      const topWithType = keep(cand.topWithType);
+      const basisGroups = cand.basisGroups.map(g => ({ basis: g.basis, items: keep(g.items) })).filter(g => g.items.length);
       if (!topWithType.length && !basisGroups.length) continue;
+      if (!rules) {
+        // 순수 데이터: 실측/추정 구분·인접 궁합·긴 블록 우선 없이, 모든 크기의 모든 후보 중 예상 시청률 1등
+        let best = topWithType[0] || null;
+        for (const g of basisGroups) if (pureBetter(g.items[0], best)) best = g.items[0];
+        if (best && (!pick || pureBetter(best, pick.best))) pick = { best, startIdx, endIdx, n };
+        continue;
+      }
       const liftMap = await getAdjacencyLiftMap(day, startIdx, endIdx);
       // 같은 크기 안에서는 실측 후보(이 시간대에 방영된 적 있는 후보) 우선.
       // 단, 실측 1등이 "이 자리 평소 수준(100점)"에 못 미치면 추정 후보들의 1등과도 비교해서 더 높은 쪽을 씀 (2026-11-12)
@@ -5333,27 +5421,113 @@ async function computeAutoFillBlocks(fixedList, preExcludedEpisodeKeys, alreadyO
       const rank = s0 + SIZE_BONUS_PER_30MIN * n;
       if (!pick || rank > pick.rank) pick = { rank, best, startIdx, endIdx, n };
     }
+    return pick;
+  }
+}
 
-    if (pick) {
-      const { best, startIdx, endIdx } = pick;
-      // 이미 칸 크기별 길이 범위(wsDurationRange) 검증을 통과한 후보이므로 칸 크기 그대로 자리를 차지시킴
-      results.push({
-        day, startIdx, endIdx: endIdx + 1,
-        name: best.name, score: best.score, basis: best.basis, type: WS_REC_TYPE,
-        program_id: best.program_id, repPlayers: best.repPlayers, avgRating: best.avgRating, episodeKey: best.episodeKey,
-      });
-      usedInThisRun.add(best.episodeKey);
-      pushPiece(day, gap.start, startIdx);
-      pushPiece(day, endIdx + 1, gap.end);
-    } else {
-      // 어떤 크기로도 맞는 후보가 없으면 앵커 30분은 비워두고 나머지 조각만 다시 시도
-      pushPiece(day, gap.start, anchor);
-      pushPiece(day, anchor + 1, gap.end);
+// "편성 규칙 반영" 체크박스 상태(없으면 켜짐 = 기존 동작)
+function wsRulesEnabled(){
+  const el = document.getElementById('ws-rules-toggle');
+  return el ? el.checked : true;
+}
+
+/* ===== 두 방식 비교 (순수 데이터 vs 규칙 반영, 2026-11-26) ===== */
+let wsCompareState = null; // { base: 비교 시점 recommendedBlocks, pure, ruled, applied }
+
+function wsCompareStats(blocks){
+  const n = blocks.length;
+  const slots = blocks.reduce((a,b) => a + (b.endIdx - b.startIdx), 0);
+  // 평균 예상 시청률: 30분 칸마다 예상 시청률을 하나씩 세서 평균(예상을 못 구한 블록은 제외)
+  let rSum = 0, rSlots = 0, noRating = 0;
+  blocks.forEach(b => {
+    const k = b.endIdx - b.startIdx;
+    if (Number.isFinite(b.avgRating)) { rSum += b.avgRating * k; rSlots += k; } else noRating++;
+  });
+  return { n, avgLenMin: n ? slots * 30 / n : 0, avgRating: rSlots ? rSum / rSlots : null, noRating };
+}
+
+async function runWeeklyCompare(){
+  if (fixedPrograms.length === 0) { alert('먼저 고정 편성을 추가해주세요.'); return; }
+  const btn = document.querySelector('#schedule-weekly [onclick="runWeeklyCompare()"]');
+  const origText = btn ? btn.textContent : null;
+  if (btn) { btn.textContent = LOADING_TEXT; btn.disabled = true; }
+  try {
+    // 자동채우기와 똑같은 조건(이미 채운 블록·지난주 중복 방지 포함)으로 두 방식을 각각 계산 — 편성표는 바꾸지 않음
+    const base = recommendedBlocks.slice();
+    const preExcluded = [...new Set([...base.map(b=>b.episodeKey).filter(Boolean), ...(await getSelectedLastWeekKeys())])];
+    const pure = await computeAutoFillBlocks(fixedPrograms, preExcluded, base, { rules: false });
+    const ruled = await computeAutoFillBlocks(fixedPrograms, preExcluded, base, { rules: true });
+    wsCompareState = { base, pure, ruled, applied: null };
+    renderWeeklyCompare();
+  } finally {
+    if (btn) { btn.textContent = origText; btn.disabled = false; }
+  }
+}
+
+function applyWeeklyCompare(which){
+  if (!wsCompareState) return;
+  const chosen = which === 'pure' ? wsCompareState.pure : wsCompareState.ruled;
+  recommendedBlocks = [...wsCompareState.base, ...chosen.map(r => ({ id: recSeq++, ...r }))];
+  wsCompareState.applied = which;
+  renderWeeklyGrid();
+  renderWeeklyCompare();
+}
+
+function closeWeeklyCompare(){
+  document.getElementById('ws-compare-panel').style.display = 'none';
+}
+
+function renderWeeklyCompare(){
+  const panel = document.getElementById('ws-compare-panel');
+  const body = document.getElementById('ws-compare-body');
+  if (!panel || !body || !wsCompareState) return;
+  panel.style.display = 'block';
+  const { pure, ruled, applied } = wsCompareState;
+  const sp = wsCompareStats(pure), sr = wsCompareStats(ruled);
+  const pct = (v) => v == null ? '-' : v.toFixed(3) + '%';
+  const blockRange = (b) => `${WS_SLOTS[b.startIdx].label}~${wsSlotEndLabel(b.endIdx - 1)}`;
+  const blockTxt = (b) => b
+    ? `<b>${escapeHtml(b.name)}</b>${b.repPlayers ? `<div style="font-size:11px; color:var(--text-secondary);">${escapeHtml(b.repPlayers)}</div>` : ''}<div style="font-size:11px; color:var(--text-tertiary);">${blockRange(b)} (${(b.endIdx-b.startIdx)*30}분) · 예상 ${pct(b.avgRating)}</div>`
+    : '<span style="color:var(--negative);">비어 있음</span>';
+
+  // 서로 다른 칸 목록: 30분 칸마다 두 결과의 블록을 비교해서, 같은 짝이 이어지는 구간끼리 한 줄로 묶음
+  const sameBlock = (a, b) => a && b && a.episodeKey === b.episodeKey && a.startIdx === b.startIdx && a.endIdx === b.endIdx;
+  const rows = [];
+  for (const day of WS_DAY_ORDER) {
+    const pa = pure.filter(b => b.day === day), ra = ruled.filter(b => b.day === day);
+    let cur = null;
+    for (let i = 0; i < WS_SLOTS.length; i++) {
+      const a = pa.find(b => i >= b.startIdx && i < b.endIdx) || null;
+      const r = ra.find(b => i >= b.startIdx && i < b.endIdx) || null;
+      if ((!a && !r) || sameBlock(a, r)) { cur = null; continue; }
+      if (cur && cur.a === a && cur.r === r) { cur.end = i + 1; continue; }
+      cur = { day, start: i, end: i + 1, a, r };
+      rows.push(cur);
     }
   }
-  // 화면·저장 순서를 보기 좋게 요일·시각 순으로 정리
-  results.sort((a,b) => (dayOrder(a.day) - dayOrder(b.day)) || (a.startIdx - b.startIdx));
-  return results;
+
+  const unfilledTxt = (res) => res.unfilled.length ? `<span style="color:var(--negative); font-weight:700;">${res.unfilled.length}칸</span>` : '0칸';
+  const radio = (which, label) => `<label style="display:inline-flex; align-items:center; gap:4px; cursor:pointer; font-weight:700;"><input type="radio" name="ws-compare-pick" ${applied===which?'checked':''} onchange="applyWeeklyCompare('${which}')"> ${label}</label>`;
+  const th = 'style="text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); font-size:12px; color:var(--text-secondary);"';
+  const td = 'style="padding:6px 8px; border-bottom:1px solid var(--border); vertical-align:top; font-size:12px;"';
+  let html = `
+    <table style="width:100%; border-collapse:collapse; margin-bottom:12px;">
+      <tr><th ${th}></th><th ${th}>순수 데이터 (규칙 끔)</th><th ${th}>규칙 반영 (규칙 켬)</th></tr>
+      <tr><td ${td}>블록 수</td><td ${td}>${sp.n}개</td><td ${td}>${sr.n}개</td></tr>
+      <tr><td ${td}>평균 블록 길이</td><td ${td}>${Math.round(sp.avgLenMin)}분</td><td ${td}>${Math.round(sr.avgLenMin)}분</td></tr>
+      <tr><td ${td}>평균 예상 시청률<div style="font-size:11px; color:var(--text-tertiary);">30분 칸마다 센 평균</div></td><td ${td}><b>${pct(sp.avgRating)}</b>${sp.noRating ? ` <span style="font-size:11px; color:var(--text-tertiary);">(예상 없는 블록 ${sp.noRating}개 제외)</span>` : ''}</td><td ${td}><b>${pct(sr.avgRating)}</b>${sr.noRating ? ` <span style="font-size:11px; color:var(--text-tertiary);">(예상 없는 블록 ${sr.noRating}개 제외)</span>` : ''}</td></tr>
+      <tr><td ${td}>못 채운 빈 칸</td><td ${td}>${unfilledTxt(pure)}</td><td ${td}>${unfilledTxt(ruled)}</td></tr>
+      <tr><td ${td}>편성표에 표시</td><td ${td}>${radio('pure', '이 결과 선택')}</td><td ${td}>${radio('ruled', '이 결과 선택')}</td></tr>
+    </table>
+    <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:12px;">한쪽을 선택하면 그 결과가 편성표에 표시돼요. 저장은 위의 "현재 편성을 템플릿으로 저장" 버튼으로 하시면 됩니다.${applied ? ` <b style="color:var(--accent);">지금 편성표: ${applied==='pure'?'순수 데이터':'규칙 반영'} 결과</b>` : ''}</div>
+    <div style="font-size:13px; font-weight:700; margin-bottom:6px;">서로 다른 칸 ${rows.length}곳</div>`;
+  html += rows.length ? `
+    <div style="max-height:420px; overflow-y:auto;">
+    <table style="width:100%; border-collapse:collapse;">
+      <tr><th ${th}>요일·시간</th><th ${th}>순수 데이터 추천</th><th ${th}>규칙 반영 추천</th></tr>
+      ${rows.map(x => `<tr><td style="padding:6px 8px; border-bottom:1px solid var(--border); vertical-align:top; font-size:12px; white-space:nowrap;">${x.day.slice(0,1)} ${WS_SLOTS[x.start].label}~${wsSlotEndLabel(x.end - 1)}</td><td ${td}>${blockTxt(x.a)}</td><td ${td}>${blockTxt(x.r)}</td></tr>`).join('')}
+    </table></div>` : `<div style="font-size:12px; color:var(--text-tertiary);">두 방식의 결과가 완전히 같아요.</div>`;
+  body.innerHTML = html;
 }
 
 async function runAutoFill(){
